@@ -260,6 +260,25 @@ Helm **is**:
 - a governance and observability layer
 - a stability-first orchestration layer for local and personal agents
 
+## Acknowledgements and influences
+
+Helm was shaped by practical iteration inside a real OpenClaw-based personal agent workspace and by selectively learning from a broader set of ideas around long-lived agent operation, reusable workflows, and externalized knowledge.
+
+Important influences include:
+
+- **OpenClaw**
+  - the underlying personal-agent workspace where many of these operational patterns were first exercised in practice
+- **Hermes Agent**
+  - structural ideas around safer workflow reuse, persistent operational context, and runtime discipline
+- **Andrej Karpathy's wiki-style knowledge management ideas**
+  - the use of explicit notes, linked context, and externalized working memory as part of the operating environment
+- **Skills-based workflow design**
+  - reusable, inspectable workflow units instead of purely hidden prompt behavior
+- **Checkpoint, audit, and rollback-oriented local operations practices**
+  - treating observability and recovery as first-class parts of agent work rather than afterthoughts
+
+Helm is not an official extension, endorsement, or collaboration with any of the projects or people referenced above. They are acknowledged here as influences that helped shape the design direction.
+
 ## License
 
 MIT

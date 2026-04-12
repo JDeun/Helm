@@ -262,6 +262,25 @@ Helm은 다음입니다.
 - governance / observability layer
 - 로컬 및 개인 에이전트를 위한 안정성 중심 orchestration layer
 
+## Acknowledgements / 영향을 준 요소들
+
+Helm은 실제 OpenClaw 기반 개인 에이전트 워크스페이스를 운영하며 축적된 시행착오와, 장기 운영되는 agent 시스템·재사용 가능한 workflow·외부화된 지식 구조에 관한 여러 아이디어를 선택적으로 흡수하면서 다듬어진 결과물입니다.
+
+특히 아래 요소들의 영향을 받았습니다.
+
+- **OpenClaw**
+  - 많은 운영 패턴이 실제로 처음 검증되고 다듬어진 개인 에이전트 작업 환경
+- **Hermes Agent**
+  - safer workflow reuse, persistent operational context, runtime discipline에 관한 구조적 아이디어
+- **Andrej Karpathy의 wiki-style knowledge management 관점**
+  - 명시적인 노트, 연결된 컨텍스트, 외부화된 working memory를 작업 환경 일부로 다루는 방식
+- **Skills 기반 workflow 설계**
+  - 숨겨진 프롬프트 동작만이 아니라 재사용 가능하고 점검 가능한 workflow 단위를 두는 방식
+- **Checkpoint / audit / rollback 중심의 로컬 운영 방식**
+  - observability와 recovery를 agent 작업의 부수 기능이 아니라 핵심 운영 요소로 보는 접근
+
+Helm은 위 프로젝트나 인물의 공식 확장판, endorsement, 협업 결과물이 아닙니다. 이 섹션은 설계 방향에 영향을 준 요소들을 명시적으로 밝히기 위한 목적입니다.
+
 ## 라이선스
 
 MIT
