@@ -18,11 +18,29 @@
   <img alt="Agent ops layer" src="https://img.shields.io/badge/agent--ops-layer-64748b?style=flat-square">
 </p>
 
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#what-helm-provides">What Helm Provides</a> ·
+  <a href="#architecture-at-a-glance">Architecture</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#typical-workflow">Workflow</a>
+</p>
+
 ![Helm social preview](assets/helm-social-preview.png)
 
 Helm adds execution-profile discipline, context hydration, audit trails, rollback guidance, and gated self-improvement on top of agent runtimes.
 
 It is designed for agents that already know how to reason and call tools, but still need a safer and more inspectable way to operate over time.
+
+## Quick Start
+
+```bash
+git clone https://github.com/JDeun/Helm.git
+cd Helm
+python3 scripts/run_with_profile.py list
+python3 scripts/ops_memory_query.py --describe-modes
+python3 scripts/ops_daily_report.py
+```
 
 ## Who Helm is for
 

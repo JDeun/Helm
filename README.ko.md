@@ -18,11 +18,29 @@
   <img alt="Agent ops layer" src="https://img.shields.io/badge/agent--ops-layer-64748b?style=flat-square">
 </p>
 
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#helm이-제공하는-것">핵심 기능</a> ·
+  <a href="#구조-한눈에-보기">구조</a> ·
+  <a href="#설치-방법">설치</a> ·
+  <a href="#기본-사용-흐름">사용 흐름</a>
+</p>
+
 ![Helm social preview](assets/helm-social-preview.png)
 
 Helm은 에이전트 런타임 위에 실행 프로파일, 컨텍스트 하이드레이션, 감사 추적, 롤백 가이드, 승인 기반 self-improvement를 얹는 운영 계층입니다.
 
 즉, 에이전트가 추론과 툴 호출은 할 수 있지만 장기 운영 관점에서 아직 불안정한 부분을 보강하는 데 초점을 둡니다.
+
+## Quick Start
+
+```bash
+git clone https://github.com/JDeun/Helm.git
+cd Helm
+python3 scripts/run_with_profile.py list
+python3 scripts/ops_memory_query.py --describe-modes
+python3 scripts/ops_daily_report.py
+```
 
 ## Helm이 적합한 사용자
 
