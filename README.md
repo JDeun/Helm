@@ -4,6 +4,8 @@
 
 [한국어 README](README.ko.md)
 
+![Helm social preview](assets/helm-social-preview.png)
+
 Helm adds execution-profile discipline, context hydration, audit trails, rollback guidance, and gated self-improvement on top of agent runtimes.
 
 It is designed for agents that already know how to reason and call tools, but still need a safer and more inspectable way to operate over time.
@@ -59,6 +61,18 @@ Helm focuses on those layers.
   - Turn successful work into draft skills, assess them, and require explicit approval before promotion.
 - **Operations reporting**
   - Summarize recent task status, failed commands, checkpoints, and draft-assessment state.
+
+## Architecture at a glance
+
+![Helm architecture diagram](assets/helm-architecture-diagram.png)
+
+Helm sits above an existing agent runtime or workspace and standardizes the operational layer around:
+
+- execution profiles
+- context hydration
+- task and command observability
+- rollback guidance
+- gated self-improvement
 
 ## Repository layout
 

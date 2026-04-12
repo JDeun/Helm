@@ -4,6 +4,8 @@
 
 [English README](README.md)
 
+![Helm social preview](assets/helm-social-preview.png)
+
 Helm은 에이전트 런타임 위에 실행 프로파일, 컨텍스트 하이드레이션, 감사 추적, 롤백 가이드, 승인 기반 self-improvement를 얹는 운영 계층입니다.
 
 즉, 에이전트가 추론과 툴 호출은 할 수 있지만 장기 운영 관점에서 아직 불안정한 부분을 보강하는 데 초점을 둡니다.
@@ -61,6 +63,18 @@ Helm은 이 부분을 해결하려는 프로젝트입니다.
   - 성공한 작업을 draft skill로 만들고, 평가 후 명시 승인으로만 승격합니다.
 - **Operations reporting**
   - 최근 task 상태, 실패 command, handoff task, checkpoint, draft assessment를 요약합니다.
+
+## 구조 한눈에 보기
+
+![Helm architecture diagram](assets/helm-architecture-diagram.png)
+
+Helm은 기존 agent runtime 또는 workspace 위에 올라가서 아래 운영 계층을 명시적으로 정리합니다.
+
+- execution profiles
+- context hydration
+- task / command observability
+- rollback guidance
+- gated self-improvement
 
 ## 저장소 구조
 
