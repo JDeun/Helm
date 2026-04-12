@@ -270,7 +270,7 @@ Important influences include:
   - the underlying personal-agent workspace where many of these operational patterns were first exercised in practice
 - **Hermes Agent**
   - structural ideas around safer workflow reuse, persistent operational context, and runtime discipline
-- **Andrej Karpathy's wiki-style knowledge management ideas**
+- **Wiki-style knowledge management and externalized working context**
   - the use of explicit notes, linked context, and externalized working memory as part of the operating environment
 - **Skills-based workflow design**
   - reusable, inspectable workflow units instead of purely hidden prompt behavior
