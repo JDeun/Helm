@@ -1,0 +1,89 @@
+{
+  "profiles": {
+    "inspect_local": {
+      "description": "Read-only local inspection for file reads, diagnostics, and status checks.",
+      "backend": "local",
+      "runtime_backend": "local-shell",
+      "runtime_target_kind": "workspace",
+      "isolation": "shared-session",
+      "handoff_required": false,
+      "writes_allowed": false,
+      "network_allowed": false,
+      "checkpoint": "never",
+      "intended_for": [
+        "codebase inspection",
+        "git status",
+        "log review",
+        "configuration reads"
+      ]
+    },
+    "workspace_edit": {
+      "description": "Normal local workspace edits and deterministic maintenance work.",
+      "backend": "local",
+      "runtime_backend": "local-shell",
+      "runtime_target_kind": "workspace",
+      "isolation": "shared-session",
+      "handoff_required": false,
+      "writes_allowed": true,
+      "network_allowed": false,
+      "checkpoint": "optional",
+      "intended_for": [
+        "single-skill updates",
+        "docs changes",
+        "memory maintenance",
+        "small script fixes"
+      ]
+    },
+    "risky_edit": {
+      "description": "Multi-file or workflow-affecting local edits that should create a checkpoint first.",
+      "backend": "local",
+      "runtime_backend": "local-shell",
+      "runtime_target_kind": "workspace",
+      "isolation": "checkpointed-session",
+      "handoff_required": false,
+      "writes_allowed": true,
+      "network_allowed": false,
+      "checkpoint": "required",
+      "intended_for": [
+        "automation changes",
+        "cron/task workflow edits",
+        "skill/router refactors",
+        "multi-file code changes"
+      ]
+    },
+    "service_ops": {
+      "description": "Live service operations that touch local scripts plus external APIs or SaaS systems.",
+      "backend": "local",
+      "runtime_backend": "local-shell",
+      "runtime_target_kind": "service-gateway",
+      "isolation": "shared-session",
+      "handoff_required": false,
+      "writes_allowed": true,
+      "network_allowed": true,
+      "checkpoint": "optional",
+      "intended_for": [
+        "calendar operations",
+        "Google Sheets writes",
+        "meeting pipeline execution",
+        "delivery through Telegram or webhooks"
+      ]
+    },
+    "remote_handoff": {
+      "description": "Work that should stay on a remote host, SSH target, container, or node-specific runtime.",
+      "backend": "manual-remote",
+      "runtime_backend": "manual-handoff",
+      "runtime_target_kind": "remote-runtime",
+      "isolation": "target-defined",
+      "handoff_required": true,
+      "writes_allowed": "depends-on-target",
+      "network_allowed": true,
+      "checkpoint": "manual",
+      "intended_for": [
+        "remote node work",
+        "SSH-only operations",
+        "containerized builds",
+        "host-specific admin tasks"
+      ]
+    }
+  }
+}
