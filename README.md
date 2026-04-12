@@ -8,6 +8,31 @@ Helm adds execution-profile discipline, context hydration, audit trails, rollbac
 
 It is designed for agents that already know how to reason and call tools, but still need a safer and more inspectable way to operate over time.
 
+## Who Helm is for
+
+Helm is most useful for people who already have:
+
+- an existing agent runtime or workspace
+- a tool-execution loop they want to make safer
+- long-lived workflows, skills, or automations they want to operate more carefully
+
+Helm is runtime-agnostic in principle, but it is easiest to adopt when you already work in an OpenClaw-style or Hermes-style agent workspace.
+
+## Relationship to OpenClaw and Hermes
+
+Helm is not a fork of OpenClaw or Hermes.
+
+Instead, it extracts and packages the reusable operational layer that emerged from running an OpenClaw-based personal agent system while selectively absorbing ideas associated with Hermes-style agent operation, especially:
+
+- execution-backend discipline
+- persistent operational context
+- safer workflow reuse
+- gated self-improvement
+- stronger observability and rollback
+
+You do **not** have to use OpenClaw or Hermes specifically.
+But you will get the most value from Helm if you already have an agent runtime, skill system, or automation workspace that needs a stronger operational layer.
+
 ## Why Helm exists
 
 Most agent stacks are good at flexible tool use, but weak at the parts that matter once the system starts doing real work repeatedly:
@@ -48,6 +73,18 @@ Helm focuses on those layers.
 
 Helm currently ships as a lightweight file-based core rather than a packaged CLI.
 
+## Prerequisites
+
+- Python 3.10+
+- a local agent workspace or automation workspace
+- basic familiarity with running Python scripts from the shell
+
+Optional but strongly recommended:
+
+- an existing skill or workflow structure
+- durable memory or note files
+- a place to store runtime state such as logs, task ledgers, and checkpoints
+
 ### 1. Clone the repository
 
 ```bash
@@ -81,6 +118,12 @@ Review and customize:
 ### Optional workspace state
 
 Some commands expect a workspace-local `.openclaw/` directory to exist once you start running tracked tasks. It will be created automatically by the runner as needed.
+
+If you are not using OpenClaw itself, you can still adopt Helm by reusing the same conventions:
+
+- keep a workspace root
+- keep runtime state in a dedicated hidden directory
+- treat profiles, memory, and skill rules as explicit files rather than hidden prompt state
 
 ## Core scripts
 
@@ -172,4 +215,3 @@ Helm **is**:
 ## License
 
 MIT
-
