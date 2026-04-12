@@ -1,8 +1,22 @@
-# Helm
+<p align="center">
+  <img src="assets/helm-mark.svg" alt="Helm mark" width="84" />
+</p>
 
-**오래 운영되는 개인 에이전트를 위한 안정성 우선 operations layer**
+<h1 align="center">Helm</h1>
 
-[English README](README.md)
+<p align="center"><strong>오래 운영되는 개인 에이전트를 위한 안정성 우선 operations layer</strong></p>
+
+<p align="center">
+  <a href="README.md">English README</a>
+</p>
+
+<p align="center">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f172a?style=flat-square">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-1d4ed8?style=flat-square">
+  <img alt="Stability first" src="https://img.shields.io/badge/focus-stability--first-334155?style=flat-square">
+  <img alt="Runtime agnostic" src="https://img.shields.io/badge/runtime-agnostic-475569?style=flat-square">
+  <img alt="Agent ops layer" src="https://img.shields.io/badge/agent--ops-layer-64748b?style=flat-square">
+</p>
 
 ![Helm social preview](assets/helm-social-preview.png)
 
