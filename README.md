@@ -2,6 +2,8 @@
 
 **A stability-first operations layer for long-lived personal agents.**
 
+[한국어 README](README.ko.md)
+
 Helm adds execution-profile discipline, context hydration, audit trails, rollback guidance, and gated self-improvement on top of agent runtimes.
 
 It is designed for agents that already know how to reason and call tools, but still need a safer and more inspectable way to operate over time.
@@ -41,6 +43,44 @@ Helm focuses on those layers.
   - execution model and workflow guidance
 - [`references/`](references)
   - starter profile, policy, and template files
+
+## Installation
+
+Helm currently ships as a lightweight file-based core rather than a packaged CLI.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/JDeun/Helm.git
+cd Helm
+```
+
+### 2. Use Python 3.10+ and make scripts executable if needed
+
+```bash
+python3 --version
+chmod +x scripts/*.py scripts/*.sh 2>/dev/null || true
+```
+
+### 3. Start with the profile and query tools
+
+```bash
+python3 scripts/run_with_profile.py list
+python3 scripts/ops_memory_query.py --describe-modes
+python3 scripts/ops_daily_report.py
+```
+
+### 4. Adapt the reference files to your own environment
+
+Review and customize:
+
+- `references/execution_profiles.json`
+- `references/skill_profile_policies.json`
+- `references/skill-capture-template.md`
+
+### Optional workspace state
+
+Some commands expect a workspace-local `.openclaw/` directory to exist once you start running tracked tasks. It will be created automatically by the runner as needed.
 
 ## Core scripts
 
@@ -131,5 +171,5 @@ Helm **is**:
 
 ## License
 
-License is not set yet.
+MIT
 
