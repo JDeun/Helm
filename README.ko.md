@@ -6,6 +6,8 @@
 
 <p align="center"><strong>오래 운영되는 개인 에이전트를 위한 안정성 우선 operations layer</strong></p>
 
+<p align="center">이미 사용 중인 agent runtime 위에 execution discipline, context hydration, audit trails, rollback guidance, gated improvement를 얹는 운영 계층입니다.</p>
+
 <p align="center">
   <a href="README.md">English README</a>
 </p>

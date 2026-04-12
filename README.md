@@ -6,6 +6,8 @@
 
 <p align="center"><strong>A stability-first operations layer for long-lived personal agents.</strong></p>
 
+<p align="center">Bring execution discipline, context hydration, audit trails, rollback guidance, and gated improvement to the agent runtime you already use.</p>
+
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
 </p>
