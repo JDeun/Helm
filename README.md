@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/helm-mark.svg" alt="Helm mark" width="84" />
+  <img src="assets/helm-icon.png" alt="Helm icon" width="108" />
 </p>
 
 <h1 align="center">Helm</h1>
