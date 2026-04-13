@@ -34,6 +34,21 @@ Helm adds execution-profile discipline, context hydration, audit trails, rollbac
 
 It is designed for agents that already know how to reason and call tools, but still need a safer and more inspectable way to operate over time.
 
+## Why this matters in practice
+
+Most agent setups can already call tools.
+The harder problem starts after that: running the right kind of work in the right mode, reloading the right context before acting, tracing what happened when something goes wrong, and recovering safely when an edit or automation run turns risky.
+
+Helm is for that layer.
+
+In practice, Helm is useful when you want to:
+
+- run shell or workspace actions under explicit safety modes instead of one generic execution path
+- hydrate an agent with files, memory, logs, checkpoints, and task history before work begins
+- keep audit trails that connect high-level tasks to low-level command execution
+- recover from risky edits with explicit checkpoints and rollback guidance
+- turn repeated successful workflows into reusable skills without allowing uncontrolled self-modification
+
 ## Quick Start
 
 ```bash
@@ -45,6 +60,15 @@ python3 scripts/ops_daily_report.py
 ```
 
 ## Who Helm is for
+
+If you already have an agent runtime and think:
+
+- "tool use works, but operations still feel brittle"
+- "the model can act, but I do not trust how it chooses execution mode"
+- "useful context exists across notes, logs, and prior work, but hydration is inconsistent"
+- "I need rollback, checkpoints, and inspection before I let automation touch real work"
+
+then Helm is the layer you are probably missing.
 
 Helm is most useful for people who already have:
 
