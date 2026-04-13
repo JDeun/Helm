@@ -27,8 +27,6 @@
   <a href="#docs-and-demo">Docs and Demo</a>
 </p>
 
-![Helm social preview](assets/helm-social-preview.png)
-
 ## Why Helm
 
 Most agent stacks can already call tools. The harder problem starts after that:
@@ -49,14 +47,21 @@ It is especially useful if you already have:
 
 Helm is runtime-agnostic in principle, but it is easiest to adopt when you already work in an OpenClaw-style or Hermes-style environment.
 
+## Example Scenario
+
+A coding agent is asked to refactor a router in a long-lived workspace.
+
+Without Helm, the agent may act on partial context, edit too quickly, and leave weak rollback visibility.
+With Helm, the runtime is governed through explicit files, execution profiles, checkpoints, and audit traces.
+
+Typical flow:
+
+1. Helm re-hydrates context from notes, memory, command logs, task history, and checkpoints.
+2. Helm selects or enforces the right execution profile before work starts.
+3. Risky work is paired with checkpoint discipline and visible task/command traces.
+4. The result is easier to inspect, reproduce, and recover.
+
 ![Helm explainer cartoon](assets/helm-explainer-cartoon-ko.png)
-
-Korean explainer cartoon for the Helm operating model:
-
-- without Helm, agents act on partial context
-- with Helm, context is re-hydrated from files and operational state
-- execution runs under explicit profiles
-- audits, checkpoints, and rollback paths stay visible
 
 ## What Helm Does
 
@@ -69,8 +74,17 @@ Korean explainer cartoon for the Helm operating model:
 
 ## Quick Start
 
+Install Helm and create a workspace:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
+helm init --path ~/.helm/workspace
+```
+
+Survey existing systems and apply onboarding:
+
+```bash
+helm survey --path ~/.helm/workspace
 helm onboard --path ~/.helm/workspace --use-detected
 ```
 
@@ -224,7 +238,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm is already usable as a public early release.
+Helm v0.1.0 is usable as a public early release.
 
 Included:
 
@@ -241,6 +255,10 @@ Not included:
 - credentials or private task history
 
 ## Positioning
+
+A short way to think about Helm:
+
+> The agent runtime does the work. Helm governs how the work is prepared, executed, traced, and recovered.
 
 Helm is not:
 

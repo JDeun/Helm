@@ -27,8 +27,6 @@
   <a href="#문서와-데모">문서와 데모</a>
 </p>
 
-![Helm social preview](assets/helm-social-preview.png)
-
 ## 왜 Helm인가
 
 대부분의 에이전트 스택은 이미 툴 호출은 할 수 있습니다. 진짜 어려운 문제는 그 다음입니다.
@@ -49,14 +47,21 @@ Helm은 바로 그 운영 계층을 위한 프로젝트입니다.
 
 원칙적으로 runtime-agnostic이지만, OpenClaw 스타일이나 Hermes 스타일 환경이 있으면 가장 자연스럽게 붙습니다.
 
+## 예시 시나리오
+
+장기 운영 중인 workspace에서 coding agent가 router refactor를 맡는 상황을 가정해보겠습니다.
+
+Helm이 없으면 에이전트가 부분적 컨텍스트만 읽고 너무 빨리 수정에 들어가거나, 나중에 왜 그렇게 실행됐는지 추적하기 어려울 수 있습니다.
+Helm이 있으면 explicit files, execution profiles, checkpoints, audit traces를 기준으로 작업이 통제됩니다.
+
+전형적인 흐름은 이렇습니다.
+
+1. notes, memory, command logs, task history, checkpoints에서 context를 다시 읽습니다.
+2. 작업 전에 적절한 execution profile을 고르거나 강제합니다.
+3. risky work에는 checkpoint discipline과 visible trace를 붙입니다.
+4. 결과적으로 검토, 재현, 복구가 쉬워집니다.
+
 ![Helm 설명 카툰](assets/helm-explainer-cartoon-ko.png)
-
-이 카툰은 Helm의 핵심 흐름을 요약합니다.
-
-- Helm이 없으면 에이전트가 부분적 컨텍스트에 기대기 쉽습니다.
-- Helm은 파일과 운영 흔적에서 컨텍스트를 다시 읽습니다.
-- 실행은 명시적 execution profile 아래에서 이뤄집니다.
-- 감사 추적, 체크포인트, 롤백 경로를 함께 남깁니다.
 
 ## Helm이 하는 일
 
@@ -69,8 +74,17 @@ Helm은 바로 그 운영 계층을 위한 프로젝트입니다.
 
 ## Quick Start
 
+Helm을 설치하고 workspace를 만듭니다.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
+helm init --path ~/.helm/workspace
+```
+
+그 다음 기존 시스템을 survey하고 onboarding을 적용합니다.
+
+```bash
+helm survey --path ~/.helm/workspace
 helm onboard --path ~/.helm/workspace --use-detected
 ```
 
@@ -224,7 +238,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## 현재 상태
 
-Helm은 이미 공개 가능한 초기 버전으로 사용할 수 있습니다.
+Helm v0.1.0은 공개 가능한 초기 버전으로 이미 사용할 수 있습니다.
 
 이미 들어간 것:
 
@@ -241,6 +255,10 @@ Helm은 이미 공개 가능한 초기 버전으로 사용할 수 있습니다.
 - credentials 또는 private task history
 
 ## 포지셔닝
+
+짧게 말하면 Helm은 이렇습니다.
+
+> agent runtime이 실제 작업을 하고, Helm은 그 작업이 어떻게 준비되고, 실행되고, 추적되고, 복구되는지를 다룹니다.
 
 Helm은 다음이 아닙니다.
 
