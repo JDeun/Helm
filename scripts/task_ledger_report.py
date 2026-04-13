@@ -5,10 +5,17 @@ import argparse
 import json
 from collections import Counter
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from helm_workspace import get_workspace_layout
 
 
-WORKSPACE = Path.home() / ".openclaw" / "workspace"
-TASK_LEDGER = WORKSPACE / ".openclaw" / "task-ledger.jsonl"
+WORKSPACE = get_workspace_layout().root
+TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
 
 
 def load_entries() -> list[dict]:

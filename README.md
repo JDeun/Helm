@@ -6,7 +6,7 @@
 
 <p align="center"><strong>A stability-first operations layer for long-lived personal agents.</strong></p>
 
-<p align="center">Bring execution discipline, context hydration, audit trails, rollback guidance, and gated improvement to the agent runtime you already use.</p>
+<p align="center">Bring execution discipline, file-native context hydration, audit trails, rollback guidance, and gated improvement to the agent runtime you already use.</p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -17,306 +17,249 @@
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-1d4ed8?style=flat-square">
   <img alt="Stability first" src="https://img.shields.io/badge/focus-stability--first-334155?style=flat-square">
   <img alt="Runtime agnostic" src="https://img.shields.io/badge/runtime-agnostic-475569?style=flat-square">
-  <img alt="Agent ops layer" src="https://img.shields.io/badge/agent--ops-layer-64748b?style=flat-square">
 </p>
 
 <p align="center">
+  <a href="#why-helm">Why Helm</a> ·
   <a href="#quick-start">Quick Start</a> ·
-  <a href="#what-helm-provides">What Helm Provides</a> ·
-  <a href="#architecture-at-a-glance">Architecture</a> ·
-  <a href="#installation">Installation</a> ·
-  <a href="#typical-workflow">Workflow</a>
+  <a href="#onboarding-and-workspace-model">Onboarding</a> ·
+  <a href="#core-commands">Core Commands</a> ·
+  <a href="#docs-and-demo">Docs and Demo</a>
 </p>
 
 ![Helm social preview](assets/helm-social-preview.png)
 
-Helm adds execution-profile discipline, context hydration, audit trails, rollback guidance, and gated self-improvement on top of agent runtimes.
+## Why Helm
 
-It is designed for agents that already know how to reason and call tools, but still need a safer and more inspectable way to operate over time.
+Most agent stacks can already call tools. The harder problem starts after that:
 
-## Why this matters in practice
+- choosing the right execution mode before a command runs
+- reloading the right context from files and prior operations
+- tracing high-level tasks and low-level commands together
+- keeping rollback paths before risky edits
+- reusing successful workflows without uncontrolled self-modification
 
-Most agent setups can already call tools.
-The harder problem starts after that: running the right kind of work in the right mode, reloading the right context before acting, tracing what happened when something goes wrong, and recovering safely when an edit or automation run turns risky.
+Helm is for that operational layer.
 
-Helm is for that layer.
+It is especially useful if you already have:
 
-In practice, Helm is useful when you want to:
+- an existing agent runtime or workspace
+- long-lived workflows or skills
+- notes, memory, logs, or checkpoints that should influence future runs
 
-- run shell or workspace actions under explicit safety modes instead of one generic execution path
-- hydrate an agent with files, memory, logs, checkpoints, and task history before work begins
-- keep audit trails that connect high-level tasks to low-level command execution
-- recover from risky edits with explicit checkpoints and rollback guidance
-- turn repeated successful workflows into reusable skills without allowing uncontrolled self-modification
+Helm is runtime-agnostic in principle, but it is easiest to adopt when you already work in an OpenClaw-style or Hermes-style environment.
 
-## Example scenario
+![Helm explainer cartoon](assets/helm-explainer-cartoon-ko.png)
 
-Imagine an agent asked to update production-adjacent workspace files after checking prior notes and recent task history.
-Without an operational layer, that request can collapse into one blurry action: read a little context, run commands, edit files, and hope nothing important was missed.
+Korean explainer cartoon for the Helm operating model:
 
-With Helm, the same work becomes more explicit:
+- without Helm, agents act on partial context
+- with Helm, context is re-hydrated from files and operational state
+- execution runs under explicit profiles
+- audits, checkpoints, and rollback paths stay visible
 
-1. hydrate context from notes, logs, checkpoints, and prior task traces
-2. choose a narrow execution profile before running anything
-3. run tracked work with audit trails tied to both tasks and commands
-4. preserve rollback paths before risky changes
-5. capture the workflow for reuse only after it proves stable
+## What Helm Does
 
-That is the shift Helm is designed to make: from capable agent behavior to inspectable, recoverable, repeatable agent operations.
+- execution profiles such as `inspect_local`, `workspace_edit`, and `risky_edit`
+- file-native context hydration across notes, memory, ontology, tasks, commands, and checkpoints
+- task and command audit trails
+- checkpoint creation, inspection, and restore guidance
+- gated skill drafting, review, approval, and rejection
+- high-level status and reporting views
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/JDeun/Helm.git
-cd Helm
-python3 scripts/run_with_profile.py list
-python3 scripts/ops_memory_query.py --describe-modes
-python3 scripts/ops_daily_report.py
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
+helm onboard --path ~/.helm/workspace --use-detected
 ```
 
-## Who Helm is for
-
-If you already have an agent runtime and think:
-
-- "tool use works, but operations still feel brittle"
-- "the model can act, but I do not trust how it chooses execution mode"
-- "useful context exists across notes, logs, and prior work, but hydration is inconsistent"
-- "I need rollback, checkpoints, and inspection before I let automation touch real work"
-
-then Helm is the layer you are probably missing.
-
-Helm is most useful for people who already have:
-
-- an existing agent runtime or workspace
-- a tool-execution loop they want to make safer
-- long-lived workflows, skills, or automations they want to operate more carefully
-
-Helm is runtime-agnostic in principle, but it is easiest to adopt when you already work in an OpenClaw-style or Hermes-style agent workspace.
-
-## Relationship to OpenClaw and Hermes
-
-Helm is not a fork of OpenClaw or Hermes.
-
-Instead, it extracts and packages the reusable operational layer that emerged from running an OpenClaw-based personal agent system while selectively absorbing ideas associated with Hermes-style agent operation, especially:
-
-- execution-backend discipline
-- persistent operational context
-- safer workflow reuse
-- gated self-improvement
-- stronger observability and rollback
-
-You do **not** have to use OpenClaw or Hermes specifically.
-But you will get the most value from Helm if you already have an agent runtime, skill system, or automation workspace that needs a stronger operational layer.
-
-## Why Helm exists
-
-Most agent stacks are good at flexible tool use, but weak at the parts that matter once the system starts doing real work repeatedly:
-
-- choosing the right execution mode before running commands
-- remembering operational context without blindly trusting chat history
-- tracing parent tasks and low-level command execution together
-- recovering from risky changes with explicit rollback paths
-- improving repeated workflows without allowing uncontrolled self-modification
-
-Helm focuses on those layers.
-
-## What Helm provides
-
-- **Execution profiles**
-  - Run meaningful work under declared profiles such as `inspect_local`, `workspace_edit`, `risky_edit`, `service_ops`, and `remote_handoff`.
-- **Context hydration**
-  - Query durable memory, ontology, task history, command failures, and checkpoints before routing.
-- **Audit trails**
-  - Record task-level and command-level operational traces.
-- **Rollback guidance**
-  - Link risky edits to checkpoints and suggest recovery candidates.
-- **Gated self-improvement**
-  - Turn successful work into draft skills, assess them, and require explicit approval before promotion.
-- **Operations reporting**
-  - Summarize recent task status, failed commands, checkpoints, and draft-assessment state.
-
-## Architecture at a glance
-
-![Helm architecture diagram](assets/helm-architecture-diagram.png)
-
-Helm sits above an existing agent runtime or workspace and standardizes the operational layer around:
-
-- execution profiles
-- context hydration
-- task and command observability
-- rollback guidance
-- gated self-improvement
-
-## Repository layout
-
-- [`scripts/`](scripts)
-  - core operational utilities
-- [`docs/`](docs)
-  - execution model and workflow guidance
-- [`references/`](references)
-  - starter profile, policy, and template files
-
-## Installation
-
-Helm currently ships as a lightweight file-based core rather than a packaged CLI.
-
-## Prerequisites
-
-- Python 3.10+
-- a local agent workspace or automation workspace
-- basic familiarity with running Python scripts from the shell
-
-Optional but strongly recommended:
-
-- an existing skill or workflow structure
-- durable memory or note files
-- a place to store runtime state such as logs, task ledgers, and checkpoints
-
-### 1. Clone the repository
+Use a custom workspace if needed:
 
 ```bash
-git clone https://github.com/JDeun/Helm.git
-cd Helm
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --workspace ~/work/helm
 ```
 
-### 2. Use Python 3.10+ and make scripts executable if needed
+## Onboarding and Workspace Model
+
+Helm should usually live in its own workspace and treat existing systems as read-only context sources first.
+
+The default model is:
+
+- keep Helm in a dedicated workspace
+- keep runtime state in `.helm/`
+- keep profiles, notes, policies, and skill rules as explicit files
+- adopt existing OpenClaw, Hermes, and note vaults instead of mutating them
+
+Recommended first-run flow:
 
 ```bash
-python3 --version
-chmod +x scripts/*.py scripts/*.sh 2>/dev/null || true
+helm init --path ~/.helm/workspace
+helm survey --path ~/.helm/workspace
+helm onboard --path ~/.helm/workspace --use-detected --dry-run
+helm onboard --path ~/.helm/workspace --use-detected
 ```
 
-### 3. Start with the profile and query tools
+By default, `helm onboard` applies the plan and then runs `doctor`, `validate`, and `status --verbose`.
+If you only want the adoption step:
 
 ```bash
-python3 scripts/run_with_profile.py list
-python3 scripts/ops_memory_query.py --describe-modes
-python3 scripts/ops_daily_report.py
+helm onboard --path ~/.helm/workspace --use-detected --skip-checks
 ```
 
-### 4. Adapt the reference files to your own environment
-
-Review and customize:
-
-- `references/execution_profiles.json`
-- `references/skill_profile_policies.json`
-- `references/skill-capture-template.md`
-
-### Optional workspace state
-
-Some commands expect a workspace-local `.openclaw/` directory to exist once you start running tracked tasks. It will be created automatically by the runner as needed.
-
-If you are not using OpenClaw itself, you can still adopt Helm by reusing the same conventions:
-
-- keep a workspace root
-- keep runtime state in a dedicated hidden directory
-- treat profiles, memory, and skill rules as explicit files rather than hidden prompt state
-
-## Core scripts
-
-- [`run_with_profile.py`](scripts/run_with_profile.py)
-- [`ops_memory_query.py`](scripts/ops_memory_query.py)
-- [`workspace_checkpoint.py`](scripts/workspace_checkpoint.py)
-- [`task_ledger_report.py`](scripts/task_ledger_report.py)
-- [`command_log_report.py`](scripts/command_log_report.py)
-- [`ops_daily_report.py`](scripts/ops_daily_report.py)
-- [`skill_capture.py`](scripts/skill_capture.py)
-
-## Current status
-
-This repository is the first public extraction of the reusable Helm core from a larger private operating stack.
-
-What is already here:
-
-- the core safety and observability scripts
-- the execution-profile model
-- context-hydration guidance
-- rollback and reporting utilities
-- the gated skill-improvement flow
-
-What is intentionally not here:
-
-- private memory and ontology data
-- personal agent overlays
-- task history, checkpoints, and credentials
-- packaging polish for every runtime and workflow
-
-## Typical workflow
-
-1. Inspect context with `ops_memory_query.py`
-2. Choose the narrowest execution profile that fits the work
-3. Run the task with `run_with_profile.py`
-4. Audit outcomes through ledger and command reports
-5. Use checkpoints and rollback advice for risky changes
-6. Convert repeated success into a draft skill through `skill_capture.py`
-
-## Example commands
-
-List available execution profiles:
+Explicit adoption examples:
 
 ```bash
-python3 scripts/run_with_profile.py list
+helm adopt --path ~/.helm/workspace --from-path ~/.openclaw/workspace --name openclaw-main
+helm adopt --path ~/.helm/workspace --from-path ~/.hermes --name hermes-main
+helm adopt --path ~/.helm/workspace --from-path ~/Documents/Obsidian/MyVault --kind generic --name obsidian-main
+helm sources --path ~/.helm/workspace
 ```
 
-Inspect router-friendly context presets:
+Helm should not overwrite an existing OpenClaw or Hermes tree by default. Obsidian is optional. Helm cares about explicit file state, not a specific notes app, but adopting an existing vault as a read-only source is a strong default.
+
+## Core Commands
+
+Inspect execution profiles:
 
 ```bash
-python3 scripts/ops_memory_query.py --describe-modes
-python3 scripts/ops_memory_query.py --mode failures --limit 5
+helm profile list --path ~/.helm/workspace
 ```
 
-Create a checkpoint-backed risky task:
+Hydrate context before routing:
 
 ```bash
-python3 scripts/run_with_profile.py run risky_edit \
+helm context --path ~/.helm/workspace --describe-modes
+helm context --path ~/.helm/workspace --mode failures --limit 5
+helm context --path ~/.helm/workspace --include notes tasks commands --summary --limit 8
+```
+
+Adopt and query an external source:
+
+```bash
+helm adopt --path ~/.helm/workspace --from-path ~/.openclaw/workspace --name openclaw-main
+helm context --path ~/.helm/workspace --adapter openclaw-main --include notes tasks commands --limit 8
+```
+
+Run a risky task with checkpoint discipline:
+
+```bash
+helm profile --path ~/.helm/workspace run risky_edit \
   --task-name "router refactor" \
   -- python3 -c 'print("hello")'
 ```
 
-Generate and assess a skill draft from a completed task:
+Inspect rollback candidates:
 
 ```bash
-python3 scripts/skill_capture.py draft-from-task \
+helm checkpoint recommend --path ~/.helm/workspace
+helm checkpoint list --path ~/.helm/workspace
+helm checkpoint show --path ~/.helm/workspace <checkpoint-id>
+```
+
+Create and review a draft skill:
+
+```bash
+helm skill --path ~/.helm/workspace draft-from-task \
   --task-id <task-id> \
   --name example-skill \
   --description "Example reusable workflow"
 
-python3 scripts/skill_capture.py assess-draft --name example-skill --json
+helm skill --path ~/.helm/workspace assess-draft --name example-skill
+helm skill-diff --path ~/.helm/workspace --name example-skill
+helm skill-approve --path ~/.helm/workspace --name example-skill --dry-run
 ```
+
+Generate operational summaries:
+
+```bash
+helm status --path ~/.helm/workspace --verbose
+helm report --path ~/.helm/workspace --format markdown
+```
+
+## File-Native Context Hydration
+
+Helm’s context model is intentionally explicit.
+
+Instead of relying on hidden prompt state, it re-reads durable files and operational traces from:
+
+- notes and curated memory files
+- file-native memory under `memory/`
+- ontology entities and relations
+- task ledger
+- command log
+- checkpoints
+- adopted external sources
+
+This is aligned with a wiki-style, externalized working-context approach, but implemented as a practical CLI and workspace layer rather than a clone of any one upstream system.
+
+## Installation Notes
+
+Local checkout install:
+
+```bash
+python3 -m pip install --user --no-build-isolation .
+```
+
+If `helm` is not on your `PATH`, the installer prints the user-level bin directory you should add to your shell profile.
+
+## Docs and Demo
+
+- [`docs/onboarding.md`](docs/onboarding.md)
+- [`docs/release-checklist.md`](docs/release-checklist.md)
+- [`docs/releases/0.1.0.md`](docs/releases/0.1.0.md)
+- [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
+- [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
+- [`examples/demo-workspace`](examples/demo-workspace)
+- [`CHANGELOG.md`](CHANGELOG.md)
+
+Try the demo workspace:
+
+```bash
+helm survey --path examples/demo-workspace
+helm doctor --path examples/demo-workspace
+helm validate --path examples/demo-workspace
+helm report --path examples/demo-workspace --format markdown
+```
+
+## Current Status
+
+Helm is already usable as a public early release.
+
+Included:
+
+- Helm-native CLI packaging
+- separate workspace model with read-only adoption
+- file-native context hydration
+- checkpoint, report, and skill review flows
+- example workspace and release-oriented docs
+
+Not included:
+
+- private memory or ontology data
+- personal agent overlays
+- credentials or private task history
 
 ## Positioning
 
-Helm is **not**:
+Helm is not:
 
 - a new foundation model
-- a generic chat UI
-- a fully autonomous agent platform
+- a chat UI
+- a full autonomous agent platform
 - a replacement for every runtime
 
-Helm **is**:
+Helm is:
 
 - an operations layer
 - a governance and observability layer
 - a stability-first orchestration layer for local and personal agents
 
-## Acknowledgements and influences
+## Acknowledgements
 
-Helm was shaped by practical iteration inside a real OpenClaw-based personal agent workspace and by selectively learning from a broader set of ideas around long-lived agent operation, reusable workflows, and externalized knowledge.
+Helm was shaped by practical iteration inside a real OpenClaw-based personal agent workspace and by broader ideas around Hermes-style runtime discipline, wiki-style externalized working context, skills-based workflow design, and checkpoint-oriented local operations.
 
-Important influences include:
-
-- **OpenClaw**
-  - the underlying personal-agent workspace where many of these operational patterns were first exercised in practice
-- **Hermes Agent**
-  - structural ideas around safer workflow reuse, persistent operational context, and runtime discipline
-- **Wiki-style knowledge management and externalized working context**
-  - the use of explicit notes, linked context, and externalized working memory as part of the operating environment
-- **Skills-based workflow design**
-  - reusable, inspectable workflow units instead of purely hidden prompt behavior
-- **Checkpoint, audit, and rollback-oriented local operations practices**
-  - treating observability and recovery as first-class parts of agent work rather than afterthoughts
-
-Helm is not an official extension, endorsement, or collaboration with any of the projects or people referenced above. They are acknowledged here as influences that helped shape the design direction.
+It is not an official extension, endorsement, or collaboration with any referenced project or person.
 
 ## License
 

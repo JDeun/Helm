@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "helm-agent-ops"
+version = "0.1.0"
+description = "Stability-first operations CLI for long-lived agent workspaces."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "JDeun" }]
+
+[project.scripts]
+helm = "helm:main"
+
+[tool.setuptools]
+py-modules = ["helm", "helm_workspace", "helm_context"]
+
+[tool.setuptools.packages.find]
+include = ["scripts"]

@@ -5,14 +5,21 @@ import argparse
 import json
 import shutil
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from helm_workspace import get_workspace_layout
 
 
-WORKSPACE = Path.home() / ".openclaw" / "workspace"
+WORKSPACE = get_workspace_layout().root
 SKILLS_ROOT = WORKSPACE / "skills"
 DRAFTS_ROOT = WORKSPACE / "skill_drafts"
 TEMPLATE_PATH = WORKSPACE / "references" / "skill-capture-template.md"
-TASK_LEDGER = WORKSPACE / ".openclaw" / "task-ledger.jsonl"
-COMMAND_LOG = WORKSPACE / ".openclaw" / "command-log.jsonl"
+TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
+COMMAND_LOG = get_workspace_layout().state_root / "command-log.jsonl"
 POLICY_PATH = WORKSPACE / "references" / "skill_profile_policies.json"
 
 PLACEHOLDER_MARKERS = (
@@ -328,8 +335,32 @@ def follow_up_steps(name: str, report: dict, target_exists: bool) -> list[str]:
         steps.append(f"Review whether `{name}` should be added to SKILLS_REGISTRY.md.")
     if report["details"].get("policy_entry") is None:
         steps.append(f"Consider adding `{name}` to references/skill_profile_policies.json with allowed/default profiles.")
-    steps.append(f"Run `python3 ~/.openclaw/workspace/scripts/skill_eligibility_report.py` if `{name}` changes routing surface materially.")
+    steps.append(f"Run a routing-surface review if `{name}` changes shared dispatch or execution policy materially.")
     return steps
+
+
+def assessment_summary(report: dict) -> list[str]:
+    lines: list[str] = []
+    checks = report["checks"]
+    if checks["missing_placeholders"] is False:
+        lines.append("Replace the remaining template placeholders in SKILL.md.")
+    if checks["has_execution_profile"] is False:
+        lines.append("Choose and document at least one execution profile for the draft.")
+    if checks["has_substantive_artifact"] is False:
+        lines.append("Add at least one real reference, template, script, or check artifact.")
+    if checks["has_task_summary"] is False:
+        lines.append("Add or restore meta/task-summary.json provenance for the source task.")
+    if checks["has_review_checklist"] is False:
+        lines.append("Restore the review checklist section so the draft remains reviewable.")
+    if checks["no_policy_conflict"] is False:
+        conflicts = ", ".join(report["details"]["policy_conflicts"])
+        lines.append(f"Align the draft profiles with references/skill_profile_policies.json: {conflicts}.")
+    if checks["no_duplicate_skill_conflict"] is False:
+        duplicates = ", ".join(item["skill"] for item in report["details"]["duplicate_candidates"][:3])
+        lines.append(f"Resolve overlap with existing skills before promotion: {duplicates}.")
+    if not lines:
+        lines.append("Draft is promotable. Review the diff once more, then promote with explicit approval.")
+    return lines
 
 
 def cmd_assess_draft(args: argparse.Namespace) -> int:
@@ -352,6 +383,15 @@ def cmd_assess_draft(args: argparse.Namespace) -> int:
             print("artifacts=" + ", ".join(report["details"]["artifacts"]))
         if report["details"]["policy_conflicts"]:
             print("policy_conflicts=" + ", ".join(report["details"]["policy_conflicts"]))
+        if report["details"]["duplicate_candidates"]:
+            print(
+                "duplicate_candidates="
+                + ", ".join(
+                    f"{item['skill']}:{item['similarity']}" for item in report["details"]["duplicate_candidates"][:5]
+                )
+            )
+        for line in assessment_summary(report):
+            print(f"next={line}")
     return 0 if report["passed"] else 1
 
 
@@ -373,6 +413,7 @@ def cmd_promote_draft(args: argparse.Namespace) -> int:
     payload = {
         "source": str(root),
         "target": str(target),
+        "assessment_summary": assessment_summary(report),
         "next_steps": follow_up_steps(args.name, report, target.exists()),
     }
     if args.dry_run:
@@ -387,7 +428,7 @@ def cmd_promote_draft(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Scaffold a new OpenClaw workspace skill.")
+    parser = argparse.ArgumentParser(description="Scaffold a new Helm workspace skill.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     create = subparsers.add_parser("create", help="Create a new skill scaffold.")

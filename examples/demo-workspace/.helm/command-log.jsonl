@@ -1,0 +1,3 @@
+{"task_id":"demo-task-001","task_skill":"router-context-demo","task_profile":"inspect_local","component":"context","label":"hydration query","command":["python3","scripts/ops_memory_query.py","--mode","failures"],"started_at":"2026-04-13T08:45:02+00:00","finished_at":"2026-04-13T08:45:03+00:00","exit_code":0}
+{"task_id":"demo-task-002","task_skill":"router-context-demo","task_profile":"risky_edit","component":"router","label":"shared refactor","command":["python3","-c","print('refactor')"],"started_at":"2026-04-13T09:10:04+00:00","finished_at":"2026-04-13T09:10:10+00:00","exit_code":1}
+

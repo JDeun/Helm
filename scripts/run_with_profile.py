@@ -11,13 +11,19 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-WORKSPACE = Path.home() / ".openclaw" / "workspace"
+from helm_workspace import get_workspace_layout
+
+
+WORKSPACE = get_workspace_layout().root
 PROFILE_FILE = WORKSPACE / "references" / "execution_profiles.json"
 POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"
 CHECKPOINT_SCRIPT = WORKSPACE / "scripts" / "workspace_checkpoint.py"
-TASK_LEDGER = WORKSPACE / ".openclaw" / "task-ledger.jsonl"
-CHECKPOINT_INDEX = WORKSPACE / ".openclaw" / "checkpoints" / "index.json"
+TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
+CHECKPOINT_INDEX = get_workspace_layout().checkpoints_root / "index.json"
 
 
 def utc_now_iso() -> str:
@@ -229,7 +235,7 @@ def cmd_rollback(args: argparse.Namespace) -> int:
             print(f"checkpoint_label={checkpoint.get('label')}")
             print(
                 "restore_command="
-                f"python3 ~/.openclaw/workspace/scripts/workspace_checkpoint.py restore {checkpoint.get('checkpoint_id')}"
+                f"python3 {CHECKPOINT_SCRIPT} restore {checkpoint.get('checkpoint_id')}"
             )
         else:
             print("checkpoint_id=-")
@@ -298,12 +304,16 @@ def cmd_run(args: argparse.Namespace) -> int:
     append_ledger(task)
 
     child_env = os.environ.copy()
+    child_env["HELM_TASK_ID"] = task["task_id"]
+    child_env["HELM_TASK_PROFILE"] = str(task["profile"])
     child_env["OPENCLAW_TASK_ID"] = task["task_id"]
     if task.get("skill"):
+        child_env["HELM_TASK_SKILL"] = str(task["skill"])
         child_env["OPENCLAW_TASK_SKILL"] = str(task["skill"])
-    child_env["OPENCLAW_TASK_PROFILE"] = str(task["profile"])
     if task.get("task_name"):
+        child_env["HELM_TASK_NAME"] = str(task["task_name"])
         child_env["OPENCLAW_TASK_NAME"] = str(task["task_name"])
+    child_env["OPENCLAW_TASK_PROFILE"] = str(task["profile"])
 
     result = subprocess.run(command, cwd=str(WORKSPACE), env=child_env)
 

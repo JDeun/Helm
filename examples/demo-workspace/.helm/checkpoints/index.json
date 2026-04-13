@@ -1,0 +1,14 @@
+[
+  {
+    "checkpoint_id": "20260413T090959Z-demo-router-edit",
+    "label": "demo-router-edit",
+    "created_at": "20260413T090959Z",
+    "paths": [
+      "docs",
+      "scripts",
+      "references"
+    ],
+    "archive": ".helm/checkpoints/20260413T090959Z-demo-router-edit/snapshot.tar.gz"
+  }
+]
+

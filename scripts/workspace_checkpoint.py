@@ -8,10 +8,17 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from helm_workspace import get_workspace_layout
 
 
-WORKSPACE = Path.home() / ".openclaw" / "workspace"
-CHECKPOINT_ROOT = WORKSPACE / ".openclaw" / "checkpoints"
+WORKSPACE = get_workspace_layout().root
+CHECKPOINT_ROOT = get_workspace_layout().checkpoints_root
 
 
 @dataclass

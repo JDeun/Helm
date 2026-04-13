@@ -2,14 +2,15 @@
 
 Upper-layer router skills should not rely only on the current user message when durable context or recent operational state may matter.
 
-Before routing, use `scripts/ops_memory_query.py` to hydrate relevant context from:
+Before routing, use `helm context` or `scripts/ops_memory_query.py` to hydrate relevant context from:
 
-- `MEMORY.md`
-- daily notes under `memory/`
+- notes and curated memory files
+- file-native memory under `memory/`
 - ontology entities and relations
 - task ledger
 - command log
 - checkpoints
+- adopted external workspaces registered through `helm adopt`
 
 ## Rule
 
@@ -29,10 +30,11 @@ Prefer narrow, domain-biased reads instead of one giant search.
 Examples:
 
 ```bash
-python3 ~/.openclaw/workspace/scripts/ops_memory_query.py travel --include memory ontology tasks --limit 8
-python3 ~/.openclaw/workspace/scripts/ops_memory_query.py ledger --include memory ontology tasks commands --limit 8
-python3 ~/.openclaw/workspace/scripts/ops_memory_query.py subway --include memory ontology tasks --limit 6
-python3 ~/.openclaw/workspace/scripts/ops_memory_query.py --include tasks commands --failed-only --limit 6
+helm context --path ~/.helm/workspace travel --include notes memory ontology tasks --limit 8
+helm context --path ~/.helm/workspace ledger --include notes memory ontology tasks commands --limit 8
+helm context --path ~/.helm/workspace subway --include notes memory ontology tasks --limit 6
+helm context --path ~/.helm/workspace --include tasks commands --failed-only --limit 6
+helm context --path ~/.helm/workspace --adapter openclaw-main --include notes tasks commands --limit 6
 ```
 
 ## What to look for
@@ -42,6 +44,7 @@ python3 ~/.openclaw/workspace/scripts/ops_memory_query.py --include tasks comman
 - the latest successful or failed task in the same workflow
 - command-level failures that explain why a provider or wrapper should be avoided
 - checkpoints when the user is asking to continue or undo risky edits
+- whether the decisive context lives in Helm-local state or an adopted external source
 
 ## Output discipline
 

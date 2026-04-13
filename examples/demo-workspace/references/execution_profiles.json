@@ -1,0 +1,23 @@
+{
+  "profiles": {
+    "inspect_local": {
+      "backend": "local",
+      "runtime_backend": "local-shell",
+      "description": "Read-only local inspection for file reads, diagnostics, and status checks.",
+      "checkpoint": "never"
+    },
+    "workspace_edit": {
+      "backend": "local",
+      "runtime_backend": "local-shell",
+      "description": "Normal local workspace edits and deterministic maintenance work.",
+      "checkpoint": "optional"
+    },
+    "risky_edit": {
+      "backend": "local",
+      "runtime_backend": "local-shell",
+      "description": "Multi-file local edits that should create a checkpoint first.",
+      "checkpoint": "required"
+    }
+  }
+}
+
