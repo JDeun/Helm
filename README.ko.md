@@ -49,6 +49,21 @@ Helm은 바로 그 운영 계층을 위한 프로젝트입니다.
 - risky edit 이후 명시적 checkpoint와 rollback guidance를 보고 싶을 때
 - 반복적으로 잘 된 흐름을 reusable skill로 바꾸되 uncontrolled self-modification은 막고 싶을 때
 
+## 예시 시나리오
+
+예를 들어, 에이전트가 최근 작업 기록과 메모를 확인한 뒤 운영에 가까운 워크스페이스 파일을 수정해야 하는 상황을 생각해볼 수 있습니다.
+운영 계층이 없다면 이 요청은 쉽게 하나의 흐릿한 행동으로 뭉개집니다. 컨텍스트를 조금 읽고, 명령을 실행하고, 파일을 수정한 뒤, 중요한 것을 놓치지 않았기를 바라는 식입니다.
+
+Helm은 같은 작업을 더 명시적인 흐름으로 바꿉니다.
+
+1. notes, logs, checkpoints, prior task traces에서 컨텍스트를 다시 읽는다
+2. 실행 전에 작업에 맞는 좁은 execution profile을 고른다
+3. task와 command를 함께 추적하는 audit trail 아래에서 작업을 수행한다
+4. risky change 전에 rollback path를 확보한다
+5. 반복 가능성이 확인된 뒤에만 그 흐름을 reusable skill로 남긴다
+
+Helm이 만들고 싶은 변화는 이것입니다. 할 수 있는 에이전트에서 끝나는 것이 아니라, 확인 가능하고 되돌릴 수 있고 반복 가능한 운영으로 넘어가는 것입니다.
+
 ## Quick Start
 
 ```bash

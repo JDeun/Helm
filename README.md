@@ -49,6 +49,21 @@ In practice, Helm is useful when you want to:
 - recover from risky edits with explicit checkpoints and rollback guidance
 - turn repeated successful workflows into reusable skills without allowing uncontrolled self-modification
 
+## Example scenario
+
+Imagine an agent asked to update production-adjacent workspace files after checking prior notes and recent task history.
+Without an operational layer, that request can collapse into one blurry action: read a little context, run commands, edit files, and hope nothing important was missed.
+
+With Helm, the same work becomes more explicit:
+
+1. hydrate context from notes, logs, checkpoints, and prior task traces
+2. choose a narrow execution profile before running anything
+3. run tracked work with audit trails tied to both tasks and commands
+4. preserve rollback paths before risky changes
+5. capture the workflow for reuse only after it proves stable
+
+That is the shift Helm is designed to make: from capable agent behavior to inspectable, recoverable, repeatable agent operations.
+
 ## Quick Start
 
 ```bash
