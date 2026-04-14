@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- replaced the central skill harness registry with skill-local `contract.json` manifests
+- moved allowed/default profile policy into skill manifests instead of requiring central policy edits
+- added manifest auditing to detect missing or malformed skill contracts before release or runtime use
+- expanded README, release docs, and release checklist around manifest-based harness governance
+
 ## 0.2.0
 
 - added explicit finalization inspection commands for recent state, pending durable captures, capture-state summaries, and checkpoint-linked finalization review

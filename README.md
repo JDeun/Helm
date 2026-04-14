@@ -25,6 +25,7 @@
   <a href="#onboarding-and-workspace-model">Onboarding</a> ·
   <a href="#core-commands">Core Commands</a> ·
   <a href="#adaptive-harness">Adaptive Harness</a> ·
+  <a href="#skill-quality-and-policy">Skill Quality</a> ·
   <a href="#docs-and-demo">Docs and Demo</a>
 </p>
 
@@ -212,6 +213,24 @@ helm harness --path ~/.helm/workspace preflight \
   -- python3 -c 'print("ok")'
 ```
 
+The key design change in the current release is that harness policy is now skill-owned:
+
+- each skill can declare `allowed_profiles` and `default_profile` in `skills/<skill>/contract.json`
+- strict runner requirements can be declared in the manifest instead of central code
+- `python3 scripts/run_with_profile.py validate-manifests --json` audits missing or malformed manifests before release
+
+## Skill Quality And Policy
+
+If you are improving a Helm workspace over time, the main policy goal is not to add more rules. It is to make each skill narrower, more explicit, and easier to validate.
+
+Good defaults:
+
+- start new skills at `inspect_local`
+- widen to `workspace_edit`, `service_ops`, or `risky_edit` only when the workflow truly needs it
+- keep irreversible or account-bound actions visible through `approval_keywords`
+- add strict runners only where weaker local models should not improvise
+- run `validate-manifests` before release or after policy-heavy skill changes
+
 ## File-Native Context Hydration
 
 Helm’s context model is intentionally explicit.
@@ -254,9 +273,10 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.2.0.md`](docs/releases/0.2.0.md)
+- [`docs/releases/0.3.0.md`](docs/releases/0.3.0.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
+- [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
 - [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
 - [`examples/demo-workspace`](examples/demo-workspace)
@@ -276,7 +296,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.2.0 is a usable early public release with explicit finalization inspection.
+Helm v0.3.0 is the first release where adaptive harness governance is skill-local rather than centrally registered.
 
 Included:
 
@@ -285,6 +305,8 @@ Included:
 - file-native context hydration
 - task finalization with durable capture planning
 - operator-facing finalization inspection commands
+- manifest-based adaptive harness governance
+- manifest auditing for missing or malformed skill contracts
 - checkpoint, report, and skill review flows
 - example workspace and release-oriented docs
 
