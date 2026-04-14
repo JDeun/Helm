@@ -4,9 +4,9 @@
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>오래 운영되는 개인 에이전트를 위한 안정성 우선 harness 및 operations layer</strong></p>
+<p align="center"><strong>한 번이 아니라 계속 돌리는 에이전트를 위한 safety and memory layer</strong></p>
 
-<p align="center">이미 사용 중인 agent runtime 위에 execution discipline, file-native context hydration, audit trails, rollback guidance, durable state capture planning, skill-owned contracts, quality-gated improvement를 얹는 운영 계층입니다.</p>
+<p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
 
 <p align="center"><strong>현재 릴리즈: v0.4.0</strong></p>
 
@@ -33,15 +33,25 @@
 
 ## 왜 Helm인가
 
-대부분의 에이전트 스택은 이미 툴 호출은 할 수 있습니다. 진짜 어려운 문제는 그 다음입니다.
+대부분의 에이전트 스택은 이미 툴 호출은 할 수 있습니다. 진짜 어려운 문제는 같은 에이전트를 계속 굴렸을 때 그것이 하나의 시스템처럼 동작하길 기대하는 순간부터 시작됩니다.
 
-- 명령을 실행하기 전에 올바른 execution mode를 고르는 것
+보통 실패는 이런 식으로 나타납니다.
+
+- 이전 실행에서 무슨 일이 있었는지 자꾸 잊어버린다
+- 작은 로컬 모델은 multi-step 작업에서 쉽게 흔들린다
+- risky edit가 생겨도 rollback discipline이 눈에 보이지 않는다
+- 작업은 끝났는데 나중에 왜 그렇게 실행됐는지 설명하기 어렵다
+- skill은 늘어나는데 규칙은 여전히 문서나 프롬프트에만 남는다
+
+Helm은 바로 이 두 번째 층의 문제를 다룹니다.
+
+즉 Helm이 하는 일은:
+
 - 파일과 이전 운영 흔적에서 필요한 컨텍스트를 다시 읽는 것
+- 명령 전에 올바른 execution mode를 고르게 만드는 것
 - 상위 task와 저수준 command를 함께 추적하는 것
-- risky edit 전에 rollback path를 확보하는 것
-- 반복 성공한 workflow를 uncontrolled self-modification 없이 재사용하는 것
-
-Helm은 바로 그 운영 계층을 위한 프로젝트입니다.
+- risky edit 전에 rollback path를 보이게 만드는 것
+- skill policy를 프롬프트 folklore가 아니라 inspectable contract로 다루는 것
 
 현재 릴리즈 기준으로는 특히 다음이 핵심입니다.
 
@@ -54,6 +64,9 @@ Helm은 바로 그 운영 계층을 위한 프로젝트입니다.
 - 이미 agent runtime 또는 workspace가 있는 경우
 - 장기적으로 굴리는 workflow나 skill이 있는 경우
 - notes, memory, logs, checkpoints가 다음 실행에도 영향을 줘야 하는 경우
+
+에이전트를 일회성 데모로만 쓴다면 Helm은 과할 수 있습니다.
+반대로 이미 실제 반복 작업을 맡기고 있다면 Helm의 필요성이 훨씬 분명해집니다.
 
 원칙적으로 runtime-agnostic이지만, OpenClaw 스타일이나 Hermes 스타일 환경이 있으면 가장 자연스럽게 붙습니다.
 

@@ -4,9 +4,9 @@
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>A stability-first harness and operations layer for long-lived personal agents.</strong></p>
+<p align="center"><strong>The safety and memory layer for agents you run more than once.</strong></p>
 
-<p align="center">Bring execution discipline, file-native context hydration, audit trails, rollback guidance, durable state capture planning, skill-owned contracts, and quality-gated improvement to the agent runtime you already use.</p>
+<p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
 <p align="center"><strong>Current release: v0.4.0</strong></p>
 
@@ -33,15 +33,25 @@
 
 ## Why Helm
 
-Most agent stacks can already call tools. The harder problem starts after that:
+Most agent stacks can already call tools. The harder problem starts when you keep using the same agent and expect it to behave like a system.
 
-- choosing the right execution mode before a command runs
-- reloading the right context from files and prior operations
-- tracing high-level tasks and low-level commands together
-- keeping rollback paths before risky edits
-- reusing successful workflows without uncontrolled self-modification
+The usual failure pattern looks like this:
 
-Helm is for that operational layer.
+- the agent forgets what happened in prior runs
+- a weaker local model drifts on multi-step work
+- risky edits happen without visible rollback discipline
+- tasks complete, but later nobody can explain why they ran that way
+- skills accumulate, but their rules still live mostly in prose
+
+Helm exists for that second layer of pain.
+
+It gives you:
+
+- a way to reload the right context from files and prior operations
+- a way to choose the right execution mode before a command runs
+- a way to trace high-level tasks and low-level commands together
+- a way to keep rollback paths before risky edits
+- a way to make skill policy inspectable instead of leaving it as prompt folklore
 
 In the current release, that means:
 
@@ -49,11 +59,14 @@ In the current release, that means:
 - smaller or weaker local models can be forced through narrower runners and stricter defaults
 - operators can audit not only whether manifests exist, but whether they are still too generic to be trusted
 
-It is especially useful if you already have:
+Helm is especially useful if you already have:
 
 - an existing agent runtime or workspace
 - long-lived workflows or skills
 - notes, memory, logs, or checkpoints that should influence future runs
+
+If your agent only runs one-off demos, Helm is probably unnecessary.
+If your agent already does real repeated work, Helm becomes much easier to justify.
 
 Helm is runtime-agnostic in principle, but it is easiest to adopt when you already work in an OpenClaw-style or Hermes-style environment.
 
