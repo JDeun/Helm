@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.skill_manifest_lib import load_skill_policies as load_manifest_policies
 
 
 WORKSPACE = get_workspace_layout().root
@@ -20,7 +21,6 @@ DRAFTS_ROOT = WORKSPACE / "skill_drafts"
 TEMPLATE_PATH = WORKSPACE / "references" / "skill-capture-template.md"
 TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
 COMMAND_LOG = get_workspace_layout().state_root / "command-log.jsonl"
-POLICY_PATH = WORKSPACE / "references" / "skill_profile_policies.json"
 CONTRACT_TEMPLATE_PATH = WORKSPACE / "references" / "skill-contract-template.json"
 
 PLACEHOLDER_MARKERS = (
@@ -104,10 +104,7 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 def load_policies() -> dict[str, dict]:
-    if not POLICY_PATH.exists():
-        return {}
-    data = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
-    return data.get("skills", {})
+    return load_manifest_policies(WORKSPACE, WORKSPACE / "references" / "skill_profile_policies.json")
 
 
 def extract_frontmatter_description(path: Path) -> str | None:
@@ -342,7 +339,7 @@ def follow_up_steps(name: str, report: dict, target_exists: bool) -> list[str]:
     if not target_exists:
         steps.append(f"Review whether `{name}` should be added to SKILLS_REGISTRY.md.")
     if report["details"].get("policy_entry") is None:
-        steps.append(f"Consider adding `{name}` to references/skill_profile_policies.json with allowed/default profiles.")
+        steps.append(f"Define `{name}` allowed/default profiles in `{name}/contract.json` before promotion.")
     steps.append(f"Run a routing-surface review if `{name}` changes shared dispatch or execution policy materially.")
     return steps
 
@@ -362,7 +359,7 @@ def assessment_summary(report: dict) -> list[str]:
         lines.append("Restore the review checklist section so the draft remains reviewable.")
     if checks["no_policy_conflict"] is False:
         conflicts = ", ".join(report["details"]["policy_conflicts"])
-        lines.append(f"Align the draft profiles with references/skill_profile_policies.json: {conflicts}.")
+        lines.append(f"Align the draft profiles with `{root.name}/contract.json` or the inherited manifest policy: {conflicts}.")
     if checks["no_duplicate_skill_conflict"] is False:
         duplicates = ", ".join(item["skill"] for item in report["details"]["duplicate_candidates"][:3])
         lines.append(f"Resolve overlap with existing skills before promotion: {duplicates}.")

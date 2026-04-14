@@ -13,6 +13,7 @@ from pathlib import Path
 
 from helm_context import adopt_context_source, configured_context_sources, load_context_sources, onboarding_root
 from helm_workspace import DEFAULT_WORKSPACE, detect_layout, discover_workspace, suggest_external_sources
+from scripts.skill_manifest_lib import load_skill_policies
 
 
 ROOT = Path(__file__).resolve().parent
@@ -20,8 +21,8 @@ REFERENCES_ROOT = ROOT / "references"
 SCRIPT_ROOT = ROOT / "scripts"
 REQUIRED_REFERENCE_FILES = (
     "execution_profiles.json",
-    "skill_profile_policies.json",
     "skill-capture-template.md",
+    "skill-contract-template.json",
 )
 
 ASCII_BANNER = r"""
@@ -85,9 +86,8 @@ def read_jsonl(path: Path) -> list[dict]:
 def validate_workspace_config(root: Path) -> dict:
     issues: list[str] = []
     profiles_path = root / "references" / "execution_profiles.json"
-    policies_path = root / "references" / "skill_profile_policies.json"
     profiles_data = read_json(profiles_path, {})
-    policies_data = read_json(policies_path, {})
+    policies = load_skill_policies(root, root / "references" / "skill_profile_policies.json")
 
     profiles = profiles_data.get("profiles", {}) if isinstance(profiles_data, dict) else {}
     if not isinstance(profiles, dict) or not profiles:
@@ -109,10 +109,7 @@ def validate_workspace_config(root: Path) -> dict:
                 f"Expected one of: {', '.join(sorted(valid_checkpoint_modes))}."
             )
 
-    skills = policies_data.get("skills", {}) if isinstance(policies_data, dict) else {}
-    if skills and not isinstance(skills, dict):
-        issues.append("references/skill_profile_policies.json must define `skills` as an object.")
-        skills = {}
+    skills = policies
     for skill, policy in skills.items():
         if not isinstance(policy, dict):
             issues.append(f"skill policy `{skill}` must map to an object.")

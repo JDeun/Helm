@@ -1,0 +1,13 @@
+{
+  "skill": "skill-capture-ko",
+  "allowed_profiles": ["workspace_edit", "risky_edit"],
+  "default_profile": "workspace_edit",
+  "context": {
+    "required": false,
+    "query": "skill",
+    "include": ["tasks", "commands", "memory"],
+    "limit": 6
+  },
+  "require_finalization_written": true,
+  "runner": {}
+}

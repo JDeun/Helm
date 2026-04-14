@@ -1,0 +1,16 @@
+{
+  "skill": "household-ledger-ko",
+  "allowed_profiles": ["inspect_local", "service_ops", "risky_edit"],
+  "default_profile": "inspect_local",
+  "context": {
+    "required": false,
+    "query": "ledger",
+    "include": ["memory", "ontology", "tasks", "commands"],
+    "limit": 6
+  },
+  "require_finalization_written": true,
+  "runner": {
+    "entrypoint": "household_ledger_runner.py",
+    "strict_required": true
+  }
+}

@@ -48,9 +48,46 @@ def evaluate(entry: dict | None) -> dict:
     enforcement = harness.get("enforcement_level", "light")
     finalization = (entry.get("memory_capture") or {}).get("finalization_status", "unknown")
     status = entry.get("status")
+    contract_present = bool(harness.get("skill_contract_present"))
+    context_required = bool(harness.get("context_required"))
+    context_satisfied = bool(harness.get("context_satisfied"))
     checks = [
         {"name": "task_status", "ok": status in {"completed", "handoff_required"}, "detail": f"status={status}"},
     ]
+    if enforcement in {"balanced", "strict"}:
+        checks.append(
+            {
+                "name": "task_name",
+                "ok": bool(entry.get("task_name")),
+                "detail": f"task_name={'present' if entry.get('task_name') else 'missing'}",
+            }
+        )
+        checks.append(
+            {
+                "name": "skill_contract",
+                "ok": contract_present,
+                "detail": f"skill_contract_present={contract_present}",
+            }
+        )
+    else:
+        checks.append({"name": "task_name", "ok": True, "detail": "not required"})
+        checks.append({"name": "skill_contract", "ok": True, "detail": f"skill_contract_present={contract_present}"})
+    if enforcement in {"balanced", "strict"} and context_required:
+        checks.append(
+            {
+                "name": "context_hydration",
+                "ok": context_satisfied,
+                "detail": f"context_required={context_required}, context_satisfied={context_satisfied}",
+            }
+        )
+    else:
+        checks.append(
+            {
+                "name": "context_hydration",
+                "ok": True,
+                "detail": f"context_required={context_required}, context_satisfied={context_satisfied}",
+            }
+        )
     if enforcement in {"balanced", "strict"}:
         checks.append(
             {
@@ -72,6 +109,7 @@ def evaluate(entry: dict | None) -> dict:
             "status": status,
             "enforcement_level": enforcement,
             "finalization_status": finalization,
+            "skill_contract_present": contract_present,
         },
         "checks": checks,
     }

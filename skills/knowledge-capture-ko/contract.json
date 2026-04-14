@@ -1,0 +1,13 @@
+{
+  "skill": "knowledge-capture-ko",
+  "allowed_profiles": ["inspect_local", "workspace_edit", "service_ops", "risky_edit"],
+  "default_profile": "inspect_local",
+  "context": {
+    "required": false,
+    "query": "memory",
+    "include": ["memory", "ontology", "tasks"],
+    "limit": 6
+  },
+  "require_finalization_written": true,
+  "runner": {}
+}

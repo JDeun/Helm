@@ -77,6 +77,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             "enforcement_level": payload["enforcement_level"],
             "skill_contract_present": bool(payload["contract"]),
             "auto_hydrate": args.auto_hydrate,
+            "context_required": payload["context_required"],
+            "context_satisfied": bool(args.context_confirmed or args.auto_hydrate or not payload["context_required"]),
             "hydration_commands": payload["hydration_commands"],
             "user_request": args.request
         }

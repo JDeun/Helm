@@ -11,15 +11,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies as load_manifest_policies
 
 
 WORKSPACE = get_workspace_layout().root
 PROFILE_FILE = WORKSPACE / "references" / "execution_profiles.json"
 POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"
 HARNESS_POLICY_FILE = WORKSPACE / "references" / "adaptive_harness_policy.json"
-CONTRACTS_FILE = WORKSPACE / "references" / "skill_contracts.json"
-SKILLS_ROOT = WORKSPACE / "skills"
-DRAFTS_ROOT = WORKSPACE / "skill_drafts"
 TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
 
 
@@ -35,18 +33,43 @@ def load_profiles() -> dict[str, dict]:
 
 
 def load_skill_policies() -> dict[str, dict]:
-    data = load_json(POLICY_FILE, {"skills": {}})
-    return data.get("skills", {}) if isinstance(data, dict) else {}
+    return load_manifest_policies(WORKSPACE, POLICY_FILE)
 
 
 def load_harness_policy() -> dict:
     data = load_json(HARNESS_POLICY_FILE, {})
-    return data if isinstance(data, dict) else {}
-
-
-def load_skill_contracts() -> dict[str, dict]:
-    data = load_json(CONTRACTS_FILE, {})
-    return data if isinstance(data, dict) else {}
+    policy = data if isinstance(data, dict) else {}
+    overlay_root = WORKSPACE / "references" / "adaptive_harness.d"
+    if overlay_root.exists():
+        for overlay_path in sorted(overlay_root.glob("*.json")):
+            overlay = load_json(overlay_path, {})
+            if not isinstance(overlay, dict):
+                continue
+            if "model_aliases" in overlay and isinstance(overlay["model_aliases"], dict):
+                merged_aliases = dict(policy.get("model_aliases", {}))
+                merged_aliases.update(overlay["model_aliases"])
+                policy["model_aliases"] = merged_aliases
+            if "tiers" in overlay and isinstance(overlay["tiers"], dict):
+                merged_tiers = dict(policy.get("tiers", {}))
+                for tier_name, tier_payload in overlay["tiers"].items():
+                    current = dict(merged_tiers.get(tier_name, {}))
+                    if isinstance(tier_payload, dict):
+                        for key, value in tier_payload.items():
+                            if key == "profile_overrides" and isinstance(value, dict):
+                                merged = dict(current.get("profile_overrides", {}))
+                                merged.update(value)
+                                current[key] = merged
+                            else:
+                                current[key] = value
+                    merged_tiers[tier_name] = current
+                policy["tiers"] = merged_tiers
+            if "validation" in overlay and isinstance(overlay["validation"], dict):
+                merged_validation = dict(policy.get("validation", {}))
+                merged_validation.update(overlay["validation"])
+                policy["validation"] = merged_validation
+            if "enforcement_order" in overlay and isinstance(overlay["enforcement_order"], list):
+                policy["enforcement_order"] = overlay["enforcement_order"]
+    return policy
 
 
 def base_skill_contract(skill: str | None) -> dict:
@@ -57,20 +80,8 @@ def base_skill_contract(skill: str | None) -> dict:
         "require_finalization_written": True,
         "allowed_profiles": policy.get("allowed_profiles", []),
         "default_profile": policy.get("default_profile"),
-        "narrow_runner_required": False,
+        "runner": {},
     }
-
-
-def contract_candidate_paths(skill: str) -> list[Path]:
-    return [
-        SKILLS_ROOT / skill / "contract.json",
-        DRAFTS_ROOT / skill / "contract.json",
-    ]
-
-
-def load_contract_file(path: Path) -> dict | None:
-    data = load_json(path, {})
-    return data if isinstance(data, dict) and data else None
 
 
 def resolve_model_tier(policy: dict, model: str | None, model_tier: str | None) -> str:
@@ -103,13 +114,7 @@ def max_enforcement(policy: dict, *levels: str) -> str:
 def resolve_skill_contract(skill: str | None) -> dict:
     if not skill:
         return {}
-    for path in contract_candidate_paths(skill):
-        contract = load_contract_file(path)
-        if contract:
-            resolved = base_skill_contract(skill)
-            resolved.update(contract)
-            return resolved
-    contracts = load_skill_contracts()
+    contracts = load_skill_contract_manifests(WORKSPACE)
     contract = contracts.get(skill)
     if contract:
         resolved = base_skill_contract(skill)
@@ -126,7 +131,8 @@ def resolve_enforcement_level(model: str | None, model_tier: str | None, profile
     enforcement = max_enforcement(policy, enforcement, str((tier_policy.get("profile_overrides") or {}).get(profile, "")))
     if (contract.get("context") or {}).get("required"):
         enforcement = max_enforcement(policy, enforcement, "balanced")
-    if contract.get("narrow_runner_required") and profile in {"service_ops", "risky_edit"}:
+    runner = contract.get("runner") or {}
+    if runner.get("strict_required") and profile in {"service_ops", "risky_edit"}:
         enforcement = max_enforcement(policy, enforcement, "strict")
     return tier, enforcement
 
@@ -217,8 +223,9 @@ def preflight_payload(
     else:
         append_check(checks, "approval_boundary", True, "no extra approval boundary required")
 
-    preferred_runner = contract.get("preferred_runner")
-    if contract.get("narrow_runner_required") and enforcement == "strict":
+    runner = contract.get("runner") or {}
+    preferred_runner = runner.get("entrypoint")
+    if runner.get("strict_required") and enforcement == "strict":
         joined = " ".join(command)
         if preferred_runner and preferred_runner not in joined:
             append_check(checks, "preferred_runner", False, f"strict mode expects {preferred_runner}")

@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 from helm_workspace import get_workspace_layout
 from scripts.memory_capture import build_memory_capture_plan
+from scripts.skill_manifest_lib import load_skill_policies as load_manifest_policies
 
 
 WORKSPACE = get_workspace_layout().root
@@ -47,10 +48,7 @@ def load_profiles() -> dict[str, dict]:
 
 
 def load_policies() -> dict[str, dict]:
-    if not POLICY_FILE.exists():
-        return {}
-    data = json.loads(POLICY_FILE.read_text(encoding="utf-8"))
-    return data.get("skills", {})
+    return load_manifest_policies(WORKSPACE, POLICY_FILE)
 
 
 def ensure_ledger_dir() -> None:

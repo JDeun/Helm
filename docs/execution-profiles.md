@@ -89,6 +89,6 @@ The profiled runner now writes a `memory_capture` plan into the final task-ledge
 - `risky_edit` automatically creates a checkpoint before execution.
 - `risky_edit` stores the created `checkpoint_id` in later task-ledger states when checkpoint creation succeeds.
 - `remote_handoff` records a handoff task instead of pretending to execute locally, and requires `--runtime-target`.
-- If `--skill` is provided, the runner checks `references/skill_profile_policies.json` and rejects disallowed profile/skill combinations.
+- If `--skill` is provided, the runner checks the skill-local `contract.json` manifest first and rejects disallowed profile/skill combinations.
 - `service_ops` runs are appended to `.openclaw/task-ledger.jsonl` so detached or side-effectful work is auditable later.
 - Final task-ledger states include a visible `memory_capture` assessment so operational completion is inspectable.
