@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- added `audit-manifest-quality` so skill contracts can be checked for generic backfills, weak defaults, and missing approval or runner policy
+- tightened the default contracts for core and representative skills so profile scope, context hydration, and approval boundaries are skill-specific
+- refreshed README and release docs to position Helm as a stability-first harness for smaller local models as well as stronger hosted models
+- clarified the maintenance loop for skill quality so new skills can be added without central harness edits or per-skill hardcoding
+
 ## 0.3.0
 
 - replaced the central skill harness registry with skill-local `contract.json` manifests

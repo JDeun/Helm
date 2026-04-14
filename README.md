@@ -4,11 +4,11 @@
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>A stability-first operations layer for long-lived personal agents.</strong></p>
+<p align="center"><strong>A stability-first harness and operations layer for long-lived personal agents.</strong></p>
 
-<p align="center">Bring execution discipline, file-native context hydration, audit trails, rollback guidance, durable state capture planning, and gated improvement to the agent runtime you already use.</p>
+<p align="center">Bring execution discipline, file-native context hydration, audit trails, rollback guidance, durable state capture planning, skill-owned contracts, and quality-gated improvement to the agent runtime you already use.</p>
 
-<p align="center"><strong>Current release: v0.3.0</strong></p>
+<p align="center"><strong>Current release: v0.4.0</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -42,6 +42,12 @@ Most agent stacks can already call tools. The harder problem starts after that:
 - reusing successful workflows without uncontrolled self-modification
 
 Helm is for that operational layer.
+
+In the current release, that means:
+
+- skills own their execution contract through `skills/<skill>/contract.json`
+- smaller or weaker local models can be forced through narrower runners and stricter defaults
+- operators can audit not only whether manifests exist, but whether they are still too generic to be trusted
 
 It is especially useful if you already have:
 
@@ -220,6 +226,7 @@ The key design change in the current release is that harness policy is now skill
 - each skill can declare `allowed_profiles` and `default_profile` in `skills/<skill>/contract.json`
 - strict runner requirements can be declared in the manifest instead of central code
 - `python3 scripts/run_with_profile.py validate-manifests --json` audits missing or malformed manifests before release
+- `python3 scripts/run_with_profile.py audit-manifest-quality --json` flags contracts that are still too broad, too generic, or missing approval boundaries
 
 ## Skill Quality And Policy
 
@@ -231,7 +238,7 @@ Good defaults:
 - widen to `workspace_edit`, `service_ops`, or `risky_edit` only when the workflow truly needs it
 - keep irreversible or account-bound actions visible through `approval_keywords`
 - add strict runners only where weaker local models should not improvise
-- run `validate-manifests` before release or after policy-heavy skill changes
+- run `validate-manifests` and `audit-manifest-quality` before release or after policy-heavy skill changes
 
 ## File-Native Context Hydration
 
@@ -275,7 +282,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.3.0.md`](docs/releases/0.3.0.md)
+- [`docs/releases/0.4.0.md`](docs/releases/0.4.0.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -298,7 +305,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.3.0 is the first release where adaptive harness governance is skill-local rather than centrally registered.
+Helm v0.4.0 is the release where skill-local harness governance became operationally enforceable rather than just structurally possible.
 
 Included:
 
@@ -309,6 +316,8 @@ Included:
 - operator-facing finalization inspection commands
 - manifest-based adaptive harness governance
 - manifest auditing for missing or malformed skill contracts
+- manifest quality auditing for generic or weak skill contracts
+- tighter representative skill policies for local, service, and handoff execution
 - checkpoint, report, and skill review flows
 - example workspace and release-oriented docs
 

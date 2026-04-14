@@ -1,12 +1,12 @@
-# Helm 0.3.0 Release Checklist
+# Helm 0.4.0 Release Checklist
 
-Use this checklist before cutting the `0.3.0` release.
+Use this checklist before cutting the `0.4.0` release.
 
 ## Version and metadata
 
-- confirm `pyproject.toml` version is `0.3.0`
-- confirm `setup.py` version is `0.3.0`
-- confirm `CHANGELOG.md` includes `0.3.0`
+- confirm `pyproject.toml` version is `0.4.0`
+- confirm `setup.py` version is `0.4.0`
+- confirm `CHANGELOG.md` includes `0.4.0`
 - confirm README asset links and docs links render correctly
 
 ## Packaging
@@ -17,6 +17,7 @@ Use this checklist before cutting the `0.3.0` release.
 - verify `helm survey` appears in help output
 - verify `helm memory` appears in help output
 - verify `python3 scripts/run_with_profile.py validate-manifests --json` reports `ok: true`
+- verify `python3 scripts/run_with_profile.py audit-manifest-quality --json` reports `ok: true`
 
 ## Workspace and onboarding smoke tests
 
@@ -29,6 +30,7 @@ Use this checklist before cutting the `0.3.0` release.
 - `helm status --path /tmp/helm-release-smoke --verbose`
 - `helm ops --path /tmp/helm-release-smoke capture-state`
 - `python3 scripts/run_with_profile.py validate-manifests --json`
+- `python3 scripts/run_with_profile.py audit-manifest-quality --json`
 
 ## Demo workspace smoke tests
 
@@ -36,6 +38,7 @@ Use this checklist before cutting the `0.3.0` release.
 - `helm doctor --path examples/demo-workspace`
 - `helm validate --path examples/demo-workspace`
 - `python3 scripts/run_with_profile.py validate-manifests --json`
+- `python3 scripts/run_with_profile.py audit-manifest-quality --json`
 - `helm context --path examples/demo-workspace --include notes tasks commands --summary --limit 8`
 - `helm context --path examples/demo-workspace recent-state --limit 5`
 - `helm memory --path examples/demo-workspace pending-captures --limit 5`
@@ -46,7 +49,7 @@ Use this checklist before cutting the `0.3.0` release.
 
 ## Release outputs
 
-- create git tag: `v0.3.0`
-- draft GitHub release notes from `docs/releases/0.3.0.md`
+- create git tag: `v0.4.0`
+- draft GitHub release notes from `docs/releases/0.4.0.md`
 - attach screenshots or README visuals if needed
 - publish source release after the checklist passes

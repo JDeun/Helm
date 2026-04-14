@@ -35,3 +35,12 @@ This document is a practical checklist for improving skill quality and operation
 4. Tighten `approval_keywords` for account-bound or irreversible actions
 5. Add `runner.entrypoint` and `runner.strict_required` where weaker models should not improvise
 6. Re-run `helm validate --path <workspace>` after policy changes
+
+## Release Bar
+
+Before a Helm release:
+
+- `validate-manifests` must report `ok: true`
+- `audit-manifest-quality` must report `ok: true`
+- README and release notes should describe the current governance model accurately
+- representative skills should be tightened enough that the release does not rely on generic backfill contracts
