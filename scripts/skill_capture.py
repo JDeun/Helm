@@ -21,6 +21,7 @@ TEMPLATE_PATH = WORKSPACE / "references" / "skill-capture-template.md"
 TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
 COMMAND_LOG = get_workspace_layout().state_root / "command-log.jsonl"
 POLICY_PATH = WORKSPACE / "references" / "skill_profile_policies.json"
+CONTRACT_TEMPLATE_PATH = WORKSPACE / "references" / "skill-contract-template.json"
 
 PLACEHOLDER_MARKERS = (
     "Describe the workflow this skill owns",
@@ -51,6 +52,11 @@ def render_template(name: str, description: str, emoji: str) -> str:
     )
 
 
+def render_contract_template(name: str) -> str:
+    template = CONTRACT_TEMPLATE_PATH.read_text(encoding="utf-8")
+    return template.replace("__SKILL_NAME__", name)
+
+
 def create_skill(args: argparse.Namespace) -> int:
     skill_dir = SKILLS_ROOT / args.name
     if skill_dir.exists():
@@ -70,6 +76,7 @@ def create_skill(args: argparse.Namespace) -> int:
         skill_md = skill_md.replace("      bins: []\n      env: []", "\n".join(extra))
 
     (skill_dir / "SKILL.md").write_text(skill_md + "\n", encoding="utf-8")
+    (skill_dir / "contract.json").write_text(render_contract_template(args.name) + "\n", encoding="utf-8")
     (skill_dir / "references" / "README.md").write_text(
         "# References\n\nStore durable workflow notes, routing rules, and source material here.\n",
         encoding="utf-8",
@@ -202,6 +209,7 @@ def draft_from_task(args: argparse.Namespace) -> int:
         commands=commands,
     )
     (draft_dir / "SKILL.md").write_text(skill_md, encoding="utf-8")
+    (draft_dir / "contract.json").write_text(render_contract_template(args.name) + "\n", encoding="utf-8")
     (draft_dir / "references" / "workflow-notes.md").write_text(
         "# Workflow Notes\n\nReplace this with the stable procedure learned from the source task.\n",
         encoding="utf-8",

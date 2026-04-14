@@ -18,6 +18,8 @@ PROFILE_FILE = WORKSPACE / "references" / "execution_profiles.json"
 POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"
 HARNESS_POLICY_FILE = WORKSPACE / "references" / "adaptive_harness_policy.json"
 CONTRACTS_FILE = WORKSPACE / "references" / "skill_contracts.json"
+SKILLS_ROOT = WORKSPACE / "skills"
+DRAFTS_ROOT = WORKSPACE / "skill_drafts"
 TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
 
 
@@ -45,6 +47,30 @@ def load_harness_policy() -> dict:
 def load_skill_contracts() -> dict[str, dict]:
     data = load_json(CONTRACTS_FILE, {})
     return data if isinstance(data, dict) else {}
+
+
+def base_skill_contract(skill: str | None) -> dict:
+    policies = load_skill_policies()
+    policy = policies.get(skill or "", {})
+    return {
+        "context": {"required": False},
+        "require_finalization_written": True,
+        "allowed_profiles": policy.get("allowed_profiles", []),
+        "default_profile": policy.get("default_profile"),
+        "narrow_runner_required": False,
+    }
+
+
+def contract_candidate_paths(skill: str) -> list[Path]:
+    return [
+        SKILLS_ROOT / skill / "contract.json",
+        DRAFTS_ROOT / skill / "contract.json",
+    ]
+
+
+def load_contract_file(path: Path) -> dict | None:
+    data = load_json(path, {})
+    return data if isinstance(data, dict) and data else None
 
 
 def resolve_model_tier(policy: dict, model: str | None, model_tier: str | None) -> str:
@@ -77,19 +103,19 @@ def max_enforcement(policy: dict, *levels: str) -> str:
 def resolve_skill_contract(skill: str | None) -> dict:
     if not skill:
         return {}
+    for path in contract_candidate_paths(skill):
+        contract = load_contract_file(path)
+        if contract:
+            resolved = base_skill_contract(skill)
+            resolved.update(contract)
+            return resolved
     contracts = load_skill_contracts()
     contract = contracts.get(skill)
     if contract:
-        return contract
-    policies = load_skill_policies()
-    policy = policies.get(skill, {})
-    return {
-        "context": {"required": False},
-        "require_finalization_written": True,
-        "allowed_profiles": policy.get("allowed_profiles", []),
-        "default_profile": policy.get("default_profile"),
-        "narrow_runner_required": False,
-    }
+        resolved = base_skill_contract(skill)
+        resolved.update(contract)
+        return resolved
+    return base_skill_contract(skill)
 
 
 def resolve_enforcement_level(model: str | None, model_tier: str | None, profile: str, contract: dict) -> tuple[str, str]:

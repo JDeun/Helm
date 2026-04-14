@@ -1,0 +1,12 @@
+{
+  "skill": "__SKILL_NAME__",
+  "context": {
+    "required": false,
+    "query": "",
+    "include": ["memory", "tasks"],
+    "limit": 6
+  },
+  "approval_keywords": [],
+  "require_finalization_written": true,
+  "narrow_runner_required": false
+}

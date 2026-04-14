@@ -7,7 +7,8 @@ This is a model-tier-aware guardrail system. It keeps the normal execution-profi
 ## Building Blocks
 
 - `references/adaptive_harness_policy.json`
-- `references/skill_contracts.json`
+- `skills/<skill>/contract.json`
+- `references/skill_contracts.json` as a legacy fallback
 - `scripts/adaptive_harness.py`
 - `helm harness ...`
 - `scripts/reply_gate.py`
@@ -20,6 +21,12 @@ This is a model-tier-aware guardrail system. It keeps the normal execution-profi
 - context hydration for contracts that depend on prior state
 - preferred narrow runners in strict mode
 - postflight finalization checks so a task is not treated as complete while durable capture is still pending
+
+New skills do not need central harness edits anymore if they ship their own `contract.json`.
+
+- `scripts/skill_capture.py create` scaffolds `contract.json`
+- `scripts/skill_capture.py draft-from-task` scaffolds `contract.json`
+- `scripts/adaptive_harness_lib.py` loads skill-local contracts before the fallback registry
 
 ## Typical Commands
 
