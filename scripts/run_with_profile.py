@@ -22,6 +22,7 @@ from scripts.skill_manifest_lib import (
     load_skill_contract_manifests,
     load_profiles as load_manifest_profiles,
     manifest_audit,
+    manifest_quality_audit,
     validate_contract_manifest,
 )
 
@@ -215,6 +216,22 @@ def cmd_validate_manifests(args: argparse.Namespace) -> int:
     return 0 if payload["ok"] else 1
 
 
+def cmd_audit_manifest_quality(args: argparse.Namespace) -> int:
+    payload = manifest_quality_audit(WORKSPACE, PROFILE_FILE)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"manifest_count={payload['manifest_count']}")
+        print(f"flagged_count={payload['flagged_count']}")
+        for item in payload["items"][:100]:
+            print(f"skill={item['skill']}")
+            print(f"allowed_profiles={','.join(item['allowed_profiles'])}")
+            print(f"default_profile={item['default_profile']}")
+            for warning in item["warnings"]:
+                print(f"warning={warning}")
+    return 0 if payload["ok"] else 2
+
+
 def cmd_ledger(args: argparse.Namespace) -> int:
     if not TASK_LEDGER.exists():
         print("No task ledger entries found.")
@@ -375,6 +392,10 @@ def build_parser() -> argparse.ArgumentParser:
     manifests = subparsers.add_parser("validate-manifests", help="Validate skill contract manifests.")
     manifests.add_argument("--json", action="store_true")
     manifests.set_defaults(func=cmd_validate_manifests)
+
+    quality = subparsers.add_parser("audit-manifest-quality", help="Flag overly generic or weak manifest policies.")
+    quality.add_argument("--json", action="store_true")
+    quality.set_defaults(func=cmd_audit_manifest_quality)
 
     ledger = subparsers.add_parser("ledger", help="Show recent task-ledger entries.")
     ledger.add_argument("--limit", type=int, default=20)

@@ -128,3 +128,50 @@ def manifest_audit(workspace: Path, legacy_policy_path: Path, profile_path: Path
         "issues": issues,
         "ok": not issues and not missing,
     }
+
+
+def manifest_quality_audit(workspace: Path, profile_path: Path) -> dict:
+    profiles = load_profiles(profile_path)
+    manifests = load_skill_contract_manifests(workspace)
+    full_profile_set = sorted(profiles.keys())
+    items: list[dict] = []
+
+    for skill, manifest in sorted(manifests.items()):
+        allowed = manifest.get("allowed_profiles") or []
+        default = manifest.get("default_profile")
+        context = manifest.get("context") or {}
+        runner = manifest.get("runner") or {}
+        approval_keywords = manifest.get("approval_keywords") or []
+        warnings: list[str] = []
+
+        if sorted(allowed) == full_profile_set:
+            warnings.append("allowed_profiles still spans every profile")
+        if default == "inspect_local" and any(p in allowed for p in ("workspace_edit", "risky_edit")) and not runner:
+            warnings.append("default_profile remains inspect_local while local mutation-capable profiles are enabled")
+        if not context.get("required") and not context.get("query"):
+            warnings.append("context policy is still generic")
+        if not approval_keywords and "remote_handoff" in allowed:
+            warnings.append("approval_keywords missing despite remote handoff capability")
+        if not runner and "risky_edit" in allowed:
+            warnings.append("runner policy missing for a risky-edit capable skill")
+
+        skill_dir = workspace / "skills" / skill
+        if (skill_dir / "scripts").exists() and not runner and any(p in allowed for p in ("service_ops", "risky_edit")):
+            warnings.append("skill ships scripts but no runner guidance is declared")
+
+        if warnings:
+            items.append(
+                {
+                    "skill": skill,
+                    "allowed_profiles": allowed,
+                    "default_profile": default,
+                    "warnings": warnings,
+                }
+            )
+
+    return {
+        "manifest_count": len(manifests),
+        "flagged_count": len(items),
+        "items": items,
+        "ok": len(items) == 0,
+    }

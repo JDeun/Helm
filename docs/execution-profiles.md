@@ -63,6 +63,7 @@ The profiled runner now writes a `memory_capture` plan into the final task-ledge
   - `python3 ~/Helm/scripts/run_with_profile.py show risky_edit`
   - `python3 ~/Helm/scripts/run_with_profile.py policy`
   - `python3 ~/Helm/scripts/run_with_profile.py validate-manifests --json`
+  - `python3 ~/Helm/scripts/run_with_profile.py audit-manifest-quality --json`
 
 - Run a command with a declared profile:
   - `python3 ~/Helm/scripts/run_with_profile.py run workspace_edit -- git -C ~/Helm status --short`

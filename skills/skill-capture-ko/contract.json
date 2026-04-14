@@ -9,5 +9,8 @@
     "limit": 6
   },
   "require_finalization_written": true,
-  "runner": {}
+  "runner": {
+    "entrypoint": "skill_capture.py",
+    "strict_required": true
+  }
 }

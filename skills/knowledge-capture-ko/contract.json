@@ -1,7 +1,7 @@
 {
   "skill": "knowledge-capture-ko",
-  "allowed_profiles": ["inspect_local", "workspace_edit", "service_ops", "risky_edit"],
-  "default_profile": "inspect_local",
+  "allowed_profiles": ["inspect_local", "workspace_edit", "service_ops"],
+  "default_profile": "workspace_edit",
   "context": {
     "required": false,
     "query": "memory",

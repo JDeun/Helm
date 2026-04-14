@@ -30,7 +30,8 @@ This document is a practical checklist for improving skill quality and operation
 ## Suggested Maintenance Loop
 
 1. Run `python3 scripts/run_with_profile.py validate-manifests --json`
-2. Review skills whose `allowed_profiles` are broader than their actual workflow needs
-3. Tighten `approval_keywords` for account-bound or irreversible actions
-4. Add `runner.entrypoint` and `runner.strict_required` where weaker models should not improvise
-5. Re-run `helm validate --path <workspace>` after policy changes
+2. Run `python3 scripts/run_with_profile.py audit-manifest-quality --json`
+3. Review skills whose `allowed_profiles` are broader than their actual workflow needs
+4. Tighten `approval_keywords` for account-bound or irreversible actions
+5. Add `runner.entrypoint` and `runner.strict_required` where weaker models should not improvise
+6. Re-run `helm validate --path <workspace>` after policy changes

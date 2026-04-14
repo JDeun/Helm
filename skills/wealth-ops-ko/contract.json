@@ -1,6 +1,6 @@
 {
   "skill": "wealth-ops-ko",
-  "allowed_profiles": ["inspect_local", "workspace_edit", "service_ops", "risky_edit", "remote_handoff"],
+  "allowed_profiles": ["inspect_local", "service_ops", "remote_handoff"],
   "default_profile": "inspect_local",
   "context": {
     "required": true,
