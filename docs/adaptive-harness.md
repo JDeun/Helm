@@ -28,6 +28,7 @@ New skills do not need central harness edits anymore if they ship their own `con
 - `scripts/skill_capture.py draft-from-task` scaffolds `contract.json`
 - `scripts/adaptive_harness_lib.py` loads skill-local contracts directly
 - `allowed_profiles` and `default_profile` now live in the skill contract instead of a required central registry
+- `scripts/run_with_profile.py validate-manifests` audits malformed or missing manifests
 
 ## Typical Commands
 

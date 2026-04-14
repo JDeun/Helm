@@ -17,7 +17,13 @@ if str(ROOT) not in sys.path:
 
 from helm_workspace import get_workspace_layout
 from scripts.memory_capture import build_memory_capture_plan
-from scripts.skill_manifest_lib import load_skill_policies as load_manifest_policies
+from scripts.skill_manifest_lib import (
+    load_skill_policies as load_manifest_policies,
+    load_skill_contract_manifests,
+    load_profiles as load_manifest_profiles,
+    manifest_audit,
+    validate_contract_manifest,
+)
 
 
 WORKSPACE = get_workspace_layout().root
@@ -96,6 +102,13 @@ def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dic
 def validate_skill_profile(skill: str | None, profile: str) -> None:
     if not skill:
         return
+    profiles = load_manifest_profiles(PROFILE_FILE)
+    manifests = load_skill_contract_manifests(WORKSPACE)
+    manifest = manifests.get(skill)
+    if manifest:
+        issues = validate_contract_manifest(skill, manifest, profiles)
+        if issues:
+            raise SystemExit("Invalid skill manifest: " + "; ".join(issues))
     policies = load_policies()
     policy = policies.get(skill)
     if not policy:
@@ -185,6 +198,21 @@ def cmd_policy(_: argparse.Namespace) -> int:
         return 0
     print(json.dumps(policies, indent=2, ensure_ascii=False))
     return 0
+
+
+def cmd_validate_manifests(args: argparse.Namespace) -> int:
+    payload = manifest_audit(WORKSPACE, POLICY_FILE, PROFILE_FILE)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"manifest_count={payload['manifest_count']}")
+        print(f"missing_contract_skills={len(payload['missing_contract_skills'])}")
+        for skill in payload["missing_contract_skills"][:50]:
+            print(f"missing={skill}")
+        for issue in payload["issues"][:100]:
+            print(f"issue={issue}")
+        print(f"ok={payload['ok']}")
+    return 0 if payload["ok"] else 1
 
 
 def cmd_ledger(args: argparse.Namespace) -> int:
@@ -343,6 +371,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     policy = subparsers.add_parser("policy", help="Show skill-to-profile policy mappings.")
     policy.set_defaults(func=cmd_policy)
+
+    manifests = subparsers.add_parser("validate-manifests", help="Validate skill contract manifests.")
+    manifests.add_argument("--json", action="store_true")
+    manifests.set_defaults(func=cmd_validate_manifests)
 
     ledger = subparsers.add_parser("ledger", help="Show recent task-ledger entries.")
     ledger.add_argument("--limit", type=int, default=20)

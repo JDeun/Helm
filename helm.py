@@ -13,7 +13,7 @@ from pathlib import Path
 
 from helm_context import adopt_context_source, configured_context_sources, load_context_sources, onboarding_root
 from helm_workspace import DEFAULT_WORKSPACE, detect_layout, discover_workspace, suggest_external_sources
-from scripts.skill_manifest_lib import load_skill_policies
+from scripts.skill_manifest_lib import load_skill_policies, manifest_audit
 
 
 ROOT = Path(__file__).resolve().parent
@@ -88,6 +88,7 @@ def validate_workspace_config(root: Path) -> dict:
     profiles_path = root / "references" / "execution_profiles.json"
     profiles_data = read_json(profiles_path, {})
     policies = load_skill_policies(root, root / "references" / "skill_profile_policies.json")
+    manifest_report = manifest_audit(root, root / "references" / "skill_profile_policies.json", profiles_path)
 
     profiles = profiles_data.get("profiles", {}) if isinstance(profiles_data, dict) else {}
     if not isinstance(profiles, dict) or not profiles:
@@ -128,11 +129,15 @@ def validate_workspace_config(root: Path) -> dict:
             issues.append(f"skill policy `{skill}` uses unknown default profile `{default}`.")
         elif allowed and default not in allowed:
             issues.append(f"skill policy `{skill}` default `{default}` is not present in `allowed_profiles`.")
+    issues.extend(manifest_report["issues"])
+    for skill in manifest_report["missing_contract_skills"]:
+        issues.append(f"skill `{skill}` is missing contract.json")
 
     return {
         "workspace": str(root),
         "profile_count": len(profiles),
         "skill_policy_count": len(skills),
+        "manifest_count": manifest_report["manifest_count"],
         "issues": issues,
         "ok": not issues,
     }

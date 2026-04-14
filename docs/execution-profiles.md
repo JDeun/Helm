@@ -62,6 +62,7 @@ The profiled runner now writes a `memory_capture` plan into the final task-ledge
   - `python3 ~/.openclaw/workspace/scripts/run_with_profile.py list`
   - `python3 ~/.openclaw/workspace/scripts/run_with_profile.py show risky_edit`
   - `python3 ~/.openclaw/workspace/scripts/run_with_profile.py policy`
+  - `python3 ~/.openclaw/workspace/scripts/run_with_profile.py validate-manifests --json`
 
 - Run a command with a declared profile:
   - `python3 ~/.openclaw/workspace/scripts/run_with_profile.py run workspace_edit -- git -C ~/.openclaw/workspace status --short`
