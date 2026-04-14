@@ -46,3 +46,16 @@ The current implementation adds planning and observability:
 - `task_ledger_report.py`, `ops_daily_report.py`, `helm status`, and `helm report` surface finalization counts
 
 Actual mutation of workspace-specific memory files stays intentionally separate because each runtime has different write rules.
+
+## Operator Commands
+
+The second expansion adds direct inspection commands so operators do not need to infer finalization state from raw ledger JSON.
+
+- `helm context recent-state --limit 10`
+  shows recently finalized tasks with their finalization status and suggested durable layers
+- `helm memory pending-captures`
+  shows only tasks that still look like they need durable capture follow-up
+- `helm ops capture-state`
+  summarizes finalization counts and the current pending capture queue
+- `helm checkpoint finalize --task-id <id>`
+  combines the task's finalization plan with the checkpoint Helm would use for rollback or inspection

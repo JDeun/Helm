@@ -294,6 +294,90 @@ def recommend_checkpoint(root: Path, task_id: str | None = None) -> dict:
     return {"task": target, "checkpoint": checkpoint}
 
 
+def task_finalization_status(task: dict) -> str:
+    return (task.get("memory_capture") or {}).get("finalization_status", "unknown")
+
+
+def build_recent_state_payload(root: Path, limit: int, *, pending_only: bool = False) -> dict:
+    state_root = root / ".helm"
+    tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
+    if pending_only:
+        tasks = [
+            task
+            for task in tasks
+            if task_finalization_status(task) in {"capture_planned", "capture_partial"}
+        ]
+    selected = tasks[-limit:]
+    items = []
+    for task in selected:
+        memory_capture = task.get("memory_capture") or {}
+        items.append(
+            {
+                "task_id": task.get("task_id"),
+                "task_name": task.get("task_name"),
+                "profile": task.get("profile"),
+                "status": task.get("status"),
+                "started_at": task.get("started_at"),
+                "finished_at": task.get("finished_at"),
+                "finalization_status": memory_capture.get("finalization_status", "unknown"),
+                "recommended_layers": memory_capture.get("recommended_layers", []),
+                "event_types": memory_capture.get("event_types", []),
+                "summary": memory_capture.get("summary"),
+            }
+        )
+    return {
+        "workspace": str(root),
+        "pending_only": pending_only,
+        "count": len(items),
+        "items": items,
+    }
+
+
+def build_capture_state_payload(root: Path, limit: int) -> dict:
+    state_root = root / ".helm"
+    tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
+    recent_tasks = tasks[-limit:]
+    finalization_counts = Counter(task_finalization_status(task) for task in recent_tasks)
+    pending_tasks = [
+        {
+            "task_id": task.get("task_id"),
+            "task_name": task.get("task_name"),
+            "profile": task.get("profile"),
+            "status": task.get("status"),
+            "finalization_status": task_finalization_status(task),
+            "recommended_layers": (task.get("memory_capture") or {}).get("recommended_layers", []),
+        }
+        for task in recent_tasks
+        if task_finalization_status(task) in {"capture_planned", "capture_partial"}
+    ]
+    return {
+        "workspace": str(root),
+        "window": len(recent_tasks),
+        "finalization_counts": dict(finalization_counts),
+        "pending_tasks": pending_tasks,
+    }
+
+
+def build_finalize_payload(root: Path, task_id: str | None) -> dict:
+    recommendation = recommend_checkpoint(root, task_id)
+    task = recommendation.get("task")
+    checkpoint = recommendation.get("checkpoint")
+    memory_capture = (task or {}).get("memory_capture") or {}
+    return {
+        "workspace": str(root),
+        "task": task,
+        "checkpoint": checkpoint,
+        "finalization": {
+            "status": memory_capture.get("finalization_status", "unknown"),
+            "relevant": memory_capture.get("relevant", False),
+            "recommended_layers": memory_capture.get("recommended_layers", []),
+            "event_types": memory_capture.get("event_types", []),
+            "reasons": memory_capture.get("reasons", []),
+            "summary": memory_capture.get("summary"),
+        },
+    }
+
+
 def format_report_markdown(payload: dict) -> str:
     lines = [
         "# Helm Report",
@@ -963,6 +1047,32 @@ def cmd_checkpoint_create(args: argparse.Namespace) -> int:
     return run_script("workspace_checkpoint.py", script_args, root)
 
 
+def cmd_checkpoint_finalize(args: argparse.Namespace) -> int:
+    root = target_root(args.path)
+    payload = build_finalize_payload(root, args.task_id)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    task = payload["task"]
+    if task is None:
+        print("No matching task found.")
+        return 0
+    finalization = payload["finalization"]
+    checkpoint = payload["checkpoint"]
+    print(f"task_id={task.get('task_id')}")
+    print(f"task_name={task.get('task_name')}")
+    print(f"status={task.get('status')}")
+    print(f"finalization_status={finalization['status']}")
+    print("recommended_layers=" + ", ".join(finalization["recommended_layers"]))
+    print("event_types=" + ", ".join(finalization["event_types"]))
+    for reason in finalization["reasons"]:
+        print(f"reason={reason}")
+    if checkpoint:
+        print(f"checkpoint_id={checkpoint.get('checkpoint_id')}")
+        print(f"checkpoint_label={checkpoint.get('label')}")
+    return 0
+
+
 def cmd_sources(args: argparse.Namespace) -> int:
     root = target_root(args.path)
     sources = load_context_sources(root)
@@ -1038,11 +1148,39 @@ def cmd_profile(args: argparse.Namespace) -> int:
 
 def cmd_context(args: argparse.Namespace) -> int:
     root = target_root(args.path) if args.path else discover_workspace().root
+    if args.args:
+        subcommand, *remainder = args.args
+        if subcommand == "recent-state":
+            parser = argparse.ArgumentParser(prog="helm context recent-state")
+            parser.add_argument("--limit", type=int, default=10)
+            parser.add_argument("--json", action="store_true")
+            parsed = parser.parse_args(remainder)
+            payload = build_recent_state_payload(root, parsed.limit)
+            if parsed.json:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
+                return 0
+            if not payload["items"]:
+                print("No recent finalized tasks found.")
+                return 0
+            for item in payload["items"]:
+                print(
+                    f"{item['task_id']} status={item['status']} profile={item['profile']} "
+                    f"finalization={item['finalization_status']} name={item['task_name']}"
+                )
+            return 0
     return run_script("ops_memory_query.py", args.args, root)
 
 
 def cmd_checkpoint(args: argparse.Namespace) -> int:
     root = target_root(args.path) if args.path else discover_workspace().root
+    if args.args:
+        subcommand, *remainder = args.args
+        if subcommand == "finalize":
+            parser = argparse.ArgumentParser(prog="helm checkpoint finalize")
+            parser.add_argument("--task-id")
+            parser.add_argument("--json", action="store_true")
+            parsed = parser.parse_args(remainder)
+            return cmd_checkpoint_finalize(argparse.Namespace(path=str(root), task_id=parsed.task_id, json=parsed.json))
     return run_script("workspace_checkpoint.py", args.args, root)
 
 
@@ -1057,6 +1195,24 @@ def cmd_ops(args: argparse.Namespace) -> int:
         print("Use `helm ops daily|tasks|commands ...`", file=sys.stderr)
         return 2
     subcommand, *remainder = args.args
+    if subcommand == "capture-state":
+        parser = argparse.ArgumentParser(prog="helm ops capture-state")
+        parser.add_argument("--limit", type=int, default=20)
+        parser.add_argument("--json", action="store_true")
+        parsed = parser.parse_args(remainder)
+        payload = build_capture_state_payload(root, parsed.limit)
+        if parsed.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 0
+        print(f"workspace={payload['workspace']}")
+        print("finalization_counts=" + json.dumps(payload["finalization_counts"], ensure_ascii=False, sort_keys=True))
+        print(f"pending_tasks={len(payload['pending_tasks'])}")
+        for task in payload["pending_tasks"][:10]:
+            print(
+                f"pending={task['task_id']} profile={task['profile']} "
+                f"finalization={task['finalization_status']} name={task['task_name']}"
+            )
+        return 0
     mapping = {
         "daily": "ops_daily_report.py",
         "tasks": "task_ledger_report.py",
@@ -1067,6 +1223,35 @@ def cmd_ops(args: argparse.Namespace) -> int:
         print(f"Unknown ops subcommand: {subcommand}", file=sys.stderr)
         return 2
     return run_script(script_name, remainder, root)
+
+
+def cmd_memory(args: argparse.Namespace) -> int:
+    root = target_root(args.path) if args.path else discover_workspace().root
+    if not args.args:
+        print("Use `helm memory pending-captures ...`", file=sys.stderr)
+        return 2
+    subcommand, *remainder = args.args
+    if subcommand != "pending-captures":
+        print(f"Unknown memory subcommand: {subcommand}", file=sys.stderr)
+        return 2
+    parser = argparse.ArgumentParser(prog="helm memory pending-captures")
+    parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--json", action="store_true")
+    parsed = parser.parse_args(remainder)
+    payload = build_recent_state_payload(root, parsed.limit, pending_only=True)
+    if parsed.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    if not payload["items"]:
+        print("No pending durable captures found.")
+        return 0
+    for item in payload["items"]:
+        print(
+            f"{item['task_id']} profile={item['profile']} status={item['status']} "
+            f"finalization={item['finalization_status']} layers={','.join(item['recommended_layers'])} "
+            f"name={item['task_name']}"
+        )
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1179,6 +1364,12 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint_recommend_sub.add_argument("--json", action="store_true")
     checkpoint_recommend_sub.set_defaults(func=cmd_checkpoint_recommend)
 
+    checkpoint_finalize = checkpoint_subparsers.add_parser("finalize", help="Inspect finalization state together with the recommended checkpoint.")
+    checkpoint_finalize.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    checkpoint_finalize.add_argument("--task-id", help="Specific task id to inspect. Defaults to the latest risky task when applicable.")
+    checkpoint_finalize.add_argument("--json", action="store_true")
+    checkpoint_finalize.set_defaults(func=cmd_checkpoint_finalize)
+
     checkpoint_recommend = subparsers.add_parser("checkpoint-recommend", help="Recommend the checkpoint to use for a risky task.")
     checkpoint_recommend.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     checkpoint_recommend.add_argument("--task-id", help="Specific task id to inspect. Defaults to the latest risky task.")
@@ -1220,6 +1411,11 @@ def build_parser() -> argparse.ArgumentParser:
     ops.add_argument("args", nargs=argparse.REMAINDER)
     ops.set_defaults(func=cmd_ops)
 
+    memory = subparsers.add_parser("memory", help="Inspect finalization-driven durable memory work queues.")
+    memory.add_argument("--path", help="Workspace path to target.")
+    memory.add_argument("args", nargs=argparse.REMAINDER)
+    memory.set_defaults(func=cmd_memory)
+
     report = subparsers.add_parser("report", help="Produce a high-level Helm operations report.")
     report.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     report.add_argument("--limit", type=int, default=20)
@@ -1237,6 +1433,8 @@ def main(argv: list[str] | None = None) -> int:
         "context": cmd_context,
         "skill": cmd_skill,
         "ops": cmd_ops,
+        "memory": cmd_memory,
+        "checkpoint": cmd_checkpoint,
     }
     if argv and argv[0] in passthrough:
         command = argv[0]
