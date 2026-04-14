@@ -64,9 +64,14 @@ def build_report(limit: int) -> dict:
     handoffs = [task for task in recent_tasks if task.get("status") == "handoff_required"]
     failed_commands = [cmd for cmd in commands[-100:] if cmd.get("exit_code") not in (0, None)]
     status_counts = Counter(task.get("status", "unknown") for task in recent_tasks)
+    finalization_counts = Counter(
+        (task.get("memory_capture") or {}).get("finalization_status", "unknown")
+        for task in recent_tasks
+    )
 
     return {
         "recent_task_status_counts": dict(status_counts),
+        "recent_finalization_counts": dict(finalization_counts),
         "recent_failed_tasks": failed_tasks[-5:],
         "recent_handoff_tasks": handoffs[-5:],
         "recent_failed_commands": failed_commands[-5:],
@@ -78,6 +83,9 @@ def build_report(limit: int) -> dict:
 def print_text(report: dict) -> None:
     print("Recent task status counts:")
     for key, value in sorted(report["recent_task_status_counts"].items()):
+        print(f"  {key}: {value}")
+    print("Recent finalization counts:")
+    for key, value in sorted(report["recent_finalization_counts"].items()):
         print(f"  {key}: {value}")
     print("Recent failed tasks:")
     for task in report["recent_failed_tasks"]:

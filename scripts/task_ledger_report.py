@@ -54,6 +54,9 @@ def summary(entries: list[dict]) -> None:
     statuses = Counter(entry.get("status", "unknown") for entry in entries)
     profiles = Counter(entry.get("profile", "unknown") for entry in entries)
     skills = Counter(entry.get("skill", "-") or "-" for entry in entries)
+    capture_states = Counter(
+        (entry.get("memory_capture") or {}).get("finalization_status", "unknown") for entry in entries
+    )
     print("Status counts:")
     for key, value in sorted(statuses.items()):
         print(f"  {key}: {value}")
@@ -62,6 +65,9 @@ def summary(entries: list[dict]) -> None:
         print(f"  {key}: {value}")
     print("Skill counts:")
     for key, value in sorted(skills.items()):
+        print(f"  {key}: {value}")
+    print("Finalization counts:")
+    for key, value in sorted(capture_states.items()):
         print(f"  {key}: {value}")
 
 

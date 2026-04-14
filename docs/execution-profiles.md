@@ -42,6 +42,20 @@ Pick the narrowest profile that matches the real risk:
 - If the right answer is `remote_handoff`, say so early instead of silently faking local execution.
 - Name the real runtime target with `--runtime-target` whenever the backend is not just the local workspace shell.
 
+## Finalization Rule
+
+Execution is not the whole task boundary.
+
+After the command or handoff path ends, Helm should still decide whether the result needs durable state capture.
+
+Examples:
+
+- repo docs, workflow rules, release actions, or reusable scripts changed
+- live service or integration behavior changed
+- note, memory, ontology, or other durable knowledge sources changed
+
+The profiled runner now writes a `memory_capture` plan into the final task-ledger state so this decision is visible instead of implicit.
+
 ## Helpers
 
 - List or inspect profiles:
@@ -77,3 +91,4 @@ Pick the narrowest profile that matches the real risk:
 - `remote_handoff` records a handoff task instead of pretending to execute locally, and requires `--runtime-target`.
 - If `--skill` is provided, the runner checks `references/skill_profile_policies.json` and rejects disallowed profile/skill combinations.
 - `service_ops` runs are appended to `.openclaw/task-ledger.jsonl` so detached or side-effectful work is auditable later.
+- Final task-ledger states include a visible `memory_capture` assessment so operational completion is inspectable.

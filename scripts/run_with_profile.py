@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.memory_capture import build_memory_capture_plan
 
 
 WORKSPACE = get_workspace_layout().root
@@ -60,6 +61,11 @@ def append_ledger(entry: dict) -> None:
     ensure_ledger_dir()
     with TASK_LEDGER.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def finalize_task(task: dict) -> None:
+    task["memory_capture"] = build_memory_capture_plan(task)
+    append_ledger(task)
 
 
 def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dict:
@@ -272,12 +278,12 @@ def cmd_run(args: argparse.Namespace) -> int:
             task["finished_at"] = utc_now_iso()
             task["failure_stage"] = "handoff"
             task["failure_reason"] = "remote_handoff requires --runtime-target"
-            append_ledger(task)
+            finalize_task(task)
             print("remote_handoff requires --runtime-target", file=sys.stderr)
             return 2
         task["status"] = "handoff_required"
         task["finished_at"] = utc_now_iso()
-        append_ledger(task)
+        finalize_task(task)
         print(
             json.dumps(
                 {
@@ -320,7 +326,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     task["finished_at"] = utc_now_iso()
     task["exit_code"] = result.returncode
     task["status"] = "completed" if result.returncode == 0 else "failed"
-    append_ledger(task)
+    finalize_task(task)
     return result.returncode
 
 

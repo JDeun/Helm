@@ -6,7 +6,7 @@
 
 <p align="center"><strong>A stability-first operations layer for long-lived personal agents.</strong></p>
 
-<p align="center">Bring execution discipline, file-native context hydration, audit trails, rollback guidance, and gated improvement to the agent runtime you already use.</p>
+<p align="center">Bring execution discipline, file-native context hydration, audit trails, rollback guidance, durable state capture planning, and gated improvement to the agent runtime you already use.</p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -52,14 +52,15 @@ Helm is runtime-agnostic in principle, but it is easiest to adopt when you alrea
 A coding agent is asked to refactor a router in a long-lived workspace.
 
 Without Helm, the agent may act on partial context, edit too quickly, and leave weak rollback visibility.
-With Helm, the runtime is governed through explicit files, execution profiles, checkpoints, and audit traces.
+With Helm, the runtime is governed through explicit files, execution profiles, checkpoints, audit traces, and visible finalization decisions.
 
 Typical flow:
 
 1. Helm re-hydrates context from notes, memory, command logs, task history, and checkpoints.
 2. Helm selects or enforces the right execution profile before work starts.
 3. Risky work is paired with checkpoint discipline and visible task/command traces.
-4. The result is easier to inspect, reproduce, and recover.
+4. After execution, Helm assesses what durable state should be captured so later work starts from files, not from remembered chat.
+5. The result is easier to inspect, reproduce, recover, and continue.
 
 ![Helm explainer cartoon](assets/helm-explainer-cartoon-ko.png)
 
@@ -69,6 +70,7 @@ Typical flow:
 - file-native context hydration across notes, memory, ontology, tasks, commands, and checkpoints
 - task and command audit trails
 - checkpoint creation, inspection, and restore guidance
+- task finalization with durable state capture planning
 - gated skill drafting, review, approval, and rejection
 - high-level status and reporting views
 
@@ -207,6 +209,18 @@ Instead of relying on hidden prompt state, it re-reads durable files and operati
 
 This is aligned with a wiki-style, externalized working-context approach, but implemented as a practical CLI and workspace layer rather than a clone of any one upstream system.
 
+## Task Finalization
+
+Helm treats task finalization as more than "the process exited."
+
+A meaningful task should leave behind:
+
+- an execution trace
+- enough rollback or recovery visibility
+- an explicit decision about whether durable state now needs to be captured
+
+Current Helm releases implement this as a visible `memory_capture` plan in the task ledger. The planner recommends whether `daily_memory`, `long_term_memory`, `ontology`, or human-readable `notes` should be updated next.
+
 ## Installation Notes
 
 Local checkout install:
@@ -223,6 +237,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 - [`docs/release-checklist.md`](docs/release-checklist.md)
 - [`docs/releases/0.1.0.md`](docs/releases/0.1.0.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
+- [`docs/task-finalization.md`](docs/task-finalization.md)
 - [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
 - [`examples/demo-workspace`](examples/demo-workspace)
 - [`CHANGELOG.md`](CHANGELOG.md)
@@ -245,6 +260,7 @@ Included:
 - Helm-native CLI packaging
 - separate workspace model with read-only adoption
 - file-native context hydration
+- task finalization with durable capture planning
 - checkpoint, report, and skill review flows
 - example workspace and release-oriented docs
 
@@ -258,7 +274,7 @@ Not included:
 
 A short way to think about Helm:
 
-> The agent runtime does the work. Helm governs how the work is prepared, executed, traced, and recovered.
+> The agent runtime does the work. Helm governs how the work is prepared, executed, traced, finalized, and recovered.
 
 Helm is not:
 

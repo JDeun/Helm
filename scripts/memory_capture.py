@@ -1,0 +1,185 @@
+from __future__ import annotations
+
+from collections.abc import Iterable
+
+
+PROFILE_SIGNAL_MAP = {
+    "service_ops": ("operational_state", "service operation may change live systems or external records"),
+    "risky_edit": ("project_state", "risky edit usually changes reusable workflow or workspace behavior"),
+    "remote_handoff": ("operational_state", "remote handoff changes where execution responsibility lives"),
+}
+
+KEYWORD_RULES = (
+    (
+        "project_state",
+        (
+            "readme",
+            "docs",
+            "skill",
+            "reference",
+            "router",
+            "workflow",
+            "policy",
+            "release",
+            "tag",
+            "commit",
+            "push",
+        ),
+        "project docs, workflow rules, or release state changed",
+    ),
+    (
+        "operational_state",
+        (
+            "cron",
+            "automation",
+            "calendar",
+            "sheet",
+            "service",
+            "integration",
+            "deploy",
+            "publish",
+            "delivery",
+        ),
+        "operational workflow or external integration changed",
+    ),
+    (
+        "knowledge_state",
+        (
+            "memory",
+            "ontology",
+            "obsidian",
+            "note",
+            "notes",
+            "entity",
+            "relation",
+        ),
+        "durable knowledge source or note structure changed",
+    ),
+)
+
+
+def _norm(value: object) -> str:
+    return str(value or "").casefold()
+
+
+def _iter_strings(values: Iterable[object]) -> Iterable[str]:
+    for value in values:
+        if value is None:
+            continue
+        yield str(value)
+
+
+def _add_reason(reasons: list[str], reason: str) -> None:
+    if reason not in reasons:
+        reasons.append(reason)
+
+
+def _add_event(event_types: list[str], event_type: str) -> None:
+    if event_type not in event_types:
+        event_types.append(event_type)
+
+
+def _recommended_layers(event_types: list[str], command_blob: str) -> list[str]:
+    layers = ["daily_memory"]
+    if "project_state" in event_types or "operational_state" in event_types:
+        layers.append("long_term_memory")
+    if "knowledge_state" in event_types:
+        layers.append("notes")
+    if "ontology" in command_blob or "entity" in command_blob or "relation" in command_blob:
+        layers.append("ontology")
+    return layers
+
+
+def _suggested_entries(task: dict, event_types: list[str], layers: list[str]) -> dict[str, list[str]]:
+    task_name = task.get("task_name") or "unnamed task"
+    profile = task.get("profile") or "unknown"
+    command_preview = task.get("command_preview") or ""
+    suggestions: dict[str, list[str]] = {layer: [] for layer in layers}
+
+    if "daily_memory" in suggestions:
+        suggestions["daily_memory"].append(
+            f"Record that `{task_name}` finished under `{profile}` with command `{command_preview}`."
+        )
+        if "project_state" in event_types:
+            suggestions["daily_memory"].append(
+                "Capture which reusable project files, docs, or release-facing artifacts changed."
+            )
+        if "operational_state" in event_types:
+            suggestions["daily_memory"].append(
+                "Capture the operational side effect so later work starts from the updated system state."
+            )
+
+    if "long_term_memory" in suggestions:
+        suggestions["long_term_memory"].append(
+            "Promote only durable rules, workflow changes, or positioning decisions that should affect future tasks."
+        )
+
+    if "notes" in suggestions:
+        suggestions["notes"].append(
+            "If the change needs human-readable explanation, keep a short note or Obsidian entry instead of only raw logs."
+        )
+
+    if "ontology" in suggestions:
+        suggestions["ontology"].append(
+            "Update entities or relations only when the task changed stable people, assets, organizations, workflows, or named systems."
+        )
+
+    return suggestions
+
+
+def build_memory_capture_plan(task: dict) -> dict:
+    command_blob = " ".join(
+        _iter_strings(
+            [
+                task.get("task_name"),
+                task.get("command_preview"),
+                task.get("skill"),
+                task.get("runtime_target"),
+                task.get("runtime_note"),
+                *task.get("checkpoint_paths", []),
+            ]
+        )
+    ).casefold()
+
+    event_types: list[str] = []
+    reasons: list[str] = []
+
+    profile = str(task.get("profile") or "")
+    signal = PROFILE_SIGNAL_MAP.get(profile)
+    if signal:
+        event_type, reason = signal
+        _add_event(event_types, event_type)
+        _add_reason(reasons, reason)
+
+    for event_type, keywords, reason in KEYWORD_RULES:
+        if any(keyword in command_blob for keyword in keywords):
+            _add_event(event_types, event_type)
+            _add_reason(reasons, reason)
+
+    status = task.get("status")
+    exit_code = task.get("exit_code")
+    relevant = status in {"completed", "handoff_required"} and bool(event_types)
+    if not relevant and status == "failed" and profile in {"service_ops", "risky_edit", "remote_handoff"}:
+        relevant = True
+        _add_reason(reasons, "failure on a high-impact profile is itself durable operational context")
+
+    layers = _recommended_layers(event_types, command_blob) if relevant else []
+    suggestions = _suggested_entries(task, event_types, layers) if relevant else {}
+    priority = "required" if relevant else "none"
+    summary = (
+        "Durable capture should be planned before the task is treated as operationally complete."
+        if relevant
+        else "No durable capture plan is recommended for this task."
+    )
+
+    return {
+        "relevant": relevant,
+        "priority": priority,
+        "event_types": event_types,
+        "recommended_layers": layers,
+        "reasons": reasons,
+        "suggested_entries": suggestions,
+        "finalization_status": "capture_planned" if relevant else "no_capture_needed",
+        "summary": summary,
+        "task_exit_code": exit_code,
+    }

@@ -12,6 +12,8 @@ Before routing, use `helm context` or `scripts/ops_memory_query.py` to hydrate r
 - checkpoints
 - adopted external workspaces registered through `helm adopt`
 
+Hydration quality depends on source durability. If previous tasks only reported success in chat and did not leave durable traces behind, routing quality will degrade even if the query tool itself is correct.
+
 ## Rule
 
 Do a focused read before tool selection whenever one of these is true:
@@ -45,6 +47,7 @@ helm context --path ~/.helm/workspace --adapter openclaw-main --include notes ta
 - command-level failures that explain why a provider or wrapper should be avoided
 - checkpoints when the user is asking to continue or undo risky edits
 - whether the decisive context lives in Helm-local state or an adopted external source
+- whether a previous task's `memory_capture` recommendation indicates that durable updates are still missing
 
 ## Output discipline
 

@@ -208,6 +208,10 @@ def build_status_payload(root: Path) -> dict:
 
     recent_tasks = task_entries[-10:]
     failed_commands = [entry for entry in command_entries[-100:] if entry.get("exit_code") not in (0, None)]
+    finalization_counts = Counter(
+        (entry.get("memory_capture") or {}).get("finalization_status", "unknown")
+        for entry in recent_tasks
+    )
     return {
         "workspace": str(root),
         "layout": layout.kind,
@@ -217,6 +221,7 @@ def build_status_payload(root: Path) -> dict:
             for source in context_sources
         ],
         "task_status_counts": dict(Counter(entry.get("status", "unknown") for entry in recent_tasks)),
+        "finalization_counts": dict(finalization_counts),
         "recent_tasks": recent_tasks[-5:],
         "recent_failed_commands": failed_commands[-5:],
         "recent_checkpoints": checkpoints[-5:],
@@ -244,12 +249,17 @@ def build_report_payload(root: Path, limit: int) -> dict:
     handoffs = [task for task in recent_tasks if task.get("status") == "handoff_required"]
     failed_commands = [cmd for cmd in commands[-200:] if cmd.get("exit_code") not in (0, None)]
     source_breakdown = Counter(source.kind for source in context_sources)
+    finalization_counts = Counter(
+        (task.get("memory_capture") or {}).get("finalization_status", "unknown")
+        for task in recent_tasks
+    )
     return {
         "workspace": str(root),
         "period_task_count": len(recent_tasks),
         "context_source_count": len(context_sources),
         "context_source_breakdown": dict(source_breakdown),
         "task_status_counts": dict(Counter(task.get("status", "unknown") for task in recent_tasks)),
+        "finalization_counts": dict(finalization_counts),
         "failed_tasks": failed_tasks[-5:],
         "running_tasks": running_tasks[-5:],
         "handoff_tasks": handoffs[-5:],
@@ -292,6 +302,7 @@ def format_report_markdown(payload: dict) -> str:
         f"- Tasks in window: `{payload['period_task_count']}`",
         f"- Context sources: `{payload['context_source_count']}` `{json.dumps(payload['context_source_breakdown'], ensure_ascii=False, sort_keys=True)}`",
         f"- Status counts: `{json.dumps(payload['task_status_counts'], ensure_ascii=False, sort_keys=True)}`",
+        f"- Finalization counts: `{json.dumps(payload['finalization_counts'], ensure_ascii=False, sort_keys=True)}`",
         "",
         "## Onboarding Actions",
     ]
@@ -684,6 +695,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"state_dir={payload['state_dir']}")
     print(f"context_sources={len(payload['context_sources'])}")
     print("task_status_counts=" + json.dumps(payload["task_status_counts"], ensure_ascii=False, sort_keys=True))
+    print("finalization_counts=" + json.dumps(payload["finalization_counts"], ensure_ascii=False, sort_keys=True))
     print(f"recent_tasks={len(payload['recent_tasks'])}")
     print(f"recent_failed_commands={len(payload['recent_failed_commands'])}")
     print(f"recent_checkpoints={len(payload['recent_checkpoints'])}")
@@ -789,6 +801,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     print(f"context_sources={payload['context_source_count']}")
     print("context_source_breakdown=" + json.dumps(payload["context_source_breakdown"], ensure_ascii=False, sort_keys=True))
     print("task_status_counts=" + json.dumps(payload["task_status_counts"], ensure_ascii=False, sort_keys=True))
+    print("finalization_counts=" + json.dumps(payload["finalization_counts"], ensure_ascii=False, sort_keys=True))
     print(f"failed_tasks={len(payload['failed_tasks'])}")
     print(f"running_tasks={len(payload['running_tasks'])}")
     print(f"handoff_tasks={len(payload['handoff_tasks'])}")
