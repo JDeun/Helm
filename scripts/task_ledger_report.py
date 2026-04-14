@@ -57,6 +57,8 @@ def summary(entries: list[dict]) -> None:
     capture_states = Counter(
         (entry.get("memory_capture") or {}).get("finalization_status", "unknown") for entry in entries
     )
+    harness_levels = Counter((((entry.get("meta") or {}).get("harness") or {}).get("enforcement_level", "-")) for entry in entries)
+    harness_models = Counter((((entry.get("meta") or {}).get("harness") or {}).get("model_tier", "-")) for entry in entries)
     print("Status counts:")
     for key, value in sorted(statuses.items()):
         print(f"  {key}: {value}")
@@ -68,6 +70,12 @@ def summary(entries: list[dict]) -> None:
         print(f"  {key}: {value}")
     print("Finalization counts:")
     for key, value in sorted(capture_states.items()):
+        print(f"  {key}: {value}")
+    print("Harness enforcement counts:")
+    for key, value in sorted(harness_levels.items()):
+        print(f"  {key}: {value}")
+    print("Harness model-tier counts:")
+    for key, value in sorted(harness_models.items()):
         print(f"  {key}: {value}")
 
 
