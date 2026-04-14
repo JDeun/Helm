@@ -1227,9 +1227,14 @@ def cmd_ops(args: argparse.Namespace) -> int:
 
 def cmd_memory(args: argparse.Namespace) -> int:
     root = target_root(args.path) if args.path else discover_workspace().root
+    help_parser = argparse.ArgumentParser(prog="helm memory")
+    help_parser.add_argument("subcommand", nargs="?", help="Currently supported: pending-captures")
     if not args.args:
-        print("Use `helm memory pending-captures ...`", file=sys.stderr)
-        return 2
+        help_parser.print_help()
+        return 0
+    if args.args[0] in {"-h", "--help"}:
+        help_parser.print_help()
+        return 0
     subcommand, *remainder = args.args
     if subcommand != "pending-captures":
         print(f"Unknown memory subcommand: {subcommand}", file=sys.stderr)

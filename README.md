@@ -235,7 +235,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.1.0.md`](docs/releases/0.1.0.md)
+- [`docs/releases/0.2.0.md`](docs/releases/0.2.0.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
 - [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
@@ -248,12 +248,15 @@ Try the demo workspace:
 helm survey --path examples/demo-workspace
 helm doctor --path examples/demo-workspace
 helm validate --path examples/demo-workspace
+helm context --path examples/demo-workspace recent-state --limit 5
+helm memory --path examples/demo-workspace pending-captures --limit 5
+helm ops --path examples/demo-workspace capture-state --limit 10
 helm report --path examples/demo-workspace --format markdown
 ```
 
 ## Current Status
 
-Helm v0.1.0 is usable as a public early release.
+Helm v0.2.0 is a usable early public release with explicit finalization inspection.
 
 Included:
 
@@ -261,6 +264,7 @@ Included:
 - separate workspace model with read-only adoption
 - file-native context hydration
 - task finalization with durable capture planning
+- operator-facing finalization inspection commands
 - checkpoint, report, and skill review flows
 - example workspace and release-oriented docs
 
