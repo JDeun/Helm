@@ -24,6 +24,7 @@
   <a href="#quick-start">Quick Start</a> ·
   <a href="#onboarding-and-workspace-model">Onboarding</a> ·
   <a href="#core-commands">Core Commands</a> ·
+  <a href="#adaptive-harness">Adaptive Harness</a> ·
   <a href="#docs-and-demo">Docs and Demo</a>
 </p>
 
@@ -193,6 +194,24 @@ helm status --path ~/.helm/workspace --verbose
 helm report --path ~/.helm/workspace --format markdown
 ```
 
+## Adaptive Harness
+
+Helm now includes an adaptive harness layer for model-tier-aware execution.
+
+Use it when you want code-enforced preflight and postflight checks instead of relying only on prompt discipline:
+
+```bash
+helm harness --path ~/.helm/workspace policy
+helm harness --path ~/.helm/workspace contract --skill travel-ops-ko
+helm harness --path ~/.helm/workspace preflight \
+  --skill travel-ops-ko \
+  --profile inspect_local \
+  --model gemma4:e4b \
+  --task-name "travel triage" \
+  --request "출장 항공편 옵션을 먼저 정리해줘" \
+  -- python3 -c 'print("ok")'
+```
+
 ## File-Native Context Hydration
 
 Helm’s context model is intentionally explicit.
@@ -237,6 +256,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 - [`docs/release-checklist.md`](docs/release-checklist.md)
 - [`docs/releases/0.2.0.md`](docs/releases/0.2.0.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
+- [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
 - [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
 - [`examples/demo-workspace`](examples/demo-workspace)

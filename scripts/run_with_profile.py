@@ -70,8 +70,9 @@ def finalize_task(task: dict) -> None:
 
 def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dict:
     config = load_profiles()[profile]
+    meta = json.loads(args.meta_json) if args.meta_json else {}
     return {
-        "task_id": str(uuid.uuid4()),
+        "task_id": args.task_id or str(uuid.uuid4()),
         "task_name": args.task_name or " ".join(command[:3]),
         "skill": args.skill,
         "profile": profile,
@@ -90,6 +91,7 @@ def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dic
         "checkpoint_paths": args.path or [],
         "checkpoint_id": None,
         "delivery_mode": args.delivery_mode,
+        "meta": meta,
     }
 
 
@@ -361,7 +363,9 @@ def parse_run_args() -> argparse.Namespace:
     parser.add_argument("command_name")
     parser.add_argument("profile", choices=sorted(load_profiles().keys()))
     parser.add_argument("--task-name", help="Human-readable task name, recommended for service_ops.")
+    parser.add_argument("--task-id", help="Explicit task id override for harness-controlled runs.")
     parser.add_argument("--skill", help="Owning skill slug for policy enforcement.")
+    parser.add_argument("--meta-json", help="Structured metadata JSON to embed in the task ledger.")
     parser.add_argument("--label", help="Checkpoint label when the profile requires one.")
     parser.add_argument("--path", action="append", help="Checkpoint path override. May be repeated.")
     parser.add_argument("--runtime-target", help="Named runtime target such as local, ssh:host, container:name, or node label.")

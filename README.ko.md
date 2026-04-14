@@ -24,6 +24,7 @@
   <a href="#quick-start">Quick Start</a> ·
   <a href="#온보딩과-workspace-모델">온보딩</a> ·
   <a href="#핵심-명령">핵심 명령</a> ·
+  <a href="#adaptive-harness">Adaptive Harness</a> ·
   <a href="#문서와-데모">문서와 데모</a>
 </p>
 
@@ -193,6 +194,24 @@ helm status --path ~/.helm/workspace --verbose
 helm report --path ~/.helm/workspace --format markdown
 ```
 
+## Adaptive Harness
+
+Helm은 model tier에 따라 강제 수준을 조절하는 adaptive harness도 포함합니다.
+
+프롬프트 규율만 믿지 않고 preflight/postflight 검증을 코드로 강제하려면 이 경로를 씁니다.
+
+```bash
+helm harness --path ~/.helm/workspace policy
+helm harness --path ~/.helm/workspace contract --skill travel-ops-ko
+helm harness --path ~/.helm/workspace preflight \
+  --skill travel-ops-ko \
+  --profile inspect_local \
+  --model gemma4:e4b \
+  --task-name "travel triage" \
+  --request "출장 항공편 옵션을 먼저 정리해줘" \
+  -- python3 -c 'print("ok")'
+```
+
 ## File-Native Context Hydration
 
 Helm의 context 모델은 의도적으로 explicit합니다.
@@ -237,6 +256,7 @@ python3 -m pip install --user --no-build-isolation .
 - [`docs/release-checklist.md`](docs/release-checklist.md)
 - [`docs/releases/0.2.0.md`](docs/releases/0.2.0.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
+- [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
 - [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
 - [`examples/demo-workspace`](examples/demo-workspace)

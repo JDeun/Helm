@@ -1,0 +1,45 @@
+{
+  "model_aliases": {
+    "codex": "frontier",
+    "gpt-5": "frontier",
+    "gpt-5.4": "frontier",
+    "gemini": "enhanced",
+    "gemini-api": "enhanced",
+    "gemini-2.5-pro": "enhanced",
+    "gemma": "constrained",
+    "gemma4": "constrained",
+    "gemma4:e4b": "constrained",
+    "gemma-local": "constrained"
+  },
+  "enforcement_order": ["light", "balanced", "strict"],
+  "tiers": {
+    "frontier": {
+      "default_enforcement": "light",
+      "profile_overrides": {
+        "risky_edit": "balanced",
+        "service_ops": "balanced",
+        "remote_handoff": "balanced"
+      }
+    },
+    "enhanced": {
+      "default_enforcement": "balanced",
+      "profile_overrides": {
+        "remote_handoff": "strict"
+      }
+    },
+    "constrained": {
+      "default_enforcement": "balanced",
+      "profile_overrides": {
+        "risky_edit": "strict",
+        "service_ops": "strict",
+        "remote_handoff": "strict"
+      }
+    }
+  },
+  "validation": {
+    "context_required_at_or_above": "balanced",
+    "task_name_required_profiles": ["service_ops", "risky_edit", "remote_handoff"],
+    "runtime_target_required_profiles": ["remote_handoff"],
+    "finalization_must_not_be_pending_at_or_above": "balanced"
+  }
+}

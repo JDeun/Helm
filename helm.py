@@ -1259,6 +1259,11 @@ def cmd_memory(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_harness(args: argparse.Namespace) -> int:
+    root = target_root(args.path) if args.path else discover_workspace().root
+    return run_script("adaptive_harness.py", args.args, root)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=render_banner() + "\nHelm CLI for stability-first agent operations.",
@@ -1421,6 +1426,11 @@ def build_parser() -> argparse.ArgumentParser:
     memory.add_argument("args", nargs=argparse.REMAINDER)
     memory.set_defaults(func=cmd_memory)
 
+    harness = subparsers.add_parser("harness", help="Run adaptive harness preflight and guarded execution flows.")
+    harness.add_argument("--path", help="Workspace path to target.")
+    harness.add_argument("args", nargs=argparse.REMAINDER)
+    harness.set_defaults(func=cmd_harness)
+
     report = subparsers.add_parser("report", help="Produce a high-level Helm operations report.")
     report.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     report.add_argument("--limit", type=int, default=20)
@@ -1440,6 +1450,7 @@ def main(argv: list[str] | None = None) -> int:
         "ops": cmd_ops,
         "memory": cmd_memory,
         "checkpoint": cmd_checkpoint,
+        "harness": cmd_harness,
     }
     if argv and argv[0] in passthrough:
         command = argv[0]
