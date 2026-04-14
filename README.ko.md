@@ -8,6 +8,8 @@
 
 <p align="center">이미 사용 중인 agent runtime 위에 execution discipline, file-native context hydration, audit trails, rollback guidance, durable state capture planning, gated improvement를 얹는 운영 계층입니다.</p>
 
+<p align="center"><strong>현재 릴리즈: v0.3.0</strong></p>
+
 <p align="center">
   <a href="README.md">English README</a>
 </p>

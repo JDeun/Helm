@@ -8,6 +8,8 @@
 
 <p align="center">Bring execution discipline, file-native context hydration, audit trails, rollback guidance, durable state capture planning, and gated improvement to the agent runtime you already use.</p>
 
+<p align="center"><strong>Current release: v0.3.0</strong></p>
+
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
 </p>
