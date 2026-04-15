@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.5.0</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.5.1</strong></p>
 
 <p align="center">
   <a href="README.md">English README</a>
@@ -191,7 +191,7 @@ helm profile --path ~/.helm/workspace run risky_edit \
 rollback 후보 확인:
 
 ```bash
-helm checkpoint recommend --path ~/.helm/workspace
+helm checkpoint-recommend --path ~/.helm/workspace
 helm checkpoint list --path ~/.helm/workspace
 helm checkpoint show --path ~/.helm/workspace <checkpoint-id>
 ```
@@ -314,7 +314,7 @@ python3 -m pip install --user --no-build-isolation .
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.0.md`](docs/releases/0.5.0.md)
+- [`docs/releases/0.5.1.md`](docs/releases/0.5.1.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -337,7 +337,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## 현재 상태
 
-Helm v0.5.0은 스킬 로컬 harness governance를 넘어, `SKILL.md` 자체도 운영 계약으로 감사하고 관리하기 시작한 릴리즈입니다.
+Helm v0.5.1은 공개 저장소 위생이 거버넌스 모델과 맞춰진 릴리즈입니다.
 
 이미 들어간 것:
 
@@ -351,7 +351,7 @@ Helm v0.5.0은 스킬 로컬 harness governance를 넘어, `SKILL.md` 자체도 
 - generic하거나 약한 skill contract를 잡는 manifest quality audit
 - `SKILL.md` 품질 기준과 계약형 draft 템플릿
 - `SKILL.md` 구조와 manifest-문서 정합성까지 보는 quality audit
-- local / service / handoff 경계를 더 분명히 한 대표 스킬 정책
+- 저장소 루트의 개인 스킬 자산 대신 일반화된 demo 전용 skill contract
 - checkpoint, report, skill review 흐름
 - example workspace와 release-oriented docs
 

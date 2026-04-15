@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1
+
+- removed repository-root personal skill contracts so Helm ships as a public governance layer rather than a private skill bundle
+- replaced personal skill examples in docs with the generalized `router-context-demo` demo draft under `examples/demo-workspace`
+- tightened `.gitignore` and demo asset tracking so public demo drafts keep only portable contract artifacts
+- expanded test coverage for manifest-quality auditing and CLI validation paths
+
 ## 0.5.0
 
 - expanded Helm's skill quality model so `SKILL.md` is treated as an operator-facing contract, not just descriptive prose

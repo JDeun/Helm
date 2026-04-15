@@ -1,0 +1,13 @@
+{
+  "skill": "__SKILL_SLUG__",
+  "allowed_profiles": ["inspect_local"],
+  "default_profile": "inspect_local",
+  "context": {
+    "required": false,
+    "query": "__QUERY__",
+    "include": ["tasks", "commands"],
+    "limit": 4
+  },
+  "require_finalization_written": true,
+  "runner": {}
+}

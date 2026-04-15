@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.5.0</strong></p>
+<p align="center"><strong>Current release: v0.5.1</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -191,7 +191,7 @@ helm profile --path ~/.helm/workspace run risky_edit \
 Inspect rollback candidates:
 
 ```bash
-helm checkpoint recommend --path ~/.helm/workspace
+helm checkpoint-recommend --path ~/.helm/workspace
 helm checkpoint list --path ~/.helm/workspace
 helm checkpoint show --path ~/.helm/workspace <checkpoint-id>
 ```
@@ -314,7 +314,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.0.md`](docs/releases/0.5.0.md)
+- [`docs/releases/0.5.1.md`](docs/releases/0.5.1.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -337,7 +337,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.5.0 is the release where skill-local harness governance expands into skill-document governance as well.
+Helm v0.5.1 is the release where public repository hygiene catches up with the governance model.
 
 Included:
 
@@ -351,7 +351,7 @@ Included:
 - manifest quality auditing for generic or weak skill contracts
 - `SKILL.md` quality guidance and contract-driven drafting templates
 - `SKILL.md` structure and manifest-to-document consistency checks in quality audit paths
-- tighter representative skill policies for local, service, and handoff execution
+- generalized demo-only skill contracts instead of repository-root personal skill assets
 - checkpoint, report, and skill review flows
 - example workspace and release-oriented docs
 

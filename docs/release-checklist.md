@@ -1,12 +1,12 @@
-# Helm 0.5.0 Release Checklist
+# Helm 0.5.1 Release Checklist
 
-Use this checklist before cutting the `0.5.0` release.
+Use this checklist before cutting the `0.5.1` release.
 
 ## Version and metadata
 
-- confirm `pyproject.toml` version is `0.5.0`
-- confirm `setup.py` version is `0.5.0`
-- confirm `CHANGELOG.md` includes `0.5.0`
+- confirm `pyproject.toml` version is `0.5.1`
+- confirm `setup.py` version is `0.5.1`
+- confirm `CHANGELOG.md` includes `0.5.1`
 - confirm README asset links and docs links render correctly
 
 ## Packaging
@@ -29,8 +29,8 @@ Use this checklist before cutting the `0.5.0` release.
 - `helm validate --path /tmp/helm-release-smoke`
 - `helm status --path /tmp/helm-release-smoke --verbose`
 - `helm ops --path /tmp/helm-release-smoke capture-state`
-- `python3 scripts/run_with_profile.py validate-manifests --json`
-- `python3 scripts/run_with_profile.py audit-manifest-quality --json`
+- `HELM_WORKSPACE=examples/demo-workspace python3 scripts/run_with_profile.py validate-manifests --json`
+- `HELM_WORKSPACE=examples/demo-workspace python3 scripts/run_with_profile.py audit-manifest-quality --json`
 
 ## Demo workspace smoke tests
 
@@ -44,12 +44,12 @@ Use this checklist before cutting the `0.5.0` release.
 - `helm memory --path examples/demo-workspace pending-captures --limit 5`
 - `helm ops --path examples/demo-workspace capture-state --limit 10`
 - `helm checkpoint --path examples/demo-workspace finalize`
-- `helm checkpoint recommend --path examples/demo-workspace`
+- `helm checkpoint-recommend --path examples/demo-workspace`
 - `helm report --path examples/demo-workspace --format markdown`
 
 ## Release outputs
 
-- create git tag: `v0.5.0`
-- draft GitHub release notes from `docs/releases/0.5.0.md`
+- create git tag: `v0.5.1`
+- draft GitHub release notes from `docs/releases/0.5.1.md`
 - attach screenshots or README visuals if needed
 - publish source release after the checklist passes
