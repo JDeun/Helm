@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- expanded Helm's skill quality model so `SKILL.md` is treated as an operator-facing contract, not just descriptive prose
+- refreshed the skill-quality docs and skill-capture template around explicit input, decision, output, and failure contracts
+- extended `audit-manifest-quality` to inspect `SKILL.md` structure and basic manifest-to-document consistency when a skill document exists
+- repositioned README and release guidance so Helm is framed as a skill-governance and operating layer rather than a skill catalog
+
 ## 0.4.0
 
 - added `audit-manifest-quality` so skill contracts can be checked for generic backfills, weak defaults, and missing approval or runner policy

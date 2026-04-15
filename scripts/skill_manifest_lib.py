@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 
@@ -26,6 +27,123 @@ def load_skill_contract_manifests(workspace: Path) -> dict[str, dict]:
             if isinstance(data, dict) and data:
                 manifests[contract_path.parent.name] = data
     return manifests
+
+
+def load_skill_markdown(workspace: Path, skill: str) -> str | None:
+    for root in (workspace / "skill_drafts", workspace / "skills"):
+        path = root / skill / "SKILL.md"
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    return None
+
+
+def audit_skill_markdown_contracts(text: str, manifest: dict) -> list[str]:
+    warnings: list[str] = []
+    normalized = text.casefold()
+    allowed = manifest.get("allowed_profiles") or []
+    context = manifest.get("context") or {}
+    approval_keywords = manifest.get("approval_keywords") or []
+    runner = manifest.get("runner") or {}
+
+    required_sections = (
+        "## core rule",
+        "## input contract",
+        "## decision contract",
+        "## output contract",
+        "## failure contract",
+    )
+    for section in required_sections:
+        if section not in normalized:
+            warnings.append(f"SKILL.md missing `{section}` section")
+
+    if "## input contract" in normalized and "ask first when missing" not in normalized:
+        warnings.append("SKILL.md input contract missing `Ask first when missing` guidance")
+
+    if "## decision contract" in normalized and "red flags" not in normalized:
+        warnings.append("SKILL.md decision contract missing `Red flags` guidance")
+
+    if "## output contract" in normalized:
+        if "default output format" not in normalized:
+            warnings.append("SKILL.md output contract missing `Default output format` guidance")
+        if "always include" not in normalized:
+            warnings.append("SKILL.md output contract missing `Always include` guidance")
+
+    if "## failure contract" in normalized:
+        if "failure types" not in normalized:
+            warnings.append("SKILL.md failure contract missing `Failure types` guidance")
+        if "fallback behavior" not in normalized:
+            warnings.append("SKILL.md failure contract missing `Fallback behavior` guidance")
+        if "user-facing failure language" not in normalized:
+            warnings.append("SKILL.md failure contract missing `User-facing failure language` guidance")
+
+    placeholder_patterns = (
+        r"\bdescribe the workflow\b",
+        r"\brequired inputs\b",
+        r"\boptional inputs\b",
+        r"\bstate the real commands\b",
+        r"\bdefault output format\b\s*$",
+        r"\bfailure types\b\s*$",
+    )
+    for pattern in placeholder_patterns:
+        if re.search(pattern, normalized, re.MULTILINE):
+            warnings.append("SKILL.md still contains template-style placeholder language")
+            break
+
+    if context.get("required"):
+        context_markers = (
+            "## context contract",
+            "prior context",
+            "saved context",
+            "hydrate",
+            "hydration",
+            "recent failures",
+        )
+        if not any(marker in normalized for marker in context_markers):
+            warnings.append("manifest requires context but SKILL.md does not explain context dependency")
+
+    if "remote_handoff" in allowed:
+        approval_markers = (
+            "approval",
+            "ask for user confirmation",
+            "hitl",
+            "human-in-the-loop",
+            "handoff",
+            "account-bound",
+            "remote_handoff",
+        )
+        if not any(marker in normalized for marker in approval_markers):
+            warnings.append("manifest allows remote handoff but SKILL.md does not expose an approval or handoff boundary")
+
+    if approval_keywords:
+        if "approval" not in normalized and "ask for user confirmation" not in normalized and "hitl" not in normalized:
+            warnings.append("manifest declares approval_keywords but SKILL.md does not describe the approval boundary")
+
+    if any(profile in allowed for profile in ("service_ops", "risky_edit")):
+        execution_markers = (
+            "## execution contract",
+            "## tool routing contract",
+            "## execution profiles",
+            "commands:",
+            "```bash",
+            "tools",
+            "apis",
+            "scripts",
+        )
+        if not any(marker in normalized for marker in execution_markers):
+            warnings.append("mutation or service-capable manifest lacks concrete execution guidance in SKILL.md")
+
+    if runner.get("strict_required"):
+        runner_markers = (
+            "strict runner",
+            "guarded runner",
+            "runner example",
+            "strict harness",
+            "entrypoint",
+        )
+        if not any(marker in normalized for marker in runner_markers):
+            warnings.append("manifest requires a strict runner but SKILL.md does not explain the guarded runner path")
+
+    return warnings
 
 
 def load_skill_policies(workspace: Path, legacy_policy_path: Path) -> dict[str, dict]:
@@ -158,6 +276,10 @@ def manifest_quality_audit(workspace: Path, profile_path: Path) -> dict:
         skill_dir = workspace / "skills" / skill
         if (skill_dir / "scripts").exists() and not runner and any(p in allowed for p in ("service_ops", "risky_edit")):
             warnings.append("skill ships scripts but no runner guidance is declared")
+
+        skill_md = load_skill_markdown(workspace, skill)
+        if skill_md:
+            warnings.extend(audit_skill_markdown_contracts(skill_md, manifest))
 
         if warnings:
             items.append(

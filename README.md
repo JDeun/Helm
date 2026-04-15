@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.4.0</strong></p>
+<p align="center"><strong>Current release: v0.5.0</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -243,7 +243,19 @@ The key design change in the current release is that harness policy is now skill
 
 ## Skill Quality And Policy
 
-If you are improving a Helm workspace over time, the main policy goal is not to add more rules. It is to make each skill narrower, more explicit, and easier to validate.
+If you are improving a Helm workspace over time, the main policy goal is not to accumulate more skills or more rules.
+It is to make any skill easier to govern.
+
+Helm should be able to take a new or changing skill and still answer these questions:
+
+- what minimum input must be collected first
+- what order of decisions the skill should make
+- where the stop or approval boundary lives
+- what a good answer should look like
+- how failure should be explained without collapsing the workflow
+
+That is why a strong Helm skill is not just a good description plus a manifest.
+It is a skill whose `SKILL.md` exposes real operating contracts and whose `contract.json` keeps execution narrow and inspectable.
 
 Good defaults:
 
@@ -252,6 +264,13 @@ Good defaults:
 - keep irreversible or account-bound actions visible through `approval_keywords`
 - add strict runners only where weaker local models should not improvise
 - run `validate-manifests` and `audit-manifest-quality` before release or after policy-heavy skill changes
+
+Good `SKILL.md` defaults:
+
+- make `Input contract`, `Decision contract`, `Output contract`, and `Failure contract` explicit
+- keep the first clarification questions short and unblock-oriented
+- define a default answer shape and a length rule
+- state what the skill must not claim, finish, or imply on its own
 
 ## File-Native Context Hydration
 
@@ -295,7 +314,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.4.0.md`](docs/releases/0.4.0.md)
+- [`docs/releases/0.5.0.md`](docs/releases/0.5.0.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -318,7 +337,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.4.0 is the release where skill-local harness governance became operationally enforceable rather than just structurally possible.
+Helm v0.5.0 is the release where skill-local harness governance expands into skill-document governance as well.
 
 Included:
 
@@ -330,6 +349,8 @@ Included:
 - manifest-based adaptive harness governance
 - manifest auditing for missing or malformed skill contracts
 - manifest quality auditing for generic or weak skill contracts
+- `SKILL.md` quality guidance and contract-driven drafting templates
+- `SKILL.md` structure and manifest-to-document consistency checks in quality audit paths
 - tighter representative skill policies for local, service, and handoff execution
 - checkpoint, report, and skill review flows
 - example workspace and release-oriented docs

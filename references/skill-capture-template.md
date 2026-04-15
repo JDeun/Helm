@@ -11,33 +11,48 @@ metadata:
 
 # __SKILL_NAME__
 
-## Purpose
+## Core rule
 
-Describe the workflow this skill owns and the outcome it should produce.
+State the narrow rule that governs this skill.
+This should explain how the skill stays safe, focused, and predictable.
 
-## When To Use
-
-- List the user intents or trigger phrases that should activate this skill.
-- Mention adjacent skills or routers that should yield to this one.
-
-## Inputs
+## Input contract
 
 - Required inputs
-- Optional context
-- Clarifying questions to ask only when necessary
+- Optional inputs
+- Ask first when missing
+- If the request is broad or ambiguous, how it must be narrowed
 
-## Execution
+## Decision contract
+
+- State the decision order explicitly.
+- Explain when the skill should route outward, stop, ask for approval, or escalate.
+- List the red flags weaker models are likely to miss.
+
+## Execution contract
 
 - State the real commands, tools, or APIs to use.
 - Prefer deterministic scripts over freeform shell improvisation.
 - If the workflow has risk, mention the execution profile or checkpoint rule.
 
-## Output
+## Output contract
 
-- State what a successful answer must include.
-- State how partial success and failure should be reported.
+- Default output format
+- Always include
+- Length rule
+- Do not say or Do not imply
 
-## Boundaries
+## Failure contract
 
-- List what this skill should not do.
+- Failure types
+- Fallback behavior
+- User-facing failure language
+
+## Do
+
+- List the most important positive behaviors to preserve.
+
+## Do not
+
+- List what this skill must not do.
 - Point to downstream tools or sibling skills when the request belongs elsewhere.
