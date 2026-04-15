@@ -71,7 +71,7 @@ The profiled runner now writes a `memory_capture` plan into the final task-ledge
   - `python3 ~/Helm/scripts/run_with_profile.py run remote_handoff --runtime-target ssh:gpu-box --runtime-note "Docker build belongs on remote builder" -- docker build .`
 
 - Create a checkpoint directly:
-  - `python3 ~/Helm/scripts/workspace_checkpoint.py create --label risky-router-edit --path skills/travel-ops-ko --path scripts`
+  - `python3 ~/Helm/scripts/workspace_checkpoint.py create --label risky-router-edit --path examples/demo-workspace/skill_drafts/router-context-demo --path scripts`
   - `python3 ~/Helm/scripts/workspace_checkpoint.py preview <checkpoint-id>`
 
 - Inspect the task ledger:
@@ -79,12 +79,12 @@ The profiled runner now writes a `memory_capture` plan into the final task-ledge
   - `python3 ~/Helm/scripts/run_with_profile.py rollback --task-id <task-id> --json`
   - `python3 ~/Helm/scripts/task_ledger_report.py --summary`
   - `python3 ~/Helm/scripts/task_ledger_report.py --failed-only --limit 20`
-  - `python3 ~/Helm/scripts/task_ledger_report.py --skill meeting-recording-ops-ko --summary`
+  - `python3 ~/Helm/scripts/task_ledger_report.py --skill router-context-demo --summary`
   - `python3 ~/Helm/scripts/task_ledger_report.py --latest --summary`
 
 - Inspect low-level command execution:
   - `python3 ~/Helm/scripts/command_log_report.py --summary`
-  - `python3 ~/Helm/scripts/command_log_report.py --component meeting-recording --failed-only`
+  - `python3 ~/Helm/scripts/command_log_report.py --component router-context-demo --failed-only`
 
 ## Enforcement
 

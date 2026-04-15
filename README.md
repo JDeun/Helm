@@ -224,13 +224,13 @@ Use it when you want code-enforced preflight and postflight checks instead of re
 
 ```bash
 helm harness --path ~/.helm/workspace policy
-helm harness --path ~/.helm/workspace contract --skill travel-ops-ko
-helm harness --path ~/.helm/workspace preflight \
-  --skill travel-ops-ko \
+helm harness --path examples/demo-workspace contract --skill router-context-demo
+helm harness --path examples/demo-workspace preflight \
+  --skill router-context-demo \
   --profile inspect_local \
   --model gemma4:e4b \
-  --task-name "travel triage" \
-  --request "출장 항공편 옵션을 먼저 정리해줘" \
+  --task-name "router triage" \
+  --request "라우터 변경 전에 필요한 컨텍스트를 먼저 점검해줘" \
   -- python3 -c 'print("ok")'
 ```
 

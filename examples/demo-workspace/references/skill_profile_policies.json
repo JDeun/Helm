@@ -1,9 +1,8 @@
 {
   "skills": {
     "router-context-demo": {
-      "allowed_profiles": ["inspect_local", "workspace_edit", "risky_edit"],
+      "allowed_profiles": ["inspect_local", "risky_edit"],
       "default_profile": "inspect_local"
     }
   }
 }
-

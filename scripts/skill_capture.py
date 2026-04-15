@@ -437,7 +437,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     create = subparsers.add_parser("create", help="Create a new skill scaffold.")
-    create.add_argument("--name", required=True, help="Skill slug, e.g. skill-capture-ko")
+    create.add_argument("--name", required=True, help="Skill slug, e.g. example-skill")
     create.add_argument("--description", required=True, help="One-line skill description.")
     create.add_argument("--emoji", default="🧩", help="Emoji for openclaw metadata.")
     create.add_argument("--bins", nargs="*", default=[], help="Required binaries.")

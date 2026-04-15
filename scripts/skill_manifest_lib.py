@@ -6,6 +6,9 @@ import re
 from pathlib import Path
 
 
+SKILL_ROOTS = ("skill_drafts", "skills")
+
+
 def load_json(path: Path, default: object) -> object:
     if not path.exists():
         return default
@@ -19,7 +22,8 @@ def load_legacy_skill_policies(path: Path) -> dict[str, dict]:
 
 def load_skill_contract_manifests(workspace: Path) -> dict[str, dict]:
     manifests: dict[str, dict] = {}
-    for root in (workspace / "skill_drafts", workspace / "skills"):
+    for root_name in SKILL_ROOTS:
+        root = workspace / root_name
         if not root.exists():
             continue
         for contract_path in sorted(root.glob("*/contract.json")):
@@ -29,9 +33,18 @@ def load_skill_contract_manifests(workspace: Path) -> dict[str, dict]:
     return manifests
 
 
+def resolve_skill_dir(workspace: Path, skill: str) -> Path | None:
+    for root_name in SKILL_ROOTS:
+        path = workspace / root_name / skill
+        if path.exists():
+            return path
+    return None
+
+
 def load_skill_markdown(workspace: Path, skill: str) -> str | None:
-    for root in (workspace / "skill_drafts", workspace / "skills"):
-        path = root / skill / "SKILL.md"
+    skill_dir = resolve_skill_dir(workspace, skill)
+    if skill_dir:
+        path = skill_dir / "SKILL.md"
         if path.exists():
             return path.read_text(encoding="utf-8")
     return None
@@ -77,12 +90,16 @@ def audit_skill_markdown_contracts(text: str, manifest: dict) -> list[str]:
             warnings.append("SKILL.md failure contract missing `User-facing failure language` guidance")
 
     placeholder_patterns = (
-        r"\bdescribe the workflow\b",
-        r"\brequired inputs\b",
-        r"\boptional inputs\b",
-        r"\bstate the real commands\b",
-        r"\bdefault output format\b\s*$",
-        r"\bfailure types\b\s*$",
+        r"^state the narrow rule that governs this skill\.$",
+        r"^this should explain how the skill stays safe, focused, and predictable\.$",
+        r"^- required inputs$",
+        r"^- optional inputs$",
+        r"^- ask first when missing$",
+        r"^- if the request is broad or ambiguous, how it must be narrowed$",
+        r"^- state the decision order explicitly\.$",
+        r"^- list the red flags weaker models are likely to miss\.$",
+        r"^- default output format$",
+        r"^- failure types$",
     )
     for pattern in placeholder_patterns:
         if re.search(pattern, normalized, re.MULTILINE):
@@ -273,8 +290,15 @@ def manifest_quality_audit(workspace: Path, profile_path: Path) -> dict:
         if not runner and "risky_edit" in allowed:
             warnings.append("runner policy missing for a risky-edit capable skill")
 
-        skill_dir = workspace / "skills" / skill
-        if (skill_dir / "scripts").exists() and not runner and any(p in allowed for p in ("service_ops", "risky_edit")):
+        skill_dir = resolve_skill_dir(workspace, skill)
+        if skill_dir is None:
+            warnings.append("manifest exists but skill directory is missing")
+        elif not (skill_dir / "SKILL.md").exists():
+            warnings.append("manifest exists but SKILL.md operator contract is missing")
+
+        if skill_dir and (skill_dir / "scripts").exists() and not runner and any(
+            p in allowed for p in ("service_ops", "risky_edit")
+        ):
             warnings.append("skill ships scripts but no runner guidance is declared")
 
         skill_md = load_skill_markdown(workspace, skill)

@@ -1,36 +1,3 @@
 {
-  "skills": {
-    "meeting-recording-ops-ko": {
-      "allowed_profiles": ["service_ops", "risky_edit"],
-      "default_profile": "service_ops"
-    },
-    "travel-ops-ko": {
-      "allowed_profiles": ["inspect_local", "workspace_edit", "service_ops", "risky_edit", "remote_handoff"],
-      "default_profile": "inspect_local"
-    },
-    "local-discovery-ko": {
-      "allowed_profiles": ["inspect_local", "service_ops", "risky_edit", "remote_handoff"],
-      "default_profile": "inspect_local"
-    },
-    "k-service-ops-ko": {
-      "allowed_profiles": ["inspect_local", "service_ops", "risky_edit", "remote_handoff"],
-      "default_profile": "inspect_local"
-    },
-    "wealth-ops-ko": {
-      "allowed_profiles": ["inspect_local", "workspace_edit", "service_ops", "risky_edit", "remote_handoff"],
-      "default_profile": "inspect_local"
-    },
-    "knowledge-capture-ko": {
-      "allowed_profiles": ["inspect_local", "workspace_edit", "service_ops", "risky_edit"],
-      "default_profile": "inspect_local"
-    },
-    "household-ledger-ko": {
-      "allowed_profiles": ["inspect_local", "service_ops", "risky_edit"],
-      "default_profile": "inspect_local"
-    },
-    "skill-capture-ko": {
-      "allowed_profiles": ["workspace_edit", "risky_edit"],
-      "default_profile": "workspace_edit"
-    }
-  }
+  "skills": {}
 }

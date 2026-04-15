@@ -14,5 +14,7 @@ __pycache__/
 .openclaw/
 memory/
 skill_drafts/
+!examples/demo-workspace/skill_drafts/
+!examples/demo-workspace/skill_drafts/**
 .env
 .env.*
