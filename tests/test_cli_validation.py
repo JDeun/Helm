@@ -10,30 +10,48 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEMO_WORKSPACE = REPO_ROOT / "examples" / "demo-workspace"
 
 
 class CliValidationTests(unittest.TestCase):
+    def run_cli(self, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(REPO_ROOT / "helm.py"), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+    def create_minimal_workspace(self, root: Path) -> None:
+        (root / ".helm" / "checkpoints").mkdir(parents=True)
+        (root / "references").mkdir()
+        (root / "skills").mkdir()
+        (root / "skill_drafts").mkdir()
+        (root / "memory").mkdir()
+        (root / ".helm" / "context_sources.json").write_text('{"sources": []}\n', encoding="utf-8")
+        (root / ".helm" / "task-ledger.jsonl").write_text("", encoding="utf-8")
+        (root / ".helm" / "command-log.jsonl").write_text("", encoding="utf-8")
+        (root / ".helm" / "checkpoints" / "index.json").write_text("[]\n", encoding="utf-8")
+        (root / "references" / "execution_profiles.json").write_text(
+            json.dumps({"profiles": {"inspect_local": {}, "workspace_edit": {}}}),
+            encoding="utf-8",
+        )
+        (root / "references" / "skill_profile_policies.json").write_text(
+            json.dumps({"skills": {}}),
+            encoding="utf-8",
+        )
+        (root / "references" / "skill-capture-template.md").write_text("# Template\n", encoding="utf-8")
+        (root / "references" / "skill-contract-template.json").write_text("{}\n", encoding="utf-8")
+
     def test_helm_validate_reports_missing_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / "references").mkdir()
+            self.create_minimal_workspace(root)
             (root / "skills" / "demo-skill").mkdir(parents=True)
-            (root / "references" / "execution_profiles.json").write_text(
-                json.dumps({"profiles": {"inspect_local": {}, "workspace_edit": {}}}),
-                encoding="utf-8",
-            )
-            (root / "references" / "skill_profile_policies.json").write_text(
-                json.dumps({"skills": {}}),
-                encoding="utf-8",
-            )
             (root / "skills" / "demo-skill" / "SKILL.md").write_text("# Demo\n", encoding="utf-8")
 
-            result = subprocess.run(
-                [sys.executable, str(REPO_ROOT / "helm.py"), "validate", "--path", str(root), "--json"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            result = self.run_cli("validate", "--path", str(root), "--json")
 
             self.assertEqual(result.returncode, 1)
             payload = json.loads(result.stdout)
@@ -134,6 +152,69 @@ Inspect first and mutate only through the strict runner.
             )
             self.assertEqual(audit_result.returncode, 0)
             self.assertTrue(json.loads(audit_result.stdout)["ok"])
+
+    def test_survey_initializes_workspace_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "fresh-workspace"
+
+            result = self.run_cli("survey", "--path", str(root), "--json")
+
+            self.assertEqual(result.returncode, 0)
+            payload = json.loads(result.stdout[result.stdout.index("{") :])
+            self.assertEqual(payload["workspace"], str(root.resolve()))
+            self.assertTrue((root / ".helm").exists())
+            self.assertTrue((root / "references" / "execution_profiles.json").exists())
+
+    def test_doctor_reports_healthy_for_minimal_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+
+            result = self.run_cli("doctor", "--path", str(root))
+
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("healthy=yes", result.stdout)
+            self.assertIn("references/skill-contract-template.json: present", result.stdout)
+
+    def test_checkpoint_recommend_reports_demo_checkpoint(self) -> None:
+        result = self.run_cli("checkpoint-recommend", "--path", str(DEMO_WORKSPACE))
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("task_id=demo-task-002", result.stdout)
+        self.assertIn("checkpoint_id=20260413T090959Z-demo-router-edit", result.stdout)
+        self.assertIn("restore_hint=helm checkpoint --path", result.stdout)
+
+    def test_report_markdown_mentions_failed_demo_task(self) -> None:
+        result = self.run_cli("report", "--path", str(DEMO_WORKSPACE), "--format", "markdown")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("# Helm Report", result.stdout)
+        self.assertIn("demo-task-002", result.stdout)
+        self.assertIn("Recent Checkpoints", result.stdout)
+
+    def test_skill_reject_writes_rejection_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / "skill_drafts" / "demo-skill").mkdir(parents=True, exist_ok=True)
+
+            result = self.run_cli(
+                "skill-reject",
+                "--path",
+                str(root),
+                "--name",
+                "demo-skill",
+                "--reason",
+                "needs narrower contract",
+                "--json",
+            )
+
+            self.assertEqual(result.returncode, 0)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "rejected")
+            self.assertEqual(payload["reason"], "needs narrower contract")
+            stored = json.loads((root / "skill_drafts" / "demo-skill" / "meta" / "rejection.json").read_text(encoding="utf-8"))
+            self.assertEqual(stored["reason"], "needs narrower contract")
 
 
 if __name__ == "__main__":
