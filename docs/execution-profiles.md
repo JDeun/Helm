@@ -56,6 +56,16 @@ Examples:
 
 The profiled runner now writes a `memory_capture` plan into the final task-ledger state so this decision is visible instead of implicit.
 
+For conversation-only or synthetic task paths, the same rule still applies: auditability should use an explicit lifecycle instead of a single terminal row.
+
+The preferred ledger shape is:
+
+- `queued`
+- `running`
+- final state such as `completed`, `failed`, or `handoff_required`
+
+That lifecycle keeps timestamp audits, failure review, and rollback reasoning aligned across shell-backed and conversation-backed execution.
+
 ## Helpers
 
 - List or inspect profiles:
@@ -94,3 +104,4 @@ The profiled runner now writes a `memory_capture` plan into the final task-ledge
 - If `--skill` is provided, the runner checks the skill-local `contract.json` manifest first and rejects disallowed profile/skill combinations.
 - `service_ops` runs are appended to `.helm/task-ledger.jsonl` so detached or side-effectful work is auditable later.
 - Final task-ledger states include a visible `memory_capture` assessment so operational completion is inspectable.
+- Intentional weak-model or small-model fallback paths should be documented as explicit operating exceptions, not silently normalized away in the runner.

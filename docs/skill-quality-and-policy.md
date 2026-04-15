@@ -74,6 +74,7 @@ Helm should push skills away from those patterns.
 - widen to `service_ops` only when live service or API side effects are expected
 - use `risky_edit` for shared scripts, routing changes, automation changes, and reusable infrastructure edits
 - use `remote_handoff` explicitly instead of pretending remote execution is local
+- document intentional fallback exceptions as policy decisions with clear scope, owner, and acceptance rationale
 
 ## Review Questions
 
@@ -84,6 +85,7 @@ Helm should push skills away from those patterns.
 - does reply-gate failure for this skill mean the manifest is too weak, or the workflow is missing a real finalization step
 - does `SKILL.md` expose a real stop boundary, or only describe the workflow at a high level
 - if this skill were swapped out for a new one tomorrow, would the same Helm quality bar still catch weak inputs, weak outputs, and weak failure handling
+- when this skill fails, can Helm later distinguish an unresolved failure from a failure that was already superseded by a successful retry
 
 ## Review Heuristics For SKILL.md
 
@@ -122,3 +124,4 @@ Before a Helm release:
 - README and release notes should describe the current governance model accurately
 - representative skills should be tightened enough that the release does not rely on generic backfill contracts
 - released skill examples should demonstrate narrow input discipline, explicit stop boundaries, and predictable output shapes
+- operating docs should explain how failure review distinguishes unresolved vs superseded failures, and how intentional fallback exceptions are tracked

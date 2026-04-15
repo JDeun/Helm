@@ -22,6 +22,16 @@ This is a model-tier-aware guardrail system. It keeps the normal execution-profi
 - preferred narrow runners in strict mode
 - postflight finalization checks so a task is not treated as complete while durable capture is still pending
 
+## Audit Interpretation
+
+Harness audit output should be read as an operator signal, not just a raw counter dump.
+
+- distinguish unresolved failures from failures that were later superseded by a successful retry or corrected follow-up
+- treat repeated raw `failed` rows without that distinction as an incomplete audit view
+- keep intentional fallback exceptions visible as policy exceptions instead of hiding them behind silent code relaxations
+
+This matters because the operating layer should tell an operator whether the system is still broken, already recovered, or intentionally running with a bounded exception.
+
 New skills do not need central harness edits anymore if they ship their own `contract.json`.
 
 - `scripts/skill_capture.py create` scaffolds `contract.json`
