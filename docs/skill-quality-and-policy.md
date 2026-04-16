@@ -36,11 +36,13 @@ Every promoted skill should make these contracts visible inside `SKILL.md`:
   - optional inputs
   - the first questions to ask when required inputs are missing
   - how broad or ambiguous inputs must be narrowed
+  - the source priority when multiple input or evidence sources are possible
 - `Decision contract`
   - the order of decisions the skill makes
   - the routing or handoff boundary
   - the approval or stop boundary
   - the red flags weaker models are likely to miss
+  - what counts as stronger versus weaker source material when quality is uneven
 - `Output contract`
   - the default answer shape
   - the required fields
@@ -93,6 +95,7 @@ Good signs:
 
 - the skill asks only for the missing minimum input
 - the decision order is explicit
+- source priority is visible when the workflow can pull from multiple materials
 - the output shape is narrow and repeatable
 - time-sensitive or risky claims are visibly constrained
 - failure behavior keeps the workflow moving instead of collapsing into generic apology text

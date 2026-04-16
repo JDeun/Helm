@@ -22,12 +22,14 @@ This should explain how the skill stays safe, focused, and predictable.
 - Optional inputs
 - Ask first when missing
 - If the request is broad or ambiguous, how it must be narrowed
+- If multiple source types can drive the skill, state the source priority explicitly
 
 ## Decision contract
 
 - State the decision order explicitly.
 - Explain when the skill should route outward, stop, ask for approval, or escalate.
 - List the red flags weaker models are likely to miss.
+- If the skill depends on evidence quality, say what counts as stronger versus weaker source material.
 
 ## Execution contract
 

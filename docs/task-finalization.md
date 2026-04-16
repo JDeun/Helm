@@ -30,6 +30,24 @@ Helm uses these durable targets as planning vocabulary:
 
 Helm does not assume every workspace uses every layer. The point is to make the decision explicit and inspectable.
 
+## Support Artifacts Versus Breakage
+
+Not every durable file that looks disconnected should be treated as a defect.
+
+Some workspaces intentionally produce support artifacts such as:
+
+- projected notes generated from another source of truth
+- task-capture or audit records kept mainly for inspection
+- alias stubs or redirect notes that exist for lookup stability
+
+These should not be collapsed into the same bucket as real breakage such as unresolved links, missing required hub edges, or missing durable traces after a meaningful task.
+
+The operating rule is:
+
+- distinguish real issues from intentional support artifacts
+- keep that distinction visible in diagnostics and operator summaries
+- only promote support artifacts into first-class navigation when the inspection value clearly outweighs the noise
+
 ## Why This Matters
 
 - Verification answers "did the task actually run?"

@@ -175,6 +175,7 @@ def render_draft_template(
 ## Review Checklist
 
 - Replace generic trigger bullets with real activation conditions.
+- Document source priority if the workflow can be driven by multiple kinds of evidence or input material.
 - Convert the observed command path into stable scripts or documented tool calls.
 - Add at least one durable reference, template, script, or check before promotion.
 - Decide the right execution profile and whether checkpointing is required.

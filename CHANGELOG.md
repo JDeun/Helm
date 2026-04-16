@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- clarified the operator guidance that diagnostics should distinguish real breakage from intentional support artifacts such as projections, capture records, and alias stubs
+- updated the skill-capture template and draft checklist to encourage explicit source priority when a skill can be driven by multiple evidence sources
+
 ## 0.5.1
 
 - removed repository-root personal skill contracts so Helm ships as a public governance layer rather than a private skill bundle
