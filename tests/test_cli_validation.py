@@ -216,6 +216,348 @@ Inspect first and mutate only through the strict runner.
             stored = json.loads((root / "skill_drafts" / "demo-skill" / "meta" / "rejection.json").read_text(encoding="utf-8"))
             self.assertEqual(stored["reason"], "needs narrower contract")
 
+    def test_harness_postflight_requires_browser_and_retrieval_evidence_when_contract_demands_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / "skills" / "browser-skill").mkdir(parents=True)
+            (root / "skills" / "browser-skill" / "contract.json").write_text(
+                json.dumps(
+                    {
+                        "skill": "browser-skill",
+                        "allowed_profiles": ["inspect_local"],
+                        "default_profile": "inspect_local",
+                        "browser_work": {
+                            "required": True,
+                            "required_fields": ["reason", "evidence", "api_reusable", "next_action"],
+                        },
+                        "retrieval_policy": {
+                            "required": True,
+                            "required_fields": ["attempt_stage", "exit_classification", "recovery_artifact"],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / ".helm" / "task-ledger.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task-browser-1",
+                        "task_name": "generic inspection task",
+                        "skill": "browser-skill",
+                        "status": "completed",
+                        "command_preview": "python3 scripts/do_work.py",
+                        "memory_capture": {"finalization_status": "capture_written"},
+                        "meta": {"harness": {"enforcement_level": "strict"}},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["HELM_WORKSPACE"] = str(root)
+
+            missing = subprocess.run(
+                [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-browser-1"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(missing.returncode, 2)
+            payload = json.loads(missing.stdout)
+            failed_checks = {item["name"]: item for item in payload["checks"]}
+            self.assertFalse(failed_checks["browser_evidence"]["ok"])
+            self.assertFalse(failed_checks["retrieval_evidence"]["ok"])
+
+            recorded = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "adaptive_harness.py"),
+                    "record-evidence",
+                    "--task-id",
+                    "task-browser-1",
+                    "--browser-evidence-json",
+                    json.dumps(
+                        {
+                            "reason": "JS-only page required live browser inspection",
+                            "evidence": "Captured snapshot plus blocking selector state",
+                            "api_reusable": True,
+                            "next_action": "Promote the discovered endpoint into a cheaper fetch path",
+                        }
+                    ),
+                    "--retrieval-evidence-json",
+                    json.dumps(
+                        {
+                            "attempt_stage": "browser_network",
+                            "exit_classification": "api_reusable",
+                            "recovery_artifact": "/tmp/browser-network.json",
+                        }
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(recorded.returncode, 0)
+            recorded_payload = json.loads(recorded.stdout)
+            self.assertTrue(recorded_payload["postflight"]["ok"])
+
+    def test_harness_postflight_can_infer_missing_evidence_from_task_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / "skills" / "browser-skill").mkdir(parents=True)
+            (root / "skills" / "browser-skill" / "contract.json").write_text(
+                json.dumps(
+                    {
+                        "skill": "browser-skill",
+                        "allowed_profiles": ["inspect_local"],
+                        "default_profile": "inspect_local",
+                        "browser_work": {"required": True},
+                        "retrieval_policy": {"required": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / ".helm" / "task-ledger.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task-browser-2",
+                        "task_name": "blocked browser retrieval",
+                        "skill": "browser-skill",
+                        "status": "completed",
+                        "command_preview": "playwright inspect blocked page and inspect network endpoint",
+                        "runtime_note": "network endpoint looked reusable after browser inspection",
+                        "memory_capture": {"finalization_status": "capture_written"},
+                        "meta": {"harness": {"enforcement_level": "strict", "user_request": "inspect blocked site and reuse the API if possible"}},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["HELM_WORKSPACE"] = str(root)
+
+            inferred = subprocess.run(
+                [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-browser-2"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(inferred.returncode, 0)
+            payload = json.loads(inferred.stdout)
+            self.assertTrue(payload["ok"])
+            harness_meta = ((payload["entry"].get("meta") or {}).get("harness") or {})
+            self.assertTrue(harness_meta["browser_evidence"]["inferred"])
+            self.assertTrue(harness_meta["retrieval_evidence"]["inferred"])
+
+    def test_harness_postflight_conditionally_requires_browser_and_retrieval_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / "skills" / "mixed-skill").mkdir(parents=True)
+            (root / "skills" / "mixed-skill" / "contract.json").write_text(
+                json.dumps(
+                    {
+                        "skill": "mixed-skill",
+                        "allowed_profiles": ["inspect_local"],
+                        "default_profile": "inspect_local",
+                        "browser_work": {"when_any": ["browser", "playwright", "selector"]},
+                        "retrieval_policy": {"when_any": ["blocked", "403", "network", "endpoint"]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / ".helm" / "task-ledger.jsonl").write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "task_id": "task-mixed-1",
+                                "task_name": "summarize local notes",
+                                "skill": "mixed-skill",
+                                "status": "completed",
+                                "command_preview": "python3 scripts/summarize_notes.py",
+                                "memory_capture": {"finalization_status": "capture_written"},
+                                "meta": {"harness": {"enforcement_level": "strict"}},
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "task_id": "task-mixed-2",
+                                "task_name": "browser blocked lookup",
+                                "skill": "mixed-skill",
+                                "status": "completed",
+                                "command_preview": "playwright browser lookup with blocked 403 response and reusable network endpoint",
+                                "memory_capture": {"finalization_status": "capture_written"},
+                                "meta": {"harness": {"enforcement_level": "strict"}},
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["HELM_WORKSPACE"] = str(root)
+
+            local_only = subprocess.run(
+                [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-mixed-1"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(local_only.returncode, 0)
+            local_payload = json.loads(local_only.stdout)
+            local_checks = {item["name"]: item for item in local_payload["checks"]}
+            self.assertTrue(local_checks["browser_evidence"]["ok"])
+            self.assertTrue(local_checks["retrieval_evidence"]["ok"])
+
+            blocked = subprocess.run(
+                [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-mixed-2"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(blocked.returncode, 0)
+            blocked_payload = json.loads(blocked.stdout)
+            self.assertTrue(blocked_payload["ok"])
+            harness_meta = ((blocked_payload["entry"].get("meta") or {}).get("harness") or {})
+            self.assertTrue(harness_meta["browser_evidence"]["inferred"])
+            self.assertEqual(harness_meta["retrieval_evidence"]["exit_classification"], "api_reusable")
+
+    def test_task_ledger_report_shows_evidence_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / ".helm" / "task-ledger.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task-report-1",
+                        "task_name": "browser retrieval",
+                        "status": "completed",
+                        "profile": "inspect_local",
+                        "memory_capture": {"finalization_status": "capture_written"},
+                        "meta": {
+                            "harness": {
+                                "enforcement_level": "strict",
+                                "model_tier": "constrained",
+                                "browser_evidence": {"reason": "browser used"},
+                                "retrieval_evidence": {"exit_classification": "api_reusable"},
+                            }
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["HELM_WORKSPACE"] = str(root)
+
+            result = subprocess.run(
+                [sys.executable, str(REPO_ROOT / "scripts" / "task_ledger_report.py"), "--summary", "--limit", "1"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("Browser evidence counts:", result.stdout)
+            self.assertIn("Retrieval evidence counts:", result.stdout)
+            self.assertIn("Retrieval exit classifications:", result.stdout)
+            self.assertIn("Retrieval next-attempt stages:", result.stdout)
+            self.assertIn("browser=B retrieval=api_reusable", result.stdout)
+
+    def test_harness_backfill_evidence_updates_prior_tasks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / "skills" / "mixed-skill").mkdir(parents=True)
+            (root / "skills" / "mixed-skill" / "contract.json").write_text(
+                json.dumps(
+                    {
+                        "skill": "mixed-skill",
+                        "allowed_profiles": ["inspect_local"],
+                        "default_profile": "inspect_local",
+                        "browser_work": {"when_any": ["browser", "playwright"]},
+                        "retrieval_policy": {"when_any": ["blocked", "network", "endpoint"]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / ".helm" / "task-ledger.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task-backfill-1",
+                        "task_name": "browser blocked lookup",
+                        "skill": "mixed-skill",
+                        "status": "completed",
+                        "command_preview": "playwright browser lookup with blocked network endpoint",
+                        "runtime_note": "network endpoint looked reusable after browser inspection",
+                        "memory_capture": {"finalization_status": "capture_written"},
+                        "meta": {"harness": {"enforcement_level": "strict"}},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["HELM_WORKSPACE"] = str(root)
+
+            result = subprocess.run(
+                [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "backfill-evidence", "--skill", "mixed-skill"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["updated"], 1)
+            self.assertEqual(payload["browser_backfilled"], 1)
+            self.assertEqual(payload["retrieval_backfilled"], 1)
+
+    def test_manifest_quality_flags_broad_when_any_triggers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / "skills" / "broad-skill").mkdir(parents=True)
+            (root / "skills" / "broad-skill" / "contract.json").write_text(
+                json.dumps(
+                    {
+                        "skill": "broad-skill",
+                        "allowed_profiles": ["inspect_local"],
+                        "default_profile": "inspect_local",
+                        "browser_work": {"required": True, "when_any": ["web", "site", "task"]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["HELM_WORKSPACE"] = str(root)
+            result = subprocess.run(
+                [sys.executable, str(REPO_ROOT / "scripts" / "run_with_profile.py"), "audit-manifest-quality", "--json"],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 2)
+            payload = json.loads(result.stdout)
+            item = next(item for item in payload["items"] if item["skill"] == "broad-skill")
+            joined = "\n".join(item["warnings"])
+            self.assertIn("redundant", joined)
+            self.assertIn("overly generic", joined)
+
 
 if __name__ == "__main__":
     unittest.main()

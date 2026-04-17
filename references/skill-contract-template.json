@@ -10,5 +10,15 @@
   },
   "approval_keywords": [],
   "require_finalization_written": true,
+  "browser_work": {
+    "required": false,
+    "required_fields": ["reason", "evidence", "api_reusable", "next_action"],
+    "when_any": []
+  },
+  "retrieval_policy": {
+    "required": false,
+    "required_fields": ["attempt_stage", "exit_classification", "recovery_artifact"],
+    "when_any": []
+  },
   "runner": {}
 }

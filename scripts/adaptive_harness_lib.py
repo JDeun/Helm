@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.retrieval_policy_lib import build_retrieval_plan
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies as load_manifest_policies
 
 
@@ -78,6 +79,8 @@ def base_skill_contract(skill: str | None) -> dict:
     return {
         "context": {"required": False},
         "require_finalization_written": True,
+        "browser_work": {"required": False, "required_fields": ["reason", "evidence", "api_reusable", "next_action"]},
+        "retrieval_policy": {"required": False, "required_fields": ["attempt_stage", "exit_classification", "recovery_artifact"]},
         "allowed_profiles": policy.get("allowed_profiles", []),
         "default_profile": policy.get("default_profile"),
         "runner": {},
@@ -172,6 +175,143 @@ def append_check(checks: list[dict], name: str, ok: bool, detail: str) -> None:
     checks.append({"name": name, "ok": ok, "detail": detail})
 
 
+def validate_evidence_payload(
+    payload: dict | None,
+    required_fields: list[str],
+    *,
+    label: str,
+) -> tuple[bool, str]:
+    if payload is None:
+        return False, f"{label} missing"
+
+    missing: list[str] = []
+    for field in required_fields:
+        value = payload.get(field)
+        if value is None:
+            missing.append(field)
+            continue
+        if isinstance(value, str) and not value.strip():
+            missing.append(field)
+            continue
+        if isinstance(value, list) and not value:
+            missing.append(field)
+    if missing:
+        return False, f"{label} missing required fields: {', '.join(missing)}"
+    return True, f"{label} satisfied"
+
+
+def evidence_hints(section: dict) -> list[str]:
+    raw = section.get("when_any")
+    if not isinstance(raw, list):
+        return []
+    return [str(item).casefold() for item in raw if str(item).strip()]
+
+
+def evidence_requirement_active(section: dict, *, blob: str) -> bool:
+    if section.get("required"):
+        return True
+    hints = evidence_hints(section)
+    return bool(hints) and any(hint in blob for hint in hints)
+
+
+def parse_evidence_json(raw: str | None, *, label: str) -> dict | None:
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{label} must be valid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"{label} must decode to a JSON object")
+    return payload
+
+
+def _command_blob_from_entry(entry: dict) -> str:
+    harness_meta = ((entry.get("meta") or {}).get("harness") or {})
+    parts = [
+        entry.get("task_name"),
+        entry.get("command_preview"),
+        entry.get("runtime_target"),
+        entry.get("runtime_note"),
+        entry.get("failure_stage"),
+        entry.get("failure_reason"),
+        harness_meta.get("user_request"),
+    ]
+    return " ".join(str(part or "") for part in parts).casefold()
+
+
+def entry_evidence_requirements(entry: dict, contract: dict) -> dict[str, bool]:
+    blob = _command_blob_from_entry(entry)
+    return {
+        "browser_work": evidence_requirement_active(contract.get("browser_work") or {}, blob=blob),
+        "retrieval_policy": evidence_requirement_active(contract.get("retrieval_policy") or {}, blob=blob),
+    }
+
+
+def infer_browser_evidence(entry: dict) -> dict | None:
+    blob = _command_blob_from_entry(entry)
+    browser_hints = ("browser", "playwright", "snapshot", "selector", "dom", "click", "safari", "chrome", "firefox", "network")
+    if not any(hint in blob for hint in browser_hints):
+        return None
+    api_reusable = any(hint in blob for hint in ("api", "endpoint", "json", "network", "reuse"))
+    evidence = entry.get("runtime_note") or entry.get("failure_reason") or entry.get("command_preview") or "task-ledger inferred browser work"
+    next_action = (
+        "Promote the discovered endpoint or network path into a cheaper non-browser retrieval route."
+        if api_reusable
+        else "Capture a more explicit network trace or selector note before repeating this browser-dependent workflow."
+    )
+    return {
+        "reason": "Task metadata indicates live browser inspection or UI-dependent interaction was part of execution.",
+        "evidence": str(evidence),
+        "api_reusable": api_reusable,
+        "next_action": next_action,
+        "inferred": True,
+        "inference_source": "task_ledger",
+    }
+
+
+def infer_retrieval_evidence(entry: dict) -> dict | None:
+    blob = _command_blob_from_entry(entry)
+    retrieval_hints = ("fetch", "retriev", "reader", "blocked", "403", "429", "waf", "auth", "browser", "network", "endpoint", "json", "spa", "challenge")
+    if not any(hint in blob for hint in retrieval_hints):
+        return None
+
+    plan = build_retrieval_plan(
+        current_stage="browser_snapshot" if any(hint in blob for hint in ("browser", "playwright", "snapshot", "selector", "dom")) else "cheap_fetch",
+        error_text=entry.get("failure_reason"),
+        body_hint=blob,
+        browser_used=any(hint in blob for hint in ("browser", "playwright", "snapshot", "selector", "dom")),
+        network_discovery=any(hint in blob for hint in ("network", "endpoint", "json", "api", "reuse")),
+        auth_required=any(hint in blob for hint in ("auth", "login", "paywall")),
+        unsafe=any(hint in blob for hint in ("unsafe",)),
+        human_approval_needed=any(hint in blob for hint in ("approval",)),
+    )
+    return {
+        "attempt_stage": plan["attempt_stage"],
+        "exit_classification": plan["exit_classification"],
+        "recovery_artifact": "inferred-from-task-ledger",
+        "next_attempt_stage": plan["next_attempt_stage"],
+        "reason": plan["reason"],
+        "inferred": True,
+        "inference_source": "task_ledger",
+    }
+
+
+def infer_missing_evidence(entry: dict, contract: dict) -> tuple[dict | None, dict | None]:
+    harness_meta = ((entry.get("meta") or {}).get("harness") or {})
+    browser_evidence = harness_meta.get("browser_evidence")
+    retrieval_evidence = harness_meta.get("retrieval_evidence")
+    blob = _command_blob_from_entry(entry)
+
+    inferred_browser = None
+    inferred_retrieval = None
+    if evidence_requirement_active(contract.get("browser_work") or {}, blob=blob) and not isinstance(browser_evidence, dict):
+        inferred_browser = infer_browser_evidence(entry)
+    if evidence_requirement_active(contract.get("retrieval_policy") or {}, blob=blob) and not isinstance(retrieval_evidence, dict):
+        inferred_retrieval = infer_retrieval_evidence(entry)
+    return inferred_browser, inferred_retrieval
+
+
 def preflight_payload(
     *,
     skill: str | None,
@@ -183,6 +323,8 @@ def preflight_payload(
     user_request: str | None,
     context_confirmed: bool,
     command: list[str],
+    browser_evidence: dict | None,
+    retrieval_evidence: dict | None,
 ) -> dict:
     harness_policy = load_harness_policy()
     contract = resolve_skill_contract(skill)
@@ -216,6 +358,8 @@ def preflight_payload(
         append_check(checks, "context_hydration", True, "context hydration requirement satisfied")
 
     request_blob = f"{task_name or ''} {user_request or ''}".casefold()
+    command_blob = " ".join(command).casefold()
+    evidence_blob = f"{request_blob} {runtime_target or ''} {command_blob}".casefold()
     approval_keywords = [keyword.casefold() for keyword in contract.get("approval_keywords", [])]
     approval_needed = any(keyword in request_blob for keyword in approval_keywords)
     if approval_needed and profile != "remote_handoff":
@@ -234,6 +378,32 @@ def preflight_payload(
     else:
         append_check(checks, "preferred_runner", True, "no strict runner requirement")
 
+    browser_work = contract.get("browser_work") or {}
+    browser_fields = [str(item) for item in browser_work.get("required_fields", []) if str(item)]
+    if browser_evidence is not None:
+        ok, detail = validate_evidence_payload(browser_evidence, browser_fields, label="browser_evidence")
+        append_check(checks, "browser_evidence_shape", ok, detail)
+    elif evidence_requirement_active(browser_work, blob=evidence_blob):
+        append_check(
+            checks,
+            "browser_evidence_contract",
+            True,
+            "browser evidence is required for this request shape; attach it before treating the task as complete",
+        )
+
+    retrieval_policy = contract.get("retrieval_policy") or {}
+    retrieval_fields = [str(item) for item in retrieval_policy.get("required_fields", []) if str(item)]
+    if retrieval_evidence is not None:
+        ok, detail = validate_evidence_payload(retrieval_evidence, retrieval_fields, label="retrieval_evidence")
+        append_check(checks, "retrieval_evidence_shape", ok, detail)
+    elif evidence_requirement_active(retrieval_policy, blob=evidence_blob):
+        append_check(
+            checks,
+            "retrieval_evidence_contract",
+            True,
+            "retrieval evidence is required for this request shape; attach it before treating the task as complete",
+        )
+
     return {
         "task_id": str(uuid.uuid4()),
         "skill": skill,
@@ -244,6 +414,8 @@ def preflight_payload(
         "contract": contract,
         "context_required": context_required,
         "hydration_commands": build_hydration_commands(contract),
+        "browser_evidence": browser_evidence,
+        "retrieval_evidence": retrieval_evidence,
         "checks": checks,
         "ok": all(item["ok"] for item in checks),
     }
@@ -263,10 +435,29 @@ def load_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def append_jsonl(path: Path, row: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
 def postflight_payload(task_id: str, contract: dict, enforcement_level: str) -> dict:
     harness_policy = load_harness_policy()
     checks: list[dict] = []
     entry = latest_task_entry(task_id)
+    return postflight_payload_for_entry(entry, task_id=task_id, contract=contract, enforcement_level=enforcement_level, harness_policy=harness_policy)
+
+
+def postflight_payload_for_entry(
+    entry: dict | None,
+    *,
+    task_id: str,
+    contract: dict,
+    enforcement_level: str,
+    harness_policy: dict | None = None,
+) -> dict:
+    policy = harness_policy or load_harness_policy()
+    checks: list[dict] = []
     if entry is None:
         append_check(checks, "task_ledger_entry", False, "task id not found in ledger")
         return {"task_id": task_id, "checks": checks, "ok": False, "entry": None}
@@ -275,17 +466,161 @@ def postflight_payload(task_id: str, contract: dict, enforcement_level: str) -> 
     status = entry.get("status")
     append_check(checks, "task_status", status in {"completed", "handoff_required"}, f"status={status}")
 
-    required_level = str((harness_policy.get("validation") or {}).get("finalization_must_not_be_pending_at_or_above", "balanced"))
+    required_level = str((policy.get("validation") or {}).get("finalization_must_not_be_pending_at_or_above", "balanced"))
     finalization_status = (entry.get("memory_capture") or {}).get("finalization_status", "unknown")
-    if contract.get("require_finalization_written") and enforcement_rank(harness_policy, enforcement_level) >= enforcement_rank(harness_policy, required_level):
+    if contract.get("require_finalization_written") and enforcement_rank(policy, enforcement_level) >= enforcement_rank(policy, required_level):
         ok = finalization_status not in {"capture_planned", "capture_partial", "unknown"}
         append_check(checks, "finalization", ok, f"finalization_status={finalization_status}")
     else:
         append_check(checks, "finalization", True, f"finalization_status={finalization_status}")
+
+    harness_meta = ((entry.get("meta") or {}).get("harness") or {})
+    blob = _command_blob_from_entry(entry)
+    browser_work = contract.get("browser_work") or {}
+    browser_fields = [str(item) for item in browser_work.get("required_fields", []) if str(item)]
+    if evidence_requirement_active(browser_work, blob=blob):
+        ok, detail = validate_evidence_payload(harness_meta.get("browser_evidence"), browser_fields, label="browser_evidence")
+        append_check(checks, "browser_evidence", ok, detail)
+    else:
+        append_check(checks, "browser_evidence", True, "browser evidence not required")
+
+    retrieval_policy = contract.get("retrieval_policy") or {}
+    retrieval_fields = [str(item) for item in retrieval_policy.get("required_fields", []) if str(item)]
+    if evidence_requirement_active(retrieval_policy, blob=blob):
+        ok, detail = validate_evidence_payload(
+            harness_meta.get("retrieval_evidence"),
+            retrieval_fields,
+            label="retrieval_evidence",
+        )
+        append_check(checks, "retrieval_evidence", ok, detail)
+    else:
+        append_check(checks, "retrieval_evidence", True, "retrieval evidence not required")
 
     return {
         "task_id": task_id,
         "entry": entry,
         "checks": checks,
         "ok": all(item["ok"] for item in checks),
+    }
+
+
+def postflight_payload_from_task(task_id: str) -> dict:
+    entry = latest_task_entry(task_id)
+    if entry is None:
+        return postflight_payload_for_entry(None, task_id=task_id, contract={}, enforcement_level="light")
+    skill = entry.get("skill")
+    contract = resolve_skill_contract(skill)
+    harness_meta = ((entry.get("meta") or {}).get("harness") or {})
+    enforcement_level = str(harness_meta.get("enforcement_level") or "light")
+    return postflight_payload_for_entry(entry, task_id=task_id, contract=contract, enforcement_level=enforcement_level)
+
+
+def record_task_evidence(
+    task_id: str,
+    *,
+    browser_evidence: dict | None,
+    retrieval_evidence: dict | None,
+) -> dict:
+    entry = latest_task_entry(task_id)
+    if entry is None:
+        raise SystemExit(f"task id not found in ledger: {task_id}")
+    meta = dict(entry.get("meta") or {})
+    harness = dict(meta.get("harness") or {})
+    if browser_evidence is not None:
+        harness["browser_evidence"] = browser_evidence
+    if retrieval_evidence is not None:
+        harness["retrieval_evidence"] = retrieval_evidence
+    meta["harness"] = harness
+    entry["meta"] = meta
+    append_jsonl(TASK_LEDGER, entry)
+    return entry
+
+
+def ensure_task_evidence(task_id: str, contract: dict) -> dict | None:
+    entry = latest_task_entry(task_id)
+    if entry is None:
+        return None
+    inferred_browser, inferred_retrieval = infer_missing_evidence(entry, contract)
+    if inferred_browser is None and inferred_retrieval is None:
+        return entry
+    return record_task_evidence(
+        task_id,
+        browser_evidence=inferred_browser,
+        retrieval_evidence=inferred_retrieval,
+    )
+
+
+def backfill_task_evidence(
+    *,
+    task_ids: list[str] | None = None,
+    skill: str | None = None,
+    limit: int | None = None,
+    latest_only: bool = True,
+) -> dict:
+    entries = load_jsonl(TASK_LEDGER)
+    if latest_only:
+        latest_map: dict[str, dict] = {}
+        for entry in entries:
+            task_id = entry.get("task_id")
+            if task_id:
+                latest_map[task_id] = entry
+        candidates = list(latest_map.values())
+    else:
+        candidates = [entry for entry in entries if entry.get("task_id")]
+
+    if skill:
+        candidates = [entry for entry in candidates if entry.get("skill") == skill]
+    if task_ids:
+        requested = set(task_ids)
+        candidates = [entry for entry in candidates if entry.get("task_id") in requested]
+    if limit is not None:
+        candidates = candidates[-limit:]
+
+    inspected = 0
+    updated = 0
+    browser_backfilled = 0
+    retrieval_backfilled = 0
+    skipped_without_contract = 0
+    skipped_without_active_requirement = 0
+    skipped_without_inference = 0
+    touched_task_ids: list[str] = []
+
+    for entry in candidates:
+        task_id = entry.get("task_id")
+        if not task_id:
+            continue
+        inspected += 1
+        contract = resolve_skill_contract(entry.get("skill"))
+        if not contract:
+            skipped_without_contract += 1
+            continue
+        requirements = entry_evidence_requirements(entry, contract)
+        if not any(requirements.values()):
+            skipped_without_active_requirement += 1
+            continue
+        inferred_browser, inferred_retrieval = infer_missing_evidence(entry, contract)
+        if inferred_browser is None and inferred_retrieval is None:
+            skipped_without_inference += 1
+            continue
+        record_task_evidence(
+            task_id,
+            browser_evidence=inferred_browser,
+            retrieval_evidence=inferred_retrieval,
+        )
+        updated += 1
+        if inferred_browser is not None:
+            browser_backfilled += 1
+        if inferred_retrieval is not None:
+            retrieval_backfilled += 1
+        touched_task_ids.append(task_id)
+
+    return {
+        "inspected": inspected,
+        "updated": updated,
+        "browser_backfilled": browser_backfilled,
+        "retrieval_backfilled": retrieval_backfilled,
+        "skipped_without_contract": skipped_without_contract,
+        "skipped_without_active_requirement": skipped_without_active_requirement,
+        "skipped_without_inference": skipped_without_inference,
+        "task_ids": touched_task_ids,
     }

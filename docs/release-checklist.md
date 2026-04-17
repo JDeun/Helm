@@ -1,12 +1,12 @@
-# Helm 0.5.2 Release Checklist
+# Helm 0.5.3 Release Checklist
 
-Use this checklist before cutting the `0.5.2` release.
+Use this checklist before cutting the `0.5.3` release.
 
 ## Version and metadata
 
-- confirm `pyproject.toml` version is `0.5.2`
-- confirm `setup.py` version is `0.5.2`
-- confirm `CHANGELOG.md` includes `0.5.2`
+- confirm `pyproject.toml` version is `0.5.3`
+- confirm `setup.py` version is `0.5.3`
+- confirm `CHANGELOG.md` includes `0.5.3`
 - confirm README asset links and docs links render correctly
 
 ## Packaging
@@ -18,6 +18,7 @@ Use this checklist before cutting the `0.5.2` release.
 - verify `helm memory` appears in help output
 - verify `python3 scripts/run_with_profile.py validate-manifests --json` reports `ok: true`
 - verify `python3 scripts/run_with_profile.py audit-manifest-quality --json` reports `ok: true`
+- verify `python3 -m unittest tests.test_cli_validation tests.test_retrieval_policy` passes
 
 ## Workspace and onboarding smoke tests
 
@@ -31,6 +32,8 @@ Use this checklist before cutting the `0.5.2` release.
 - `helm ops --path /tmp/helm-release-smoke capture-state`
 - `HELM_WORKSPACE=examples/demo-workspace python3 scripts/run_with_profile.py validate-manifests --json`
 - `HELM_WORKSPACE=examples/demo-workspace python3 scripts/run_with_profile.py audit-manifest-quality --json`
+- `HELM_WORKSPACE=examples/demo-workspace python3 scripts/adaptive_harness.py backfill-evidence`
+- `HELM_WORKSPACE=examples/demo-workspace python3 scripts/task_ledger_report.py --summary --latest --limit 5`
 
 ## Demo workspace smoke tests
 
@@ -49,7 +52,7 @@ Use this checklist before cutting the `0.5.2` release.
 
 ## Release outputs
 
-- create git tag: `v0.5.2`
-- draft GitHub release notes from `docs/releases/0.5.2.md`
+- create git tag: `v0.5.3`
+- draft GitHub release notes from `docs/releases/0.5.3.md`
 - attach screenshots or README visuals if needed
 - publish source release after the checklist passes

@@ -191,6 +191,8 @@ def validate_contract_manifest(skill: str, manifest: dict, profiles: dict[str, d
     context = manifest.get("context", {})
     runner = manifest.get("runner", {})
     approval_keywords = manifest.get("approval_keywords", [])
+    browser_work = manifest.get("browser_work", {})
+    retrieval_policy = manifest.get("retrieval_policy", {})
 
     if allowed is not None:
         if not isinstance(allowed, list) or not allowed:
@@ -238,6 +240,26 @@ def validate_contract_manifest(skill: str, manifest: dict, profiles: dict[str, d
             if strict_required and not entrypoint:
                 issues.append(f"{skill}: runner.entrypoint is required when strict_required is true")
 
+    for section_name, section in (("browser_work", browser_work), ("retrieval_policy", retrieval_policy)):
+        if not section:
+            continue
+        if not isinstance(section, dict):
+            issues.append(f"{skill}: {section_name} must be an object")
+            continue
+        required = section.get("required")
+        required_fields = section.get("required_fields")
+        when_any = section.get("when_any")
+        if required is not None and not isinstance(required, bool):
+            issues.append(f"{skill}: {section_name}.required must be a boolean")
+        if required_fields is not None and (
+            not isinstance(required_fields, list) or any(not isinstance(item, str) or not item.strip() for item in required_fields)
+        ):
+            issues.append(f"{skill}: {section_name}.required_fields must be a non-empty string list")
+        if when_any is not None and (
+            not isinstance(when_any, list) or any(not isinstance(item, str) or not item.strip() for item in when_any)
+        ):
+            issues.append(f"{skill}: {section_name}.when_any must be a string list")
+
     return issues
 
 
@@ -277,6 +299,8 @@ def manifest_quality_audit(workspace: Path, profile_path: Path) -> dict:
         context = manifest.get("context") or {}
         runner = manifest.get("runner") or {}
         approval_keywords = manifest.get("approval_keywords") or []
+        browser_work = manifest.get("browser_work") or {}
+        retrieval_policy = manifest.get("retrieval_policy") or {}
         warnings: list[str] = []
 
         if sorted(allowed) == full_profile_set:
@@ -304,6 +328,21 @@ def manifest_quality_audit(workspace: Path, profile_path: Path) -> dict:
         skill_md = load_skill_markdown(workspace, skill)
         if skill_md:
             warnings.extend(audit_skill_markdown_contracts(skill_md, manifest))
+
+        for section_name, section in (("browser_work", browser_work), ("retrieval_policy", retrieval_policy)):
+            if not isinstance(section, dict) or not section:
+                continue
+            when_any = [str(item).casefold() for item in section.get("when_any", []) if str(item).strip()]
+            if section.get("required") and when_any:
+                warnings.append(f"{section_name} declares both `required` and `when_any`; the trigger is redundant")
+            if len(when_any) > 12:
+                warnings.append(f"{section_name}.when_any is broad enough to behave like a near-global trigger")
+            if len(set(when_any)) != len(when_any):
+                warnings.append(f"{section_name}.when_any contains duplicate trigger hints")
+            if any(len(item) < 3 for item in when_any):
+                warnings.append(f"{section_name}.when_any includes hints that are too short to be discriminative")
+            if any(item in {"web", "site", "task", "request", "work"} for item in when_any):
+                warnings.append(f"{section_name}.when_any includes overly generic trigger hints")
 
         if warnings:
             items.append(

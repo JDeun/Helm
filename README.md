@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.5.2</strong></p>
+<p align="center"><strong>Current release: v0.5.3</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -238,6 +238,10 @@ The key design change in the current release is that harness policy is now skill
 
 - each skill can declare `allowed_profiles` and `default_profile` in `skills/<skill>/contract.json`
 - strict runner requirements can be declared in the manifest instead of central code
+- browser-heavy workflows can require structured `browser_evidence` in task metadata before the work is treated as complete
+- blocked retrieval workflows can require structured `retrieval_evidence` so escalation exits stay inspectable instead of living only in prose
+- when explicit evidence is missing, the harness can infer a minimal evidence record from the task ledger and still force operators to make the escalation path inspectable
+- `python3 scripts/adaptive_harness.py backfill-evidence` can append inferred evidence to prior runs without rewriting the original ledger history
 - `python3 scripts/run_with_profile.py validate-manifests --json` audits missing or malformed manifests before release
 - `python3 scripts/run_with_profile.py audit-manifest-quality --json` flags contracts that are still too broad, too generic, or missing approval boundaries
 
@@ -314,7 +318,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.2.md`](docs/releases/0.5.2.md)
+- [`docs/releases/0.5.3.md`](docs/releases/0.5.3.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)

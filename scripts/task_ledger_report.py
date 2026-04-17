@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.adaptive_harness_lib import entry_evidence_requirements, resolve_skill_contract
 
 
 WORKSPACE = get_workspace_layout().root
@@ -59,6 +60,34 @@ def summary(entries: list[dict]) -> None:
     )
     harness_levels = Counter((((entry.get("meta") or {}).get("harness") or {}).get("enforcement_level", "-")) for entry in entries)
     harness_models = Counter((((entry.get("meta") or {}).get("harness") or {}).get("model_tier", "-")) for entry in entries)
+    browser_evidence = Counter()
+    retrieval_evidence = Counter()
+    retrieval_exit_classes = Counter()
+    retrieval_next_stages = Counter()
+    missing_required_browser_by_skill = Counter()
+    missing_required_retrieval_by_skill = Counter()
+    for entry in entries:
+        harness = ((entry.get("meta") or {}).get("harness") or {})
+        contract = resolve_skill_contract(entry.get("skill"))
+        requirements = entry_evidence_requirements(entry, contract) if contract else {"browser_work": False, "retrieval_policy": False}
+        browser_payload = harness.get("browser_evidence")
+        retrieval_payload = harness.get("retrieval_evidence")
+
+        if isinstance(browser_payload, dict):
+            browser_evidence["inferred" if browser_payload.get("inferred") else "present"] += 1
+        else:
+            browser_evidence["missing_required" if requirements["browser_work"] else "missing_optional"] += 1
+            if requirements["browser_work"]:
+                missing_required_browser_by_skill[entry.get("skill", "-") or "-"] += 1
+
+        if isinstance(retrieval_payload, dict):
+            retrieval_evidence["inferred" if retrieval_payload.get("inferred") else "present"] += 1
+            retrieval_exit_classes[str(retrieval_payload.get("exit_classification", "-"))] += 1
+            retrieval_next_stages[str(retrieval_payload.get("next_attempt_stage") or "none")] += 1
+        else:
+            retrieval_evidence["missing_required" if requirements["retrieval_policy"] else "missing_optional"] += 1
+            if requirements["retrieval_policy"]:
+                missing_required_retrieval_by_skill[entry.get("skill", "-") or "-"] += 1
     print("Status counts:")
     for key, value in sorted(statuses.items()):
         print(f"  {key}: {value}")
@@ -77,6 +106,24 @@ def summary(entries: list[dict]) -> None:
     print("Harness model-tier counts:")
     for key, value in sorted(harness_models.items()):
         print(f"  {key}: {value}")
+    print("Browser evidence counts:")
+    for key, value in sorted(browser_evidence.items()):
+        print(f"  {key}: {value}")
+    print("Retrieval evidence counts:")
+    for key, value in sorted(retrieval_evidence.items()):
+        print(f"  {key}: {value}")
+    print("Retrieval exit classifications:")
+    for key, value in sorted(retrieval_exit_classes.items()):
+        print(f"  {key}: {value}")
+    print("Retrieval next-attempt stages:")
+    for key, value in sorted(retrieval_next_stages.items()):
+        print(f"  {key}: {value}")
+    print("Missing required browser evidence by skill:")
+    for key, value in sorted(missing_required_browser_by_skill.items()):
+        print(f"  {key}: {value}")
+    print("Missing required retrieval evidence by skill:")
+    for key, value in sorted(missing_required_retrieval_by_skill.items()):
+        print(f"  {key}: {value}")
 
 
 def recent(entries: list[dict], limit: int, json_output: bool) -> None:
@@ -85,12 +132,17 @@ def recent(entries: list[dict], limit: int, json_output: bool) -> None:
         print(json.dumps(window, indent=2, ensure_ascii=False))
         return
     for entry in window:
+        harness = ((entry.get("meta") or {}).get("harness") or {})
+        browser_flag = "B" if isinstance(harness.get("browser_evidence"), dict) else "-"
+        retrieval = harness.get("retrieval_evidence")
+        retrieval_flag = retrieval.get("exit_classification", "-") if isinstance(retrieval, dict) else "-"
         print(
             f"{entry.get('started_at', '-')} "
             f"{entry.get('status', '-'):>9} "
             f"{entry.get('profile', '-'):>14} "
             f"{(entry.get('skill') or '-'):>22} "
-            f"{entry.get('task_name', '-')}"
+            f"{entry.get('task_name', '-')} "
+            f"[browser={browser_flag} retrieval={retrieval_flag}]"
         )
 
 

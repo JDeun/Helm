@@ -128,6 +128,7 @@ def _suggested_entries(task: dict, event_types: list[str], layers: list[str]) ->
 
 
 def build_memory_capture_plan(task: dict) -> dict:
+    harness_meta = ((task.get("meta") or {}).get("harness") or {})
     command_blob = " ".join(
         _iter_strings(
             [
@@ -137,6 +138,8 @@ def build_memory_capture_plan(task: dict) -> dict:
                 task.get("runtime_target"),
                 task.get("runtime_note"),
                 *task.get("checkpoint_paths", []),
+                json.dumps(harness_meta.get("browser_evidence") or {}, ensure_ascii=False),
+                json.dumps(harness_meta.get("retrieval_evidence") or {}, ensure_ascii=False),
             ]
         )
     ).casefold()
@@ -155,6 +158,23 @@ def build_memory_capture_plan(task: dict) -> dict:
         if any(keyword in command_blob for keyword in keywords):
             _add_event(event_types, event_type)
             _add_reason(reasons, reason)
+
+    browser_evidence = harness_meta.get("browser_evidence")
+    if isinstance(browser_evidence, dict) and browser_evidence:
+        _add_event(event_types, "operational_state")
+        _add_reason(reasons, "browser evidence was captured for a task that depended on runtime inspection")
+        if browser_evidence.get("api_reusable") is True:
+            _add_event(event_types, "project_state")
+            _add_reason(reasons, "browser work identified an API-reusable path worth keeping as reusable workflow state")
+
+    retrieval_evidence = harness_meta.get("retrieval_evidence")
+    if isinstance(retrieval_evidence, dict) and retrieval_evidence:
+        _add_event(event_types, "operational_state")
+        _add_reason(reasons, "retrieval escalation evidence was captured for blocked or degraded access handling")
+        exit_classification = _norm(retrieval_evidence.get("exit_classification"))
+        if exit_classification in {"auth_required", "unsafe", "human_approval_needed"}:
+            _add_event(event_types, "knowledge_state")
+            _add_reason(reasons, "retrieval exit classification should stay visible as durable operator context")
 
     status = task.get("status")
     exit_code = task.get("exit_code")
