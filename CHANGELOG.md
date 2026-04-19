@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- documented a runtime-neutral memory operations policy covering crystallization, confidence/recency metadata, supersession, review flags, and scope boundaries
+- expanded knowledge-contract and task-finalization guidance so durable capture policy is explicitly treated as a first-class runtime contract
+
 ## 0.5.4
 
 - added `file_intake` evidence contracts to the adaptive harness, manifest validation, and ledger reporting so local file workflows leave inspectable type-routing evidence

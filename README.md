@@ -58,6 +58,7 @@ In the current release, that means:
 - skills own their execution contract through `skills/<skill>/contract.json`
 - smaller or weaker local models can be forced through narrower runners and stricter defaults
 - operators can audit not only whether manifests exist, but whether they are still too generic to be trusted
+- knowledge policy can be described independently from the runtime so memory, artifact, supersession, and review decisions stay inspectable
 
 Helm is especially useful if you already have:
 
@@ -94,6 +95,7 @@ Typical flow:
 - task and command audit trails
 - checkpoint creation, inspection, and restore guidance
 - task finalization with durable state capture planning
+- runtime-neutral memory policy for confidence, recency, supersession, crystallization, and audit-first maintenance
 - gated skill drafting, review, approval, and rejection
 - high-level status and reporting views
 
