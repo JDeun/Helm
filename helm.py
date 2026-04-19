@@ -428,6 +428,11 @@ def build_recent_state_payload(root: Path, limit: int, *, pending_only: bool = F
                 "finalization_status": memory_capture.get("finalization_status", "unknown"),
                 "recommended_layers": memory_capture.get("recommended_layers", []),
                 "event_types": memory_capture.get("event_types", []),
+                "claim_state": memory_capture.get("claim_state", {}),
+                "retention": memory_capture.get("retention", {}),
+                "review_flags": memory_capture.get("review_flags", []),
+                "supersession": memory_capture.get("supersession", {}),
+                "crystallization": memory_capture.get("crystallization", {}),
                 "summary": memory_capture.get("summary"),
             }
         )
@@ -452,6 +457,8 @@ def build_capture_state_payload(root: Path, limit: int) -> dict:
             "status": task.get("status"),
             "finalization_status": task_finalization_status(task),
             "recommended_layers": (task.get("memory_capture") or {}).get("recommended_layers", []),
+            "review_flags": (task.get("memory_capture") or {}).get("review_flags", []),
+            "confidence_hint": ((task.get("memory_capture") or {}).get("claim_state") or {}).get("confidence_hint"),
         }
         for task in recent_tasks
         if task_finalization_status(task) in {"capture_planned", "capture_partial"}
@@ -478,6 +485,11 @@ def build_finalize_payload(root: Path, task_id: str | None) -> dict:
             "relevant": memory_capture.get("relevant", False),
             "recommended_layers": memory_capture.get("recommended_layers", []),
             "event_types": memory_capture.get("event_types", []),
+            "claim_state": memory_capture.get("claim_state", {}),
+            "retention": memory_capture.get("retention", {}),
+            "review_flags": memory_capture.get("review_flags", []),
+            "supersession": memory_capture.get("supersession", {}),
+            "crystallization": memory_capture.get("crystallization", {}),
             "reasons": memory_capture.get("reasons", []),
             "summary": memory_capture.get("summary"),
         },
@@ -1316,7 +1328,8 @@ def cmd_context(args: argparse.Namespace) -> int:
             for item in payload["items"]:
                 print(
                     f"{item['task_id']} status={item['status']} profile={item['profile']} "
-                    f"finalization={item['finalization_status']} name={item['task_name']}"
+                    f"finalization={item['finalization_status']} confidence={item['claim_state'].get('confidence_hint', '-')} "
+                    f"retention={item['retention'].get('tier', '-')} review_flags={len(item['review_flags'])} name={item['task_name']}"
                 )
             return 0
     return run_script("ops_memory_query.py", args.args, root)
@@ -1361,7 +1374,8 @@ def cmd_ops(args: argparse.Namespace) -> int:
         for task in payload["pending_tasks"][:10]:
             print(
                 f"pending={task['task_id']} profile={task['profile']} "
-                f"finalization={task['finalization_status']} name={task['task_name']}"
+                f"finalization={task['finalization_status']} confidence={task.get('confidence_hint') or '-'} "
+                f"review_flags={len(task['review_flags'])} name={task['task_name']}"
             )
         return 0
     mapping = {
@@ -1404,7 +1418,8 @@ def cmd_memory(args: argparse.Namespace) -> int:
     for item in payload["items"]:
         print(
             f"{item['task_id']} profile={item['profile']} status={item['status']} "
-            f"finalization={item['finalization_status']} layers={','.join(item['recommended_layers'])} "
+            f"finalization={item['finalization_status']} confidence={item['claim_state'].get('confidence_hint', '-')} "
+            f"layers={','.join(item['recommended_layers'])} review_flags={len(item['review_flags'])} "
             f"name={item['task_name']}"
         )
     return 0

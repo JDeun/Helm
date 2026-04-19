@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+## 0.5.5
+
 - documented a runtime-neutral memory operations policy covering crystallization, confidence/recency metadata, supersession, review flags, and scope boundaries
 - expanded knowledge-contract and task-finalization guidance so durable capture policy is explicitly treated as a first-class runtime contract
+- surfaced claim-state confidence, retention tier, review flags, and supersession hints directly in Helm CLI inspection output
+- refreshed package metadata, README release references, and release notes for the `0.5.5` cut
 
 ## 0.5.4
 

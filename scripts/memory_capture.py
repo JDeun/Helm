@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime, timezone
 
 
 PROFILE_SIGNAL_MAP = {
@@ -88,6 +89,74 @@ def _recommended_layers(event_types: list[str], command_blob: str) -> list[str]:
     if "ontology" in command_blob or "entity" in command_blob or "relation" in command_blob:
         layers.append("ontology")
     return layers
+
+
+def _task_timestamp(task: dict) -> str:
+    return str(task.get("finished_at") or task.get("started_at") or task.get("created_at") or datetime.now(timezone.utc).isoformat())
+
+
+def _retention_profile(event_types: list[str]) -> dict:
+    if not event_types:
+        return {"tier": "ephemeral", "decay_hint": "drop_if_unreferenced"}
+    if "knowledge_state" in event_types:
+        return {"tier": "durable_knowledge", "decay_hint": "keep_until_superseded"}
+    if "project_state" in event_types or "operational_state" in event_types:
+        return {"tier": "durable_operational", "decay_hint": "keep_until_workflow_changes"}
+    return {"tier": "working_memory", "decay_hint": "downrank_if_stale"}
+
+
+def _claim_state(task: dict, event_types: list[str], harness_meta: dict) -> dict:
+    source_count = 0
+    if task.get("checkpoint_paths"):
+        source_count += 1
+    if harness_meta.get("browser_evidence"):
+        source_count += 1
+    if harness_meta.get("retrieval_evidence"):
+        source_count += 1
+    confidence_hint = "low"
+    if task.get("status") == "completed" and source_count >= 2:
+        confidence_hint = "high"
+    elif task.get("status") in {"completed", "handoff_required"} and event_types:
+        confidence_hint = "medium"
+    return {
+        "last_confirmed_at": _task_timestamp(task),
+        "source_count": source_count,
+        "confidence_hint": confidence_hint,
+        "recency_hint": "fresh" if event_types else "unscoped",
+    }
+
+
+def _supersession(task: dict) -> dict:
+    status = str(task.get("status") or "")
+    if status not in {"completed", "handoff_required"}:
+        return {"state": "not_applicable", "supersedes_task_ids": []}
+    return {"state": "none", "supersedes_task_ids": []}
+
+
+def _crystallization(task: dict, event_types: list[str], reasons: list[str]) -> dict:
+    affected = []
+    if task.get("skill"):
+        affected.append(f"skill:{task['skill']}")
+    if task.get("runtime_target"):
+        affected.append(f"runtime:{task['runtime_target']}")
+    affected.extend(f"event:{item}" for item in event_types)
+    return {
+        "question": task.get("task_name") or "What changed in this run?",
+        "action": task.get("command_preview") or task.get("task_name") or "unknown action",
+        "result": f"{task.get('status')} task finalization assessed",
+        "lesson": reasons[0] if reasons else "No durable lesson inferred.",
+        "affected_entities": affected[:8],
+    }
+
+
+def _review_flags(task: dict, claim_state: dict) -> list[dict]:
+    flags: list[dict] = []
+    name_blob = _norm(task.get("task_name"))
+    if claim_state.get("confidence_hint") == "low":
+        flags.append({"type": "low_confidence_review", "severity": "low"})
+    if any(token in name_blob for token in ("replace", "rewrite", "rename", "correct", "refresh", "update")):
+        flags.append({"type": "contradiction_review", "severity": "medium"})
+    return flags
 
 
 def _suggested_entries(task: dict, event_types: list[str], layers: list[str]) -> dict[str, list[str]]:
@@ -186,6 +255,11 @@ def build_memory_capture_plan(task: dict) -> dict:
     layers = _recommended_layers(event_types, command_blob) if relevant else []
     suggestions = _suggested_entries(task, event_types, layers) if relevant else {}
     priority = "required" if relevant else "none"
+    claim_state = _claim_state(task, event_types, harness_meta)
+    retention = _retention_profile(event_types)
+    supersession = _supersession(task)
+    crystallization = _crystallization(task, event_types, reasons)
+    review_flags = _review_flags(task, claim_state)
     summary = (
         "Durable capture should be planned before the task is treated as operationally complete."
         if relevant
@@ -199,6 +273,11 @@ def build_memory_capture_plan(task: dict) -> dict:
         "recommended_layers": layers,
         "reasons": reasons,
         "suggested_entries": suggestions,
+        "claim_state": claim_state,
+        "retention": retention,
+        "supersession": supersession,
+        "crystallization": crystallization,
+        "review_flags": review_flags,
         "finalization_status": "capture_planned" if relevant else "no_capture_needed",
         "summary": summary,
         "task_exit_code": exit_code,
