@@ -109,6 +109,37 @@ Use the strict runner for all mutations.
             warnings = report["items"][0]["warnings"]
             self.assertIn("skill ships scripts but no runner guidance is declared", warnings)
 
+    def test_file_intake_manifest_without_skill_guidance_is_flagged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "references").mkdir()
+            (root / "skills" / "file-skill").mkdir(parents=True)
+            (root / "references" / "execution_profiles.json").write_text(
+                json.dumps({"profiles": {"inspect_local": {}}}),
+                encoding="utf-8",
+            )
+            (root / "skills" / "file-skill" / "contract.json").write_text(
+                json.dumps(
+                    {
+                        "skill": "file-skill",
+                        "allowed_profiles": ["inspect_local"],
+                        "default_profile": "inspect_local",
+                        "file_intake": {"required": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "skills" / "file-skill" / "SKILL.md").write_text(
+                "# File Skill\n\n## Core rule\n\nInspect first.\n",
+                encoding="utf-8",
+            )
+
+            report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
+
+            self.assertFalse(report["ok"])
+            warnings = report["items"][0]["warnings"]
+            self.assertIn("manifest requires file intake evidence but SKILL.md does not explain the intake boundary", warnings)
+
 
 if __name__ == "__main__":
     unittest.main()

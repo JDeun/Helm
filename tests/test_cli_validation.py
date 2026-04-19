@@ -176,6 +176,80 @@ Inspect first and mutate only through the strict runner.
             self.assertIn("healthy=yes", result.stdout)
             self.assertIn("references/skill-contract-template.json: present", result.stdout)
 
+    def test_run_contract_and_capability_diff_report_recent_task_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / "skills" / "demo-skill").mkdir(parents=True)
+            (root / "skills" / "demo-skill" / "contract.json").write_text(
+                json.dumps(
+                    {
+                        "skill": "demo-skill",
+                        "allowed_profiles": ["inspect_local", "workspace_edit"],
+                        "default_profile": "inspect_local",
+                        "file_intake": {"required": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / ".helm" / "task-ledger.jsonl").write_text(
+                "\n".join(
+                    [
+                        json.dumps(
+                            {
+                                "task_id": "task-old",
+                                "task_name": "inspect draft",
+                                "skill": "demo-skill",
+                                "profile": "inspect_local",
+                                "status": "completed",
+                                "memory_capture": {"finalization_status": "capture_written"},
+                                "meta": {"harness": {"model_tier": "frontier", "enforcement_level": "light"}},
+                            }
+                        ),
+                        json.dumps(
+                            {
+                                "task_id": "task-new",
+                                "task_name": "edit draft",
+                                "skill": "demo-skill",
+                                "profile": "workspace_edit",
+                                "status": "completed",
+                                "delivery_mode": "inline",
+                                "memory_capture": {"finalization_status": "capture_written"},
+                                "meta": {
+                                    "harness": {
+                                        "model_tier": "constrained",
+                                        "enforcement_level": "strict",
+                                        "file_intake_evidence": {
+                                            "path": "/tmp/demo.pdf",
+                                            "claimed_type": "application/pdf",
+                                            "detected_type": "application/pdf",
+                                            "detector": "magika",
+                                            "route_decision": "pdf_document",
+                                        },
+                                    }
+                                },
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            contract_result = self.run_cli("run-contract", "--path", str(root), "--json")
+            self.assertEqual(contract_result.returncode, 0)
+            contract_payload = json.loads(contract_result.stdout)
+            self.assertEqual(contract_payload["task"]["task_id"], "task-new")
+            self.assertTrue(contract_payload["task"]["file_intake_evidence_present"])
+
+            diff_result = self.run_cli("capability-diff", "--path", str(root), "--json")
+            self.assertEqual(diff_result.returncode, 0)
+            diff_payload = json.loads(diff_result.stdout)
+            changed_fields = {item["field"] for item in diff_payload["changed"]}
+            self.assertIn("profile", changed_fields)
+            self.assertIn("model_tier", changed_fields)
+            self.assertIn("file_intake_evidence_present", changed_fields)
+
     def test_checkpoint_recommend_reports_demo_checkpoint(self) -> None:
         result = self.run_cli("checkpoint-recommend", "--path", str(DEMO_WORKSPACE))
 
@@ -235,6 +309,10 @@ Inspect first and mutate only through the strict runner.
                             "required": True,
                             "required_fields": ["attempt_stage", "exit_classification", "recovery_artifact"],
                         },
+                        "file_intake": {
+                            "required": True,
+                            "required_fields": ["path", "claimed_type", "detected_type", "detector", "route_decision"],
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -270,6 +348,7 @@ Inspect first and mutate only through the strict runner.
             failed_checks = {item["name"]: item for item in payload["checks"]}
             self.assertFalse(failed_checks["browser_evidence"]["ok"])
             self.assertFalse(failed_checks["retrieval_evidence"]["ok"])
+            self.assertFalse(failed_checks["file_intake_evidence"]["ok"])
 
             recorded = subprocess.run(
                 [
@@ -293,6 +372,16 @@ Inspect first and mutate only through the strict runner.
                             "attempt_stage": "browser_network",
                             "exit_classification": "api_reusable",
                             "recovery_artifact": "/tmp/browser-network.json",
+                        }
+                    ),
+                    "--file-intake-evidence-json",
+                    json.dumps(
+                        {
+                            "path": "/tmp/example.pdf",
+                            "claimed_type": "application/pdf",
+                            "detected_type": "application/pdf",
+                            "detector": "magika",
+                            "route_decision": "pdf_document",
                         }
                     ),
                 ],
@@ -472,9 +561,10 @@ Inspect first and mutate only through the strict runner.
             self.assertEqual(result.returncode, 0)
             self.assertIn("Browser evidence counts:", result.stdout)
             self.assertIn("Retrieval evidence counts:", result.stdout)
+            self.assertIn("File intake evidence counts:", result.stdout)
             self.assertIn("Retrieval exit classifications:", result.stdout)
             self.assertIn("Retrieval next-attempt stages:", result.stdout)
-            self.assertIn("browser=B retrieval=api_reusable", result.stdout)
+            self.assertIn("browser=B retrieval=api_reusable file=-", result.stdout)
 
     def test_harness_backfill_evidence_updates_prior_tasks(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.5.3</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.5.4</strong></p>
 
 <p align="center">
   <a href="README.md">English README</a>
@@ -240,6 +240,7 @@ helm harness --path examples/demo-workspace preflight \
 - strict runner 필요 여부도 중앙 코드가 아니라 manifest에서 선언합니다
 - browser-heavy workflow는 작업 완료 전에 구조화된 `browser_evidence`를 남기도록 강제할 수 있습니다
 - blocked retrieval workflow는 escalation 종료 상태를 `retrieval_evidence`로 남겨서 사후 inspection이 가능하게 만들 수 있습니다
+- 파일 기반 workflow는 parser routing과 mismatch 처리를 추적 가능하게 남기도록 구조화된 `file_intake_evidence`를 요구할 수 있습니다
 - 명시적 evidence가 빠졌더라도 `python3 scripts/adaptive_harness.py backfill-evidence`로 기존 ledger에서 추론 가능한 항목을 보강할 수 있습니다
 - `python3 scripts/run_with_profile.py validate-manifests --json`으로 release 전에 manifest 누락이나 형식 오류를 감지할 수 있습니다
 - `python3 scripts/run_with_profile.py audit-manifest-quality --json`으로 아직 too broad하거나 approval 경계가 약한 contract를 감지할 수 있습니다
@@ -267,6 +268,7 @@ Helm이 계속 대답할 수 있어야 하는 질문은 이런 것들입니다.
 - account-bound 또는 irreversible action은 `approval_keywords`로 눈에 띄게 둘 것
 - 약한 로컬 모델이 즉흥 실행하면 위험한 흐름은 strict runner로 묶을 것
 - release 전이나 정책 수정 후에는 `validate-manifests`와 `audit-manifest-quality`를 함께 돌릴 것
+- durable memory, workflow artifact, promoted skill rule을 같은 층으로 섞지 말 것
 
 `SKILL.md` 권장 기본값:
 
@@ -274,6 +276,13 @@ Helm이 계속 대답할 수 있어야 하는 질문은 이런 것들입니다.
 - 입력 누락 시 첫 질문은 짧고 unblock-oriented 하게 쓸 것
 - 기본 출력 형식과 길이 제한을 둘 것
 - 스킬이 스스로 단정하거나 완료했다고 말하면 안 되는 경계를 적을 것
+
+검토 기준은 [docs/skill-quality-and-policy.md](docs/skill-quality-and-policy.md), memory/promotion 경계는 [docs/knowledge-contract.md](docs/knowledge-contract.md)를 보면 됩니다.
+
+운영 가시성 보조 명령:
+
+- `helm run-contract --path <workspace> --json` 으로 최신 실행 계약 스냅샷 확인
+- `helm capability-diff --path <workspace> --json` 으로 최근 실행 간 capability 차이 확인
 
 ## File-Native Context Hydration
 
@@ -317,7 +326,7 @@ python3 -m pip install --user --no-build-isolation .
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.3.md`](docs/releases/0.5.3.md)
+- [`docs/releases/0.5.4.md`](docs/releases/0.5.4.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)

@@ -62,16 +62,22 @@ def summary(entries: list[dict]) -> None:
     harness_models = Counter((((entry.get("meta") or {}).get("harness") or {}).get("model_tier", "-")) for entry in entries)
     browser_evidence = Counter()
     retrieval_evidence = Counter()
+    file_intake_evidence = Counter()
+    file_intake_routes = Counter()
+    file_intake_detectors = Counter()
+    file_intake_warnings = Counter()
     retrieval_exit_classes = Counter()
     retrieval_next_stages = Counter()
     missing_required_browser_by_skill = Counter()
     missing_required_retrieval_by_skill = Counter()
+    missing_required_file_intake_by_skill = Counter()
     for entry in entries:
         harness = ((entry.get("meta") or {}).get("harness") or {})
         contract = resolve_skill_contract(entry.get("skill"))
-        requirements = entry_evidence_requirements(entry, contract) if contract else {"browser_work": False, "retrieval_policy": False}
+        requirements = entry_evidence_requirements(entry, contract) if contract else {"browser_work": False, "retrieval_policy": False, "file_intake": False}
         browser_payload = harness.get("browser_evidence")
         retrieval_payload = harness.get("retrieval_evidence")
+        file_intake_payload = harness.get("file_intake_evidence")
 
         if isinstance(browser_payload, dict):
             browser_evidence["inferred" if browser_payload.get("inferred") else "present"] += 1
@@ -88,6 +94,19 @@ def summary(entries: list[dict]) -> None:
             retrieval_evidence["missing_required" if requirements["retrieval_policy"] else "missing_optional"] += 1
             if requirements["retrieval_policy"]:
                 missing_required_retrieval_by_skill[entry.get("skill", "-") or "-"] += 1
+
+        if isinstance(file_intake_payload, dict):
+            file_intake_evidence["inferred" if file_intake_payload.get("inferred") else "present"] += 1
+            file_intake_routes[str(file_intake_payload.get("route_decision") or "-")] += 1
+            file_intake_detectors[str(file_intake_payload.get("detector") or "-")] += 1
+            if file_intake_payload.get("mismatch"):
+                file_intake_warnings["mismatch"] += 1
+            if not file_intake_payload.get("safe_to_parse", True):
+                file_intake_warnings["unsafe_or_manual_review"] += 1
+        else:
+            file_intake_evidence["missing_required" if requirements["file_intake"] else "missing_optional"] += 1
+            if requirements["file_intake"]:
+                missing_required_file_intake_by_skill[entry.get("skill", "-") or "-"] += 1
     print("Status counts:")
     for key, value in sorted(statuses.items()):
         print(f"  {key}: {value}")
@@ -112,6 +131,18 @@ def summary(entries: list[dict]) -> None:
     print("Retrieval evidence counts:")
     for key, value in sorted(retrieval_evidence.items()):
         print(f"  {key}: {value}")
+    print("File intake evidence counts:")
+    for key, value in sorted(file_intake_evidence.items()):
+        print(f"  {key}: {value}")
+    print("File intake route decisions:")
+    for key, value in sorted(file_intake_routes.items()):
+        print(f"  {key}: {value}")
+    print("File intake detectors:")
+    for key, value in sorted(file_intake_detectors.items()):
+        print(f"  {key}: {value}")
+    print("File intake warning counts:")
+    for key, value in sorted(file_intake_warnings.items()):
+        print(f"  {key}: {value}")
     print("Retrieval exit classifications:")
     for key, value in sorted(retrieval_exit_classes.items()):
         print(f"  {key}: {value}")
@@ -123,6 +154,9 @@ def summary(entries: list[dict]) -> None:
         print(f"  {key}: {value}")
     print("Missing required retrieval evidence by skill:")
     for key, value in sorted(missing_required_retrieval_by_skill.items()):
+        print(f"  {key}: {value}")
+    print("Missing required file intake evidence by skill:")
+    for key, value in sorted(missing_required_file_intake_by_skill.items()):
         print(f"  {key}: {value}")
 
 
@@ -136,13 +170,14 @@ def recent(entries: list[dict], limit: int, json_output: bool) -> None:
         browser_flag = "B" if isinstance(harness.get("browser_evidence"), dict) else "-"
         retrieval = harness.get("retrieval_evidence")
         retrieval_flag = retrieval.get("exit_classification", "-") if isinstance(retrieval, dict) else "-"
+        file_intake_flag = "F" if isinstance(harness.get("file_intake_evidence"), dict) else "-"
         print(
             f"{entry.get('started_at', '-')} "
             f"{entry.get('status', '-'):>9} "
             f"{entry.get('profile', '-'):>14} "
             f"{(entry.get('skill') or '-'):>22} "
             f"{entry.get('task_name', '-')} "
-            f"[browser={browser_flag} retrieval={retrieval_flag}]"
+            f"[browser={browser_flag} retrieval={retrieval_flag} file={file_intake_flag}]"
         )
 
 

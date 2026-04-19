@@ -20,5 +20,10 @@
     "required_fields": ["attempt_stage", "exit_classification", "recovery_artifact"],
     "when_any": []
   },
+  "file_intake": {
+    "required": false,
+    "required_fields": ["path", "claimed_type", "detected_type", "detector", "route_decision"],
+    "when_any": []
+  },
   "runner": {}
 }

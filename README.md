@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.5.3</strong></p>
+<p align="center"><strong>Current release: v0.5.4</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -240,6 +240,7 @@ The key design change in the current release is that harness policy is now skill
 - strict runner requirements can be declared in the manifest instead of central code
 - browser-heavy workflows can require structured `browser_evidence` in task metadata before the work is treated as complete
 - blocked retrieval workflows can require structured `retrieval_evidence` so escalation exits stay inspectable instead of living only in prose
+- file-oriented workflows can require structured `file_intake_evidence` so parser routing and mismatch handling stay auditable
 - when explicit evidence is missing, the harness can infer a minimal evidence record from the task ledger and still force operators to make the escalation path inspectable
 - `python3 scripts/adaptive_harness.py backfill-evidence` can append inferred evidence to prior runs without rewriting the original ledger history
 - `python3 scripts/run_with_profile.py validate-manifests --json` audits missing or malformed manifests before release
@@ -268,6 +269,7 @@ Good defaults:
 - keep irreversible or account-bound actions visible through `approval_keywords`
 - add strict runners only where weaker local models should not improvise
 - run `validate-manifests` and `audit-manifest-quality` before release or after policy-heavy skill changes
+- keep durable memory, workflow artifacts, and promoted skill rules as separate layers
 
 Good `SKILL.md` defaults:
 
@@ -275,6 +277,13 @@ Good `SKILL.md` defaults:
 - keep the first clarification questions short and unblock-oriented
 - define a default answer shape and a length rule
 - state what the skill must not claim, finish, or imply on its own
+
+See [docs/skill-quality-and-policy.md](docs/skill-quality-and-policy.md) for the review checklist and [docs/knowledge-contract.md](docs/knowledge-contract.md) for the memory and promotion boundary.
+
+Operator visibility helpers:
+
+- `helm run-contract --path <workspace> --json` prints the latest run contract snapshot
+- `helm capability-diff --path <workspace> --json` compares recent execution capabilities across runs
 
 ## File-Native Context Hydration
 
@@ -318,7 +327,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.3.md`](docs/releases/0.5.3.md)
+- [`docs/releases/0.5.4.md`](docs/releases/0.5.4.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)

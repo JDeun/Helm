@@ -45,6 +45,7 @@ def build_preflight(args: argparse.Namespace, *, context_confirmed: bool) -> dic
         command=args.command,
         browser_evidence=parse_evidence_json(args.browser_evidence_json, label="--browser-evidence-json"),
         retrieval_evidence=parse_evidence_json(args.retrieval_evidence_json, label="--retrieval-evidence-json"),
+        file_intake_evidence=parse_evidence_json(args.file_intake_evidence_json, label="--file-intake-evidence-json"),
     )
 
 
@@ -90,6 +91,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             "user_request": args.request,
             "browser_evidence": payload["browser_evidence"],
             "retrieval_evidence": payload["retrieval_evidence"],
+            "file_intake_evidence": payload["file_intake_evidence"],
         }
     }
     run_cmd = [
@@ -144,12 +146,14 @@ def cmd_postflight(args: argparse.Namespace) -> int:
 def cmd_record_evidence(args: argparse.Namespace) -> int:
     browser_evidence = parse_evidence_json(args.browser_evidence_json, label="--browser-evidence-json")
     retrieval_evidence = parse_evidence_json(args.retrieval_evidence_json, label="--retrieval-evidence-json")
-    if browser_evidence is None and retrieval_evidence is None:
-        raise SystemExit("Provide --browser-evidence-json or --retrieval-evidence-json")
+    file_intake_evidence = parse_evidence_json(args.file_intake_evidence_json, label="--file-intake-evidence-json")
+    if browser_evidence is None and retrieval_evidence is None and file_intake_evidence is None:
+        raise SystemExit("Provide --browser-evidence-json, --retrieval-evidence-json, or --file-intake-evidence-json")
     entry = record_task_evidence(
         args.task_id,
         browser_evidence=browser_evidence,
         retrieval_evidence=retrieval_evidence,
+        file_intake_evidence=file_intake_evidence,
     )
     postflight = postflight_payload_from_task(args.task_id)
     print(json.dumps({"entry": entry, "postflight": postflight}, indent=2, ensure_ascii=False))
@@ -193,6 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--context-confirmed", action="store_true")
     common.add_argument("--browser-evidence-json", help="Structured browser evidence JSON recorded in harness metadata.")
     common.add_argument("--retrieval-evidence-json", help="Structured retrieval evidence JSON recorded in harness metadata.")
+    common.add_argument("--file-intake-evidence-json", help="Structured file intake evidence JSON recorded in harness metadata.")
 
     preflight = subparsers.add_parser("preflight", parents=[common], help="Validate a task before execution.")
     preflight.add_argument("command", nargs=argparse.REMAINDER)
@@ -211,6 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--task-id", required=True)
     record.add_argument("--browser-evidence-json", help="Structured browser evidence JSON to persist.")
     record.add_argument("--retrieval-evidence-json", help="Structured retrieval evidence JSON to persist.")
+    record.add_argument("--file-intake-evidence-json", help="Structured file intake evidence JSON to persist.")
     record.set_defaults(func=cmd_record_evidence)
 
     backfill = subparsers.add_parser("backfill-evidence", help="Infer and append missing browser or retrieval evidence for prior tasks.")

@@ -26,6 +26,7 @@ The real questions are:
 - `context.required` should be true only when the skill actually depends on prior state
 - `approval_keywords` should cover irreversible, account-bound, or payment-adjacent actions
 - `runner.strict_required` should be used only when freeform execution is too risky for weaker models
+- file-handling skills should declare `file_intake` evidence when parser routing depends on the real content type
 
 ## SKILL.md Baseline
 
@@ -52,6 +53,13 @@ Every promoted skill should make these contracts visible inside `SKILL.md`:
   - common failure types
   - fallback behavior
   - how the failure should be explained to the user
+
+For file-oriented workflows, make the intake boundary visible as well:
+
+- which evidence must exist before parsing
+- whether filename, claimed MIME, and detected type can disagree
+- what conservative route should be taken on mismatch or unknown binary
+- how mismatch, manual-review, and unsafe-parse outcomes will stay visible in task or audit reports
 
 These sections matter because Helm should be able to govern unknown or newly added skills without relying on prompt folklore or operator memory.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.4
+
+- added `file_intake` evidence contracts to the adaptive harness, manifest validation, and ledger reporting so local file workflows leave inspectable type-routing evidence
+- added operator-facing knowledge contract guidance and run-contract / capability-diff inspection commands for recent task state
+- tightened release docs and README guidance around file-oriented workflows, visible evidence gaps, and session-card style status output
+
 ## 0.5.3
 
 - added explicit `browser_work` and `retrieval_policy` evidence contracts to the adaptive harness so browser-dependent and blocked-retrieval workflows leave inspectable execution records

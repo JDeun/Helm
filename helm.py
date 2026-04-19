@@ -13,7 +13,7 @@ from pathlib import Path
 
 from helm_context import adopt_context_source, configured_context_sources, load_context_sources, onboarding_root
 from helm_workspace import DEFAULT_WORKSPACE, detect_layout, discover_workspace, suggest_external_sources
-from scripts.skill_manifest_lib import load_skill_policies, manifest_audit
+from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies, manifest_audit
 
 
 ROOT = Path(__file__).resolve().parent
@@ -228,6 +228,110 @@ def build_status_payload(root: Path) -> dict:
         "recent_failed_commands": failed_commands[-5:],
         "recent_checkpoints": checkpoints[-5:],
         "draft_assessments": draft_assessments[-5:],
+        "session_card": build_session_card_payload(root),
+    }
+
+
+def resolve_skill_contract_for_root(root: Path, skill: str | None) -> dict:
+    if not skill:
+        return {}
+    return load_skill_contract_manifests(root).get(skill, {})
+
+
+def _task_capability_fields(task: dict | None, root: Path) -> dict:
+    if not task:
+        return {}
+    harness = ((task.get("meta") or {}).get("harness") or {})
+    contract = resolve_skill_contract_for_root(root, task.get("skill"))
+    return {
+        "task_id": task.get("task_id"),
+        "task_name": task.get("task_name"),
+        "status": task.get("status"),
+        "skill": task.get("skill"),
+        "profile": task.get("profile"),
+        "runtime_backend": task.get("runtime_backend") or task.get("backend"),
+        "runtime_target_kind": task.get("runtime_target_kind"),
+        "runtime_target": task.get("runtime_target"),
+        "delivery_mode": task.get("delivery_mode"),
+        "model_tier": harness.get("model_tier"),
+        "enforcement_level": harness.get("enforcement_level"),
+        "context_required": harness.get("context_required"),
+        "context_satisfied": harness.get("context_satisfied"),
+        "skill_contract_present": harness.get("skill_contract_present"),
+        "browser_evidence_present": isinstance(harness.get("browser_evidence"), dict),
+        "retrieval_evidence_present": isinstance(harness.get("retrieval_evidence"), dict),
+        "file_intake_evidence_present": isinstance(harness.get("file_intake_evidence"), dict),
+        "allowed_profiles": contract.get("allowed_profiles", []),
+        "default_profile": contract.get("default_profile"),
+        "context_sources": [source.name for source in configured_context_sources(root)],
+    }
+
+
+def build_run_contract_payload(root: Path, task_id: str | None = None) -> dict:
+    tasks = latest_tasks(read_jsonl(root / ".helm" / "task-ledger.jsonl"))
+    target = None
+    if task_id:
+        target = next((task for task in tasks if task.get("task_id") == task_id), None)
+    elif tasks:
+        target = tasks[-1]
+    return {
+        "workspace": str(root),
+        "task": _task_capability_fields(target, root),
+        "contract": resolve_skill_contract_for_root(root, target.get("skill") if target else None),
+    }
+
+
+def build_capability_diff_payload(root: Path, older_task_id: str | None = None, newer_task_id: str | None = None) -> dict:
+    tasks = latest_tasks(read_jsonl(root / ".helm" / "task-ledger.jsonl"))
+    older = None
+    newer = None
+    if older_task_id or newer_task_id:
+        if older_task_id:
+            older = next((task for task in tasks if task.get("task_id") == older_task_id), None)
+        if newer_task_id:
+            newer = next((task for task in tasks if task.get("task_id") == newer_task_id), None)
+    elif len(tasks) >= 2:
+        older, newer = tasks[-2], tasks[-1]
+    elif tasks:
+        newer = tasks[-1]
+    older_fields = _task_capability_fields(older, root)
+    newer_fields = _task_capability_fields(newer, root)
+    changed: list[dict] = []
+    keys = sorted(set(older_fields) | set(newer_fields))
+    for key in keys:
+        if older_fields.get(key) != newer_fields.get(key):
+            changed.append({"field": key, "before": older_fields.get(key), "after": newer_fields.get(key)})
+    return {
+        "workspace": str(root),
+        "older": older_fields,
+        "newer": newer_fields,
+        "changed": changed,
+    }
+
+
+def build_session_card_payload(root: Path) -> dict:
+    status = build_run_contract_payload(root)
+    task = status.get("task") or {}
+    command_entries = read_jsonl(root / ".helm" / "command-log.jsonl")
+    recent_failures = [entry for entry in command_entries[-50:] if entry.get("exit_code") not in (0, None)]
+    finalization = None
+    tasks = latest_tasks(read_jsonl(root / ".helm" / "task-ledger.jsonl"))
+    if task.get("task_id"):
+        raw_task = next((entry for entry in tasks if entry.get("task_id") == task.get("task_id")), None)
+        if raw_task:
+            finalization = (raw_task.get("memory_capture") or {}).get("finalization_status")
+    return {
+        "task_id": task.get("task_id"),
+        "task_name": task.get("task_name"),
+        "status": task.get("status"),
+        "skill": task.get("skill"),
+        "profile": task.get("profile"),
+        "model_tier": task.get("model_tier"),
+        "enforcement_level": task.get("enforcement_level"),
+        "context_sources": task.get("context_sources", []),
+        "recent_failure_count": len(recent_failures),
+        "latest_failure_labels": [entry.get("label") for entry in recent_failures[-3:]],
+        "finalization_status": finalization,
     }
 
 
@@ -787,6 +891,24 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"recent_checkpoints={len(payload['recent_checkpoints'])}")
     print(f"draft_assessments={len(payload['draft_assessments'])}")
     print(f"onboarding_actions={len(onboarding['actions'])}")
+    card = payload["session_card"]
+    print(
+        "session_card="
+        + json.dumps(
+            {
+                "task_id": card.get("task_id"),
+                "task_name": card.get("task_name"),
+                "status": card.get("status"),
+                "skill": card.get("skill"),
+                "profile": card.get("profile"),
+                "model_tier": card.get("model_tier"),
+                "enforcement_level": card.get("enforcement_level"),
+                "finalization_status": card.get("finalization_status"),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
     if args.verbose:
         for source in payload["context_sources"]:
             print(f"context_source={source['name']} kind={source['kind']} root={source['root']}")
@@ -798,6 +920,33 @@ def cmd_status(args: argparse.Namespace) -> int:
             )
         for action in onboarding["actions"]:
             print(f"next={action}")
+    return 0
+
+
+def cmd_run_contract(args: argparse.Namespace) -> int:
+    root = target_root(args.path)
+    payload = build_run_contract_payload(root, task_id=args.task_id)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    print(f"workspace={payload['workspace']}")
+    task = payload.get("task") or {}
+    print("task=" + json.dumps(task, ensure_ascii=False, sort_keys=True))
+    print("contract=" + json.dumps(payload.get("contract") or {}, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+def cmd_capability_diff(args: argparse.Namespace) -> int:
+    root = target_root(args.path)
+    payload = build_capability_diff_payload(root, older_task_id=args.older_task_id, newer_task_id=args.newer_task_id)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    print(f"workspace={payload['workspace']}")
+    print("older=" + json.dumps(payload.get("older") or {}, ensure_ascii=False, sort_keys=True))
+    print("newer=" + json.dumps(payload.get("newer") or {}, ensure_ascii=False, sort_keys=True))
+    for item in payload["changed"]:
+        print(f"changed={item['field']} before={json.dumps(item['before'], ensure_ascii=False)} after={json.dumps(item['after'], ensure_ascii=False)}")
     return 0
 
 
@@ -1304,6 +1453,19 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--json", action="store_true")
     status.add_argument("--verbose", action="store_true")
     status.set_defaults(func=cmd_status)
+
+    run_contract = subparsers.add_parser("run-contract", help="Show the latest run contract snapshot or one task's execution contract.")
+    run_contract.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    run_contract.add_argument("--task-id", help="Specific task id to inspect. Defaults to the latest task.")
+    run_contract.add_argument("--json", action="store_true")
+    run_contract.set_defaults(func=cmd_run_contract)
+
+    capability_diff = subparsers.add_parser("capability-diff", help="Compare recent run capabilities across two task snapshots.")
+    capability_diff.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    capability_diff.add_argument("--older-task-id", help="Older task id to compare.")
+    capability_diff.add_argument("--newer-task-id", help="Newer task id to compare.")
+    capability_diff.add_argument("--json", action="store_true")
+    capability_diff.set_defaults(func=cmd_capability_diff)
 
     adopt = subparsers.add_parser("adopt", help="Register an external workspace as a read-only context source.")
     adopt.add_argument("--path", help=f"Helm workspace path. Defaults to {DEFAULT_WORKSPACE}.")

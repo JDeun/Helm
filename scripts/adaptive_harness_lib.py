@@ -81,6 +81,7 @@ def base_skill_contract(skill: str | None) -> dict:
         "require_finalization_written": True,
         "browser_work": {"required": False, "required_fields": ["reason", "evidence", "api_reusable", "next_action"]},
         "retrieval_policy": {"required": False, "required_fields": ["attempt_stage", "exit_classification", "recovery_artifact"]},
+        "file_intake": {"required": False, "required_fields": ["path", "claimed_type", "detected_type", "detector", "route_decision"]},
         "allowed_profiles": policy.get("allowed_profiles", []),
         "default_profile": policy.get("default_profile"),
         "runner": {},
@@ -245,6 +246,7 @@ def entry_evidence_requirements(entry: dict, contract: dict) -> dict[str, bool]:
     return {
         "browser_work": evidence_requirement_active(contract.get("browser_work") or {}, blob=blob),
         "retrieval_policy": evidence_requirement_active(contract.get("retrieval_policy") or {}, blob=blob),
+        "file_intake": evidence_requirement_active(contract.get("file_intake") or {}, blob=blob),
     }
 
 
@@ -325,6 +327,7 @@ def preflight_payload(
     command: list[str],
     browser_evidence: dict | None,
     retrieval_evidence: dict | None,
+    file_intake_evidence: dict | None,
 ) -> dict:
     harness_policy = load_harness_policy()
     contract = resolve_skill_contract(skill)
@@ -404,6 +407,19 @@ def preflight_payload(
             "retrieval evidence is required for this request shape; attach it before treating the task as complete",
         )
 
+    file_intake = contract.get("file_intake") or {}
+    file_intake_fields = [str(item) for item in file_intake.get("required_fields", []) if str(item)]
+    if file_intake_evidence is not None:
+        ok, detail = validate_evidence_payload(file_intake_evidence, file_intake_fields, label="file_intake_evidence")
+        append_check(checks, "file_intake_evidence_shape", ok, detail)
+    elif evidence_requirement_active(file_intake, blob=evidence_blob):
+        append_check(
+            checks,
+            "file_intake_evidence_contract",
+            True,
+            "file intake evidence is required for this request shape; attach it before treating the task as complete",
+        )
+
     return {
         "task_id": str(uuid.uuid4()),
         "skill": skill,
@@ -416,6 +432,7 @@ def preflight_payload(
         "hydration_commands": build_hydration_commands(contract),
         "browser_evidence": browser_evidence,
         "retrieval_evidence": retrieval_evidence,
+        "file_intake_evidence": file_intake_evidence,
         "checks": checks,
         "ok": all(item["ok"] for item in checks),
     }
@@ -496,6 +513,18 @@ def postflight_payload_for_entry(
     else:
         append_check(checks, "retrieval_evidence", True, "retrieval evidence not required")
 
+    file_intake = contract.get("file_intake") or {}
+    file_intake_fields = [str(item) for item in file_intake.get("required_fields", []) if str(item)]
+    if evidence_requirement_active(file_intake, blob=blob):
+        ok, detail = validate_evidence_payload(
+            harness_meta.get("file_intake_evidence"),
+            file_intake_fields,
+            label="file_intake_evidence",
+        )
+        append_check(checks, "file_intake_evidence", ok, detail)
+    else:
+        append_check(checks, "file_intake_evidence", True, "file intake evidence not required")
+
     return {
         "task_id": task_id,
         "entry": entry,
@@ -520,6 +549,7 @@ def record_task_evidence(
     *,
     browser_evidence: dict | None,
     retrieval_evidence: dict | None,
+    file_intake_evidence: dict | None,
 ) -> dict:
     entry = latest_task_entry(task_id)
     if entry is None:
@@ -530,6 +560,8 @@ def record_task_evidence(
         harness["browser_evidence"] = browser_evidence
     if retrieval_evidence is not None:
         harness["retrieval_evidence"] = retrieval_evidence
+    if file_intake_evidence is not None:
+        harness["file_intake_evidence"] = file_intake_evidence
     meta["harness"] = harness
     entry["meta"] = meta
     append_jsonl(TASK_LEDGER, entry)
@@ -547,6 +579,7 @@ def ensure_task_evidence(task_id: str, contract: dict) -> dict | None:
         task_id,
         browser_evidence=inferred_browser,
         retrieval_evidence=inferred_retrieval,
+        file_intake_evidence=None,
     )
 
 
@@ -606,6 +639,7 @@ def backfill_task_evidence(
             task_id,
             browser_evidence=inferred_browser,
             retrieval_evidence=inferred_retrieval,
+            file_intake_evidence=None,
         )
         updated += 1
         if inferred_browser is not None:

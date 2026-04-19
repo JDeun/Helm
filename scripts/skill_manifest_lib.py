@@ -57,6 +57,7 @@ def audit_skill_markdown_contracts(text: str, manifest: dict) -> list[str]:
     context = manifest.get("context") or {}
     approval_keywords = manifest.get("approval_keywords") or []
     runner = manifest.get("runner") or {}
+    file_intake = manifest.get("file_intake") or {}
 
     required_sections = (
         "## core rule",
@@ -160,6 +161,18 @@ def audit_skill_markdown_contracts(text: str, manifest: dict) -> list[str]:
         if not any(marker in normalized for marker in runner_markers):
             warnings.append("manifest requires a strict runner but SKILL.md does not explain the guarded runner path")
 
+    if file_intake.get("required"):
+        intake_markers = (
+            "file intake",
+            "attachment",
+            "uploaded file",
+            "claimed_type",
+            "detected_type",
+            "route_decision",
+        )
+        if not any(marker in normalized for marker in intake_markers):
+            warnings.append("manifest requires file intake evidence but SKILL.md does not explain the intake boundary")
+
     return warnings
 
 
@@ -193,6 +206,7 @@ def validate_contract_manifest(skill: str, manifest: dict, profiles: dict[str, d
     approval_keywords = manifest.get("approval_keywords", [])
     browser_work = manifest.get("browser_work", {})
     retrieval_policy = manifest.get("retrieval_policy", {})
+    file_intake = manifest.get("file_intake", {})
 
     if allowed is not None:
         if not isinstance(allowed, list) or not allowed:
@@ -240,7 +254,7 @@ def validate_contract_manifest(skill: str, manifest: dict, profiles: dict[str, d
             if strict_required and not entrypoint:
                 issues.append(f"{skill}: runner.entrypoint is required when strict_required is true")
 
-    for section_name, section in (("browser_work", browser_work), ("retrieval_policy", retrieval_policy)):
+    for section_name, section in (("browser_work", browser_work), ("retrieval_policy", retrieval_policy), ("file_intake", file_intake)):
         if not section:
             continue
         if not isinstance(section, dict):
@@ -301,6 +315,7 @@ def manifest_quality_audit(workspace: Path, profile_path: Path) -> dict:
         approval_keywords = manifest.get("approval_keywords") or []
         browser_work = manifest.get("browser_work") or {}
         retrieval_policy = manifest.get("retrieval_policy") or {}
+        file_intake = manifest.get("file_intake") or {}
         warnings: list[str] = []
 
         if sorted(allowed) == full_profile_set:
@@ -329,7 +344,7 @@ def manifest_quality_audit(workspace: Path, profile_path: Path) -> dict:
         if skill_md:
             warnings.extend(audit_skill_markdown_contracts(skill_md, manifest))
 
-        for section_name, section in (("browser_work", browser_work), ("retrieval_policy", retrieval_policy)):
+        for section_name, section in (("browser_work", browser_work), ("retrieval_policy", retrieval_policy), ("file_intake", file_intake)):
             if not isinstance(section, dict) or not section:
                 continue
             when_any = [str(item).casefold() for item in section.get("when_any", []) if str(item).strip()]
