@@ -8,21 +8,35 @@ def _command_blob(command: list[str]) -> str:
     return " ".join(str(part or "") for part in command).casefold()
 
 
+def _strip_env_prefix(command: list[str]) -> list[str]:
+    index = 0
+    while index < len(command):
+        token = str(command[index] or "")
+        if "=" not in token:
+            break
+        name, _, value = token.partition("=")
+        if not name or not value:
+            break
+        index += 1
+    return command[index:]
+
+
 def infer_chosen_tool(command: list[str]) -> str | None:
-    if not command:
+    normalized_command = _strip_env_prefix(command)
+    if not normalized_command:
         return None
-    candidate = Path(str(command[0])).name
-    if candidate.startswith("python") and len(command) >= 3 and str(command[1]) == "-m":
-        return str(command[2]) or None
-    if candidate.startswith("python") and len(command) >= 2 and str(command[1]) == "-c":
+    candidate = Path(str(normalized_command[0])).name
+    if candidate.startswith("python") and len(normalized_command) >= 3 and str(normalized_command[1]) == "-m":
+        return str(normalized_command[2]) or None
+    if candidate.startswith("python") and len(normalized_command) >= 2 and str(normalized_command[1]) == "-c":
         return "python-inline"
-    if candidate.startswith("python") and len(command) >= 2:
-        return Path(str(command[1])).name
-    if candidate in {"bash", "zsh", "sh"} and len(command) >= 3 and str(command[1]) in {"-c", "-lc"}:
-        nested = shlex.split(str(command[2]))
+    if candidate.startswith("python") and len(normalized_command) >= 2:
+        return Path(str(normalized_command[1])).name
+    if candidate in {"bash", "zsh", "sh"} and len(normalized_command) >= 3 and str(normalized_command[1]) in {"-c", "-lc"}:
+        nested = shlex.split(str(normalized_command[2]))
         return infer_chosen_tool(nested) if nested else candidate
-    if candidate in {"bash", "zsh", "sh"} and len(command) >= 2:
-        return Path(str(command[1])).name
+    if candidate in {"bash", "zsh", "sh"} and len(normalized_command) >= 2:
+        return Path(str(normalized_command[1])).name
     return candidate or None
 
 

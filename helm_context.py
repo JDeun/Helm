@@ -79,15 +79,31 @@ def load_context_sources(workspace_root: Path) -> list[ContextSource]:
     path = context_sources_path(workspace_root)
     if not path.exists():
         return []
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, dict):
+        return []
     sources: list[ContextSource] = []
-    for item in data.get("sources", []):
+    raw_sources = data.get("sources", [])
+    if not isinstance(raw_sources, list):
+        return []
+    for item in raw_sources:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        kind = item.get("kind")
+        root = item.get("root")
+        state_dir_name = item.get("state_dir_name")
+        if not all(isinstance(value, str) and value.strip() for value in (name, kind, root, state_dir_name)):
+            continue
         sources.append(
             ContextSource(
-                name=item["name"],
-                kind=item["kind"],
-                root=Path(item["root"]).expanduser().resolve(),
-                state_dir_name=item["state_dir_name"],
+                name=name,
+                kind=kind,
+                root=Path(root).expanduser().resolve(),
+                state_dir_name=state_dir_name,
                 mode=item.get("mode", "read-only"),
             )
         )

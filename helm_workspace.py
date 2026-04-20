@@ -104,10 +104,16 @@ def suggest_external_sources(home: Path | None = None) -> dict[str, list[Path]]:
     suggestions["hermes"] = _prune_nested(suggestions["hermes"])
     obsidian_vaults: list[Path] = []
     for parent in suggestions["obsidian"]:
+        if not parent.is_dir():
+            continue
         if (parent / ".obsidian").exists():
             obsidian_vaults.append(parent)
             continue
-        for child in parent.iterdir():
+        try:
+            children = list(parent.iterdir())
+        except OSError:
+            continue
+        for child in children:
             if child.is_dir() and (child / ".obsidian").exists():
                 obsidian_vaults.append(child.resolve())
     suggestions["obsidian"] = _prune_nested(list(dict.fromkeys(obsidian_vaults)))

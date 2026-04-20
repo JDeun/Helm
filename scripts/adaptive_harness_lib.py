@@ -156,30 +156,32 @@ def build_hydration_commands(contract: dict) -> list[list[str]]:
     context = contract.get("context") or {}
     if not context.get("required"):
         return []
+    include = [str(item) for item in context.get("include", []) if str(item)]
     commands: list[list[str]] = [
         [
             "python3",
             str(WORKSPACE / "scripts" / "ops_memory_query.py"),
             str(context.get("query") or ""),
-            "--include",
-            *[str(item) for item in context.get("include", [])],
-            "--limit",
-            str(context.get("limit", 6)),
         ]
     ]
+    if include:
+        commands[0].extend(["--include", *include])
+    commands[0].extend(["--limit", str(context.get("limit", 6))])
     failed_include = context.get("failed_include")
     if failed_include:
+        failed_include_values = [str(item) for item in failed_include if str(item)]
+        if not failed_include_values:
+            return commands
         commands.append(
             [
                 "python3",
                 str(WORKSPACE / "scripts" / "ops_memory_query.py"),
-                "--include",
-                *[str(item) for item in failed_include],
                 "--failed-only",
                 "--limit",
                 str(context.get("failed_limit", 6)),
             ]
         )
+        commands[-1][3:3] = ["--include", *failed_include_values]
     return commands
 
 

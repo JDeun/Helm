@@ -152,6 +152,8 @@ def restore_checkpoint(args: argparse.Namespace) -> int:
     with tarfile.open(archive_path, "r:gz") as tar:
         members = tar.getmembers()
         for member in members:
+            if member.issym() or member.islnk():
+                raise ValueError(f"archive contains unsupported link member: {member.name}")
             member_path = (WORKSPACE / member.name).resolve()
             workspace_resolved = WORKSPACE.resolve()
             if workspace_resolved not in member_path.parents and member_path != workspace_resolved:

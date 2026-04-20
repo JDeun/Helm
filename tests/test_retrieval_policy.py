@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from scripts.route_contract_lib import infer_chosen_tool
 from scripts.retrieval_policy_lib import build_retrieval_plan, classify_retrieval
 
 
@@ -31,6 +32,10 @@ class RetrievalPolicyTests(unittest.TestCase):
         payload = build_retrieval_plan(current_stage="browser_network", browser_used=True, network_discovery=True)
         self.assertEqual(payload["exit_classification"], "api_reusable")
         self.assertIsNone(payload["next_attempt_stage"])
+
+    def test_route_contract_ignores_env_prefix_in_nested_shell(self) -> None:
+        chosen = infer_chosen_tool(["bash", "-lc", "HELM_PROFILE=strict python3 /tmp/router_runner.py --help"])
+        self.assertEqual(chosen, "router_runner.py")
 
 
 if __name__ == "__main__":
