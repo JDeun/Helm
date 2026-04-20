@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from scripts import command_log_report, ops_daily_report, task_ledger_report
+
+
+class ReportResilienceTests(unittest.TestCase):
+    def test_command_log_report_skips_malformed_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "command-log.jsonl"
+            path.write_text('{"component":"runner"}\nnot-json\n{"label":"ok"}\n', encoding="utf-8")
+
+            with patch.object(command_log_report, "COMMAND_LOG", path):
+                rows = command_log_report.load_entries()
+
+            self.assertEqual(len(rows), 2)
+
+    def test_task_ledger_report_skips_malformed_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "task-ledger.jsonl"
+            path.write_text('{"task_id":"1"}\nnot-json\n{"task_id":"2"}\n', encoding="utf-8")
+
+            with patch.object(task_ledger_report, "TASK_LEDGER", path):
+                rows = task_ledger_report.load_entries()
+
+            self.assertEqual([row["task_id"] for row in rows], ["1", "2"])
+
+    def test_ops_daily_report_tolerates_invalid_checkpoint_and_assessment_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            state_root = workspace / ".helm"
+            drafts_root = workspace / "skill_drafts"
+            (state_root / "checkpoints").mkdir(parents=True)
+            (drafts_root / "draft-a" / "meta").mkdir(parents=True)
+            (state_root / "checkpoints" / "index.json").write_text("{not-json\n", encoding="utf-8")
+            (drafts_root / "draft-a" / "meta" / "assessment.json").write_text("{not-json\n", encoding="utf-8")
+
+            with patch.object(ops_daily_report, "STATE_ROOT", state_root), patch.object(
+                ops_daily_report, "DRAFTS_ROOT", drafts_root
+            ):
+                self.assertEqual(ops_daily_report.load_checkpoints(), [])
+                self.assertEqual(ops_daily_report.load_draft_assessments(), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

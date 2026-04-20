@@ -21,7 +21,17 @@ COMMAND_LOG = get_workspace_layout().state_root / "command-log.jsonl"
 def load_entries() -> list[dict]:
     if not COMMAND_LOG.exists():
         return []
-    return [json.loads(line) for line in COMMAND_LOG.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows: list[dict] = []
+    for line in COMMAND_LOG.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
 
 
 def apply_filters(entries: list[dict], args: argparse.Namespace) -> list[dict]:

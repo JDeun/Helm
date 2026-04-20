@@ -22,7 +22,17 @@ DRAFTS_ROOT = WORKSPACE / "skill_drafts"
 def read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
 
 
 def latest_tasks() -> list[dict]:
@@ -39,7 +49,13 @@ def load_checkpoints() -> list[dict]:
     index = STATE_ROOT / "checkpoints" / "index.json"
     if not index.exists():
         return []
-    return json.loads(index.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(index.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
 
 
 def load_draft_assessments() -> list[dict]:
@@ -49,7 +65,12 @@ def load_draft_assessments() -> list[dict]:
     for draft in sorted(DRAFTS_ROOT.iterdir()):
         assessment = draft / "meta" / "assessment.json"
         if assessment.exists():
-            reports.append(json.loads(assessment.read_text(encoding="utf-8")))
+            try:
+                payload = json.loads(assessment.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                reports.append(payload)
     return reports
 
 

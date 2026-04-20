@@ -22,7 +22,17 @@ TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
 def load_entries() -> list[dict]:
     if not TASK_LEDGER.exists():
         return []
-    return [json.loads(line) for line in TASK_LEDGER.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows: list[dict] = []
+    for line in TASK_LEDGER.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
 
 
 def latest_entries(entries: list[dict]) -> list[dict]:
