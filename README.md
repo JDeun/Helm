@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.5.8</strong></p>
+<p align="center"><strong>Current release: v0.5.9</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -333,7 +333,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.8.md`](docs/releases/0.5.8.md)
+- [`docs/releases/0.5.9.md`](docs/releases/0.5.9.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -357,7 +357,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.5.8 hardens audit-critical edges in context loading, checkpoint restore, adaptive harness routing, and file-intake classification so inspection paths fail safer and evidence capture stays consistent.
+Helm v0.5.9 hardens inspection and reporting paths so malformed state files degrade gracefully instead of taking down operator-facing views.
 
 Included:
 

@@ -1,12 +1,12 @@
-# Helm 0.5.8 Release Checklist
+# Helm 0.5.9 Release Checklist
 
-Use this checklist before cutting the `0.5.8` release.
+Use this checklist before cutting the `0.5.9` release.
 
 ## Version and metadata
 
-- confirm `pyproject.toml` version is `0.5.8`
-- confirm `setup.py` version is `0.5.8`
-- confirm `CHANGELOG.md` includes `0.5.8`
+- confirm `pyproject.toml` version is `0.5.9`
+- confirm `setup.py` version is `0.5.9`
+- confirm `CHANGELOG.md` includes `0.5.9`
 - confirm README asset links and docs links render correctly
 
 ## Packaging
@@ -55,7 +55,7 @@ Use this checklist before cutting the `0.5.8` release.
 
 ## Release outputs
 
-- create git tag: `v0.5.8`
-- draft GitHub release notes from `docs/releases/0.5.8.md`
+- create git tag: `v0.5.9`
+- draft GitHub release notes from `docs/releases/0.5.9.md`
 - attach screenshots or README visuals if needed
 - publish source release after the checklist passes

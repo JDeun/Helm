@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.9
+
+- hardened report and ledger readers so malformed JSONL lines no longer break command-log, task-ledger, or daily-report inspection flows
+- hardened checkpoint and assessment report loading so malformed JSON artifacts degrade to empty report sections instead of aborting operator views
+- expanded regression coverage for report resilience and malformed-state handling across Helm inspection commands
+
 ## 0.5.8
 
 - hardened adaptive harness hydration commands so empty include lists do not generate invalid `ops_memory_query` invocations
