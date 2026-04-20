@@ -10,6 +10,15 @@ from scripts import ops_memory_query
 
 
 class OpsMemoryQueryTests(unittest.TestCase):
+    def test_read_jsonl_skips_malformed_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "entities.jsonl"
+            path.write_text('{"id":"ok-1"}\nnot-json\n', encoding="utf-8")
+
+            rows = ops_memory_query.read_jsonl(path)
+
+            self.assertEqual(rows, [{"id": "ok-1"}])
+
     def test_load_checkpoint_results_tolerates_invalid_index_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace = Path(tmpdir)

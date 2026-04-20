@@ -206,6 +206,20 @@ class CliValidationTests(unittest.TestCase):
             self.assertEqual(payload[0]["metadata"]["task_id"], "task-local")
             self.assertEqual(payload[0]["adapter"], "helm-local")
 
+    def test_doctor_reports_invalid_reference_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / "references" / "execution_profiles.json").write_text("{not-json\n", encoding="utf-8")
+
+            result = self.run_cli("doctor", "--path", str(root), "--json")
+
+            self.assertEqual(result.returncode, 1)
+            payload = json.loads(result.stdout)
+            check = next(item for item in payload["checks"] if item["name"] == "references/execution_profiles.json")
+            self.assertFalse(check["ok"])
+            self.assertIn("invalid json", check["detail"])
+
     def test_status_resolves_nested_openclaw_workspace_from_parent_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home_root = Path(tmpdir)

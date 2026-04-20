@@ -852,7 +852,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if ok and path.suffix == ".json":
             try:
                 json.loads(path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError as exc:
+            except (OSError, json.JSONDecodeError) as exc:
                 ok = False
                 detail = f"invalid json: {exc}"
         checks.append({"name": f"references/{filename}", "ok": ok, "detail": detail})

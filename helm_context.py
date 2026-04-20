@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -81,7 +82,8 @@ def load_context_sources(workspace_root: Path) -> list[ContextSource]:
         return []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        print(f"warning: ignoring malformed context source registry {path}: {exc}", file=sys.stderr)
         return []
     if not isinstance(data, dict):
         return []
