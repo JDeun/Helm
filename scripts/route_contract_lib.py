@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 
@@ -11,8 +12,15 @@ def infer_chosen_tool(command: list[str]) -> str | None:
     if not command:
         return None
     candidate = Path(str(command[0])).name
+    if candidate.startswith("python") and len(command) >= 3 and str(command[1]) == "-m":
+        return str(command[2]) or None
+    if candidate.startswith("python") and len(command) >= 2 and str(command[1]) == "-c":
+        return "python-inline"
     if candidate.startswith("python") and len(command) >= 2:
         return Path(str(command[1])).name
+    if candidate in {"bash", "zsh", "sh"} and len(command) >= 3 and str(command[1]) in {"-c", "-lc"}:
+        nested = shlex.split(str(command[2]))
+        return infer_chosen_tool(nested) if nested else candidate
     if candidate in {"bash", "zsh", "sh"} and len(command) >= 2:
         return Path(str(command[1])).name
     return candidate or None

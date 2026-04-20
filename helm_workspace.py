@@ -41,6 +41,20 @@ def _existing_paths(candidates: tuple[Path, ...]) -> list[Path]:
     return [path.expanduser().resolve() for path in candidates if path.expanduser().exists()]
 
 
+def _state_artifact_paths(root: Path, state_dir_name: str) -> tuple[Path, ...]:
+    state_root = root / state_dir_name
+    return (
+        state_root / "task-ledger.jsonl",
+        state_root / "command-log.jsonl",
+        state_root / "checkpoints",
+        state_root / "checkpoints" / "index.json",
+    )
+
+
+def _has_state_artifacts(root: Path, state_dir_name: str) -> bool:
+    return any(path.exists() for path in _state_artifact_paths(root, state_dir_name))
+
+
 def _prune_nested(paths: list[Path]) -> list[Path]:
     ordered = sorted(dict.fromkeys(paths), key=lambda path: len(path.parts), reverse=True)
     kept: list[Path] = []
@@ -118,14 +132,8 @@ def detect_layout(root: Path) -> WorkspaceLayout:
             state_dir_name=".helm",
         )
 
-    openclaw_markers = _marker_matches(
-        resolved,
-        (
-            ".openclaw",
-            "memory",
-        ),
-    )
-    if openclaw_markers:
+    openclaw_markers = _marker_matches(resolved, (".openclaw",))
+    if openclaw_markers and _has_state_artifacts(resolved, ".openclaw"):
         return WorkspaceLayout(
             root=resolved,
             kind="openclaw",
@@ -221,6 +229,27 @@ def discover_workspace(start: Path | None = None) -> WorkspaceLayout:
         markers=layout.markers,
         state_dir_name=layout.state_dir_name,
     )
+
+
+def resolve_nested_workspace(root: Path) -> WorkspaceLayout | None:
+    resolved = _normalized(root)
+    candidates = (
+        resolved / ".helm" / "workspace",
+        resolved / ".openclaw" / "workspace",
+    )
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        layout = detect_layout(candidate)
+        if layout.kind != "unknown":
+            return WorkspaceLayout(
+                root=layout.root,
+                kind=layout.kind,
+                source="nested",
+                markers=layout.markers,
+                state_dir_name=layout.state_dir_name,
+            )
+    return None
 
 
 def get_workspace_layout() -> WorkspaceLayout:

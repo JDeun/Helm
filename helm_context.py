@@ -102,11 +102,13 @@ def save_context_sources(workspace_root: Path, sources: list[ContextSource]) -> 
 
 
 def local_helm_source(workspace_root: Path) -> ContextSource:
+    layout = detect_layout(workspace_root.resolve())
+    kind = layout.kind if layout.kind != "unknown" else "helm"
     return ContextSource(
-        name="helm-local",
-        kind="helm",
+        name=f"{kind}-local",
+        kind=kind,
         root=workspace_root.resolve(),
-        state_dir_name=".helm",
+        state_dir_name=layout.state_dir_name,
     )
 
 

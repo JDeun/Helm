@@ -44,6 +44,17 @@ class CliValidationTests(unittest.TestCase):
         (root / "references" / "skill-capture-template.md").write_text("# Template\n", encoding="utf-8")
         (root / "references" / "skill-contract-template.json").write_text("{}\n", encoding="utf-8")
 
+    def create_minimal_openclaw_workspace(self, root: Path) -> None:
+        (root / ".openclaw" / "checkpoints").mkdir(parents=True)
+        (root / "references").mkdir()
+        (root / "skills").mkdir()
+        (root / "skill_drafts").mkdir()
+        (root / "memory").mkdir()
+        (root / ".openclaw" / "context_sources.json").write_text('{"sources": []}\n', encoding="utf-8")
+        (root / ".openclaw" / "task-ledger.jsonl").write_text("", encoding="utf-8")
+        (root / ".openclaw" / "command-log.jsonl").write_text("", encoding="utf-8")
+        (root / ".openclaw" / "checkpoints" / "index.json").write_text("[]\n", encoding="utf-8")
+
     def test_helm_validate_reports_missing_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -112,15 +123,7 @@ class CliValidationTests(unittest.TestCase):
     def test_status_uses_openclaw_state_root_when_layout_is_openclaw(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            (root / ".openclaw" / "checkpoints").mkdir(parents=True)
-            (root / "references").mkdir()
-            (root / "skills").mkdir()
-            (root / "skill_drafts").mkdir()
-            (root / "memory").mkdir()
-            (root / ".openclaw" / "context_sources.json").write_text('{"sources": []}\n', encoding="utf-8")
-            (root / ".openclaw" / "task-ledger.jsonl").write_text("", encoding="utf-8")
-            (root / ".openclaw" / "command-log.jsonl").write_text("", encoding="utf-8")
-            (root / ".openclaw" / "checkpoints" / "index.json").write_text("[]\n", encoding="utf-8")
+            self.create_minimal_openclaw_workspace(root)
             (root / ".openclaw" / "memory-operations.jsonl").write_text(
                 json.dumps(
                     {
@@ -152,6 +155,135 @@ class CliValidationTests(unittest.TestCase):
             self.assertIn("layout=openclaw", result.stdout)
             self.assertIn("recent_memory_operations=1", result.stdout)
             self.assertIn("recent_crystallized_sessions=1", result.stdout)
+
+    def test_context_uses_openclaw_local_source_for_task_hydration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_openclaw_workspace(root)
+            (root / ".openclaw" / "task-ledger.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task-openclaw",
+                        "task_name": "openclaw local task",
+                        "status": "completed",
+                        "profile": "inspect_local",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = self.run_cli("context", "--path", str(root), "--include", "tasks", "--json")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(len(payload), 1)
+            self.assertEqual(payload[0]["metadata"]["task_id"], "task-openclaw")
+            self.assertEqual(payload[0]["adapter_kind"], "openclaw")
+
+    def test_status_resolves_nested_openclaw_workspace_from_parent_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home_root = Path(tmpdir)
+            workspace_root = home_root / ".openclaw" / "workspace"
+            self.create_minimal_openclaw_workspace(workspace_root)
+            (workspace_root / ".openclaw" / "task-ledger.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task-nested",
+                        "task_name": "nested openclaw task",
+                        "status": "completed",
+                        "profile": "inspect_local",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_cli("status", "--path", str(home_root), "--json")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["workspace"], str(workspace_root.resolve()))
+            self.assertEqual(payload["layout"], "openclaw")
+            self.assertEqual(payload["recent_tasks"][0]["task_id"], "task-nested")
+
+    def test_detect_prefers_nested_openclaw_workspace_over_generic_parent_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home_root = Path(tmpdir)
+            (home_root / "references").mkdir()
+            (home_root / "docs").mkdir()
+            workspace_root = home_root / ".openclaw" / "workspace"
+            self.create_minimal_openclaw_workspace(workspace_root)
+
+            result = self.run_cli("detect", "--path", str(home_root), "--json")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["workspace"], str(workspace_root.resolve()))
+            self.assertEqual(payload["layout"], "openclaw")
+
+    def test_checkpoint_list_uses_openclaw_state_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_openclaw_workspace(root)
+            checkpoints = [
+                {
+                    "checkpoint_id": "openclaw-demo-1",
+                    "label": "demo snapshot",
+                    "paths": ["memory/router.md"],
+                    "archive": "checkpoints/openclaw-demo-1.tar.gz",
+                }
+            ]
+            (root / ".openclaw" / "checkpoints" / "index.json").write_text(
+                json.dumps(checkpoints) + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_cli("checkpoint", "list", "--path", str(root), "--json")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload[0]["checkpoint_id"], "openclaw-demo-1")
+
+    def test_survey_on_openclaw_workspace_does_not_recommend_self_adoption(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_openclaw_workspace(root)
+
+            result = self.run_cli("survey", "--path", str(root), "--json")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["layout"], "openclaw")
+            self.assertNotIn(str(root.resolve()), payload["detected_candidates"].get("openclaw", []))
+
+    def test_status_review_queue_count_matches_missing_follow_up_logic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / ".helm" / "task-ledger.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task-1",
+                        "task_name": "router refresh",
+                        "status": "completed",
+                        "memory_capture": {
+                            "relevant": True,
+                            "finalization_status": "capture_written",
+                            "claim_state": {"confidence_hint": "high"},
+                            "review_flags": [],
+                            "supersession": {"state": "refreshes_prior_state", "supersedes_task_ids": ["task-old"]},
+                            "crystallization": {"question": "What changed?", "result": "updated"},
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_cli("status", "--path", str(root), "--verbose")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("memory_review_queue_count=1", result.stdout)
 
     def test_run_with_profile_honors_workspace_env_for_demo_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -248,7 +380,7 @@ Inspect first and mutate only through the strict runner.
             self.assertEqual(audit_result.returncode, 0)
             self.assertTrue(json.loads(audit_result.stdout)["ok"])
 
-    def test_survey_initializes_workspace_when_missing(self) -> None:
+    def test_survey_does_not_initialize_workspace_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "fresh-workspace"
 
@@ -257,8 +389,8 @@ Inspect first and mutate only through the strict runner.
             self.assertEqual(result.returncode, 0)
             payload = json.loads(result.stdout[result.stdout.index("{") :])
             self.assertEqual(payload["workspace"], str(root.resolve()))
-            self.assertTrue((root / ".helm").exists())
-            self.assertTrue((root / "references" / "execution_profiles.json").exists())
+            self.assertFalse((root / ".helm").exists())
+            self.assertFalse((root / "references").exists())
 
     def test_doctor_reports_healthy_for_minimal_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

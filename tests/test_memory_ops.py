@@ -150,6 +150,75 @@ class MemoryOpsTests(unittest.TestCase):
             self.assertIn("missing_supersede_op", payload["items"][0]["blockers"])
             self.assertIn("finalization=capture_partial", payload["items"][1]["blockers"])
 
+    def test_review_queue_hides_task_closed_by_supersede_operation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_workspace(root)
+            entries = [
+                {
+                    "task_id": "task-old",
+                    "task_name": "retry router refresh",
+                    "profile": "workspace_edit",
+                    "status": "failed",
+                    "memory_capture": {
+                        "relevant": True,
+                        "finalization_status": "capture_written",
+                        "claim_state": {"confidence_hint": "low"},
+                        "review_flags": [{"type": "low_confidence_review", "severity": "low"}],
+                        "supersession": {"state": "not_applicable", "supersedes_task_ids": []},
+                    },
+                },
+                {
+                    "task_id": "task-new",
+                    "task_name": "retry router refresh",
+                    "profile": "workspace_edit",
+                    "status": "completed",
+                    "memory_capture": {
+                        "relevant": True,
+                        "finalization_status": "capture_written",
+                        "claim_state": {"confidence_hint": "high"},
+                        "review_flags": [],
+                        "supersession": {"state": "refreshes_prior_state", "supersedes_task_ids": ["task-old"]},
+                        "crystallization": {"question": "q", "action": "a", "result": "r", "lesson": "l", "affected_entities": []},
+                    },
+                },
+            ]
+            (root / ".helm" / "task-ledger.jsonl").write_text(
+                "\n".join(json.dumps(entry) for entry in entries) + "\n",
+                encoding="utf-8",
+            )
+            (root / ".helm" / "memory-operations.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": "memop-1",
+                        "timestamp": "2026-04-20T00:00:00+00:00",
+                        "operation": "supersede",
+                        "subject": "router retry resolved",
+                        "scope": "private",
+                        "task_id": "task-new",
+                        "supersedes": ["task-old"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".helm" / "crystallized-sessions.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": "crystal-1",
+                        "task_id": "task-new",
+                        "crystallization": {"question": "q", "result": "r"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_cli(root, "memory", "review-queue", "--json")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

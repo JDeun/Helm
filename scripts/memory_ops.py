@@ -32,14 +32,18 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _latest_tasks() -> list[dict]:
-    ledger = _read_jsonl(_state_root() / "task-ledger.jsonl")
+def _latest_tasks_for_state(state_root: Path) -> list[dict]:
+    ledger = _read_jsonl(state_root / "task-ledger.jsonl")
     by_task: dict[str, dict] = {}
     for entry in ledger:
         task_id = entry.get("task_id")
         if task_id:
             by_task[task_id] = entry
     return sorted(by_task.values(), key=lambda item: item.get("finished_at") or item.get("started_at") or "")
+
+
+def _latest_tasks() -> list[dict]:
+    return _latest_tasks_for_state(_state_root())
 
 
 def _select_task(task_id: str) -> dict:
@@ -49,17 +53,17 @@ def _select_task(task_id: str) -> dict:
     raise SystemExit(f"Task not found: {task_id}")
 
 
-def _crystallized_task_ids() -> set[str]:
+def _crystallized_task_ids_for_state(state_root: Path) -> set[str]:
     return {
         str(row.get("task_id"))
-        for row in _read_jsonl(_jsonl_path("crystallized-sessions.jsonl"))
+        for row in _read_jsonl(state_root / "crystallized-sessions.jsonl")
         if row.get("task_id")
     }
 
 
-def _operations_by_task() -> dict[str, list[dict]]:
+def _operations_by_task_for_state(state_root: Path) -> dict[str, list[dict]]:
     grouped: dict[str, list[dict]] = {}
-    for row in _read_jsonl(_jsonl_path("memory-operations.jsonl")):
+    for row in _read_jsonl(state_root / "memory-operations.jsonl"):
         task_id = row.get("task_id")
         if not task_id:
             continue
@@ -67,17 +71,31 @@ def _operations_by_task() -> dict[str, list[dict]]:
     return grouped
 
 
-def _review_queue(limit: int) -> list[dict]:
-    crystallized = _crystallized_task_ids()
-    operations_by_task = _operations_by_task()
+def _resolved_task_ids_for_state(state_root: Path) -> set[str]:
+    resolved: set[str] = set()
+    for row in _read_jsonl(state_root / "memory-operations.jsonl"):
+        operation = str(row.get("operation") or "")
+        if operation == "supersede":
+            resolved.update(str(item) for item in (row.get("supersedes") or []) if item)
+        if operation in {"archive", "rollback"} and row.get("task_id"):
+            resolved.add(str(row["task_id"]))
+    return resolved
+
+
+def review_queue_items(state_root: Path, limit: int | None = None) -> list[dict]:
+    crystallized = _crystallized_task_ids_for_state(state_root)
+    operations_by_task = _operations_by_task_for_state(state_root)
+    resolved_task_ids = _resolved_task_ids_for_state(state_root)
     queue: list[dict] = []
-    for task in reversed(_latest_tasks()):
+    for task in reversed(_latest_tasks_for_state(state_root)):
         memory_capture = task.get("memory_capture") or {}
         finalization = str(memory_capture.get("finalization_status") or "unknown")
         review_flags = list(memory_capture.get("review_flags") or [])
         supersession = memory_capture.get("supersession") or {}
         claim_state = memory_capture.get("claim_state") or {}
         task_id = str(task.get("task_id") or "")
+        if task_id and task_id in resolved_task_ids:
+            continue
         task_ops = operations_by_task.get(task_id, [])
 
         blockers: list[str] = []
@@ -121,9 +139,13 @@ def _review_queue(limit: int) -> list[dict]:
                 "claim_state": claim_state,
             }
         )
-        if len(queue) >= limit:
+        if limit is not None and len(queue) >= limit:
             break
     return queue
+
+
+def _review_queue(limit: int) -> list[dict]:
+    return review_queue_items(_state_root(), limit)
 
 
 def _record_operation(kind: str, args: argparse.Namespace) -> dict:

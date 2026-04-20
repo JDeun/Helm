@@ -12,7 +12,8 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from helm_context import adopt_context_source, configured_context_sources, load_context_sources, onboarding_root
-from helm_workspace import DEFAULT_WORKSPACE, detect_layout, discover_workspace, suggest_external_sources
+from helm_workspace import DEFAULT_WORKSPACE, detect_layout, discover_workspace, resolve_nested_workspace, suggest_external_sources
+from scripts.memory_ops import review_queue_items
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies, manifest_audit
 
 
@@ -85,6 +86,10 @@ def read_jsonl(path: Path) -> list[dict]:
 
 def state_root_for(root: Path) -> Path:
     return detect_layout(root).state_root
+
+
+def memory_review_queue_count_for(root: Path) -> int:
+    return len(review_queue_items(state_root_for(root), None))
 
 
 def validate_workspace_config(root: Path) -> dict:
@@ -193,7 +198,15 @@ def target_root(path: str | None, *, create: bool = False) -> Path:
         root = Path.cwd()
     if create:
         root.mkdir(parents=True, exist_ok=True)
-    return root.resolve()
+        return root.resolve()
+    resolved = root.resolve()
+    layout = detect_layout(resolved)
+    if layout.kind in {"helm", "openclaw", "hermes"}:
+        return resolved
+    nested = resolve_nested_workspace(resolved)
+    if nested is not None:
+        return nested.root
+    return resolved
 
 
 def build_status_payload(root: Path) -> dict:
@@ -220,12 +233,6 @@ def build_status_payload(root: Path) -> dict:
     )
     memory_operations = read_jsonl(state_root / "memory-operations.jsonl")
     crystallized_sessions = read_jsonl(state_root / "crystallized-sessions.jsonl")
-    review_queue = [
-        task
-        for task in task_entries
-        if (task.get("memory_capture") or {}).get("finalization_status") in {"capture_planned", "capture_partial"}
-        or (task.get("memory_capture") or {}).get("review_flags")
-    ]
     return {
         "workspace": str(root),
         "layout": layout.kind,
@@ -242,7 +249,7 @@ def build_status_payload(root: Path) -> dict:
         "draft_assessments": draft_assessments[-5:],
         "recent_memory_operations": memory_operations[-5:],
         "recent_crystallized_sessions": crystallized_sessions[-5:],
-        "memory_review_queue_count": len(review_queue[-20:]),
+        "memory_review_queue_count": memory_review_queue_count_for(root),
         "session_card": build_session_card_payload(root),
     }
 
@@ -371,12 +378,6 @@ def build_report_payload(root: Path, limit: int) -> dict:
     failed_commands = [cmd for cmd in commands[-200:] if cmd.get("exit_code") not in (0, None)]
     memory_operations = read_jsonl(state_root / "memory-operations.jsonl")
     crystallized_sessions = read_jsonl(state_root / "crystallized-sessions.jsonl")
-    review_queue = [
-        task
-        for task in recent_tasks
-        if task_finalization_status(task) in {"capture_planned", "capture_partial"}
-        or (task.get("memory_capture") or {}).get("review_flags")
-    ]
     source_breakdown = Counter(source.kind for source in context_sources)
     finalization_counts = Counter(
         (task.get("memory_capture") or {}).get("finalization_status", "unknown")
@@ -396,7 +397,7 @@ def build_report_payload(root: Path, limit: int) -> dict:
         "recent_checkpoints": checkpoints[-10:],
         "recent_memory_operations": memory_operations[-10:],
         "recent_crystallized_sessions": crystallized_sessions[-10:],
-        "memory_review_queue_count": len(review_queue),
+        "memory_review_queue_count": memory_review_queue_count_for(root),
         "draft_assessments": assessments[-10:],
     }
 
@@ -602,8 +603,9 @@ def build_onboarding_payload(root: Path) -> dict:
     suggestions = suggest_external_sources()
     adopted = load_context_sources(root)
     adopted_roots = {source.root for source in adopted}
+    resolved_root = root.resolve()
     candidates = {
-        name: [str(path) for path in paths if path not in adopted_roots]
+        name: [str(path) for path in paths if path not in adopted_roots and path != resolved_root]
         for name, paths in suggestions.items()
         if name != "obsidian_app"
     }
@@ -802,7 +804,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = target_root(args.path)
     layout = detect_layout(root)
-    state_root = root / ".helm"
+    state_root = state_root_for(root)
     suggestions = suggest_external_sources()
 
     checks: list[dict] = []
@@ -818,7 +820,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 detail = f"invalid json: {exc}"
         checks.append({"name": f"references/{filename}", "ok": ok, "detail": detail})
 
-    for relative in ("skills", "skill_drafts", "memory", ".helm", ".helm/checkpoints"):
+    state_dir_relative = relative_or_absolute(state_root, root)
+    checkpoints_relative = relative_or_absolute(state_root / "checkpoints", root)
+    for relative in ("skills", "skill_drafts", "memory", state_dir_relative, checkpoints_relative):
         path = root / relative
         checks.append(
             {
@@ -1131,9 +1135,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 def cmd_survey(args: argparse.Namespace) -> int:
-    root = target_root(args.path or str(DEFAULT_WORKSPACE), create=True)
-    if not (root / ".helm").exists():
-        cmd_init(argparse.Namespace(path=str(root), force=False, json=False))
+    root = target_root(args.path or str(DEFAULT_WORKSPACE))
     payload = build_onboarding_payload(root)
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -1222,7 +1224,7 @@ def cmd_checkpoint_recommend(args: argparse.Namespace) -> int:
 
 def cmd_checkpoint_list(args: argparse.Namespace) -> int:
     root = target_root(args.path)
-    checkpoints = read_json(root / ".helm" / "checkpoints" / "index.json", [])
+    checkpoints = read_json(state_root_for(root) / "checkpoints" / "index.json", [])
     if args.json:
         print(json.dumps(checkpoints, indent=2, ensure_ascii=False))
         return 0
@@ -1240,7 +1242,7 @@ def cmd_checkpoint_list(args: argparse.Namespace) -> int:
 
 def cmd_checkpoint_show(args: argparse.Namespace) -> int:
     root = target_root(args.path)
-    checkpoints = read_json(root / ".helm" / "checkpoints" / "index.json", [])
+    checkpoints = read_json(state_root_for(root) / "checkpoints" / "index.json", [])
     checkpoint = next((item for item in checkpoints if item.get("checkpoint_id") == args.checkpoint_id), None)
     if checkpoint is None:
         print(f"checkpoint not found: {args.checkpoint_id}", file=sys.stderr)
@@ -1700,7 +1702,6 @@ def main(argv: list[str] | None = None) -> int:
         "skill": cmd_skill,
         "ops": cmd_ops,
         "memory": cmd_memory,
-        "checkpoint": cmd_checkpoint,
         "harness": cmd_harness,
     }
     if argv and argv[0] in passthrough:
