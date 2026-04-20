@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.5.6</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.5.7</strong></p>
 
 <p align="center">
   <a href="README.md">English README</a>
@@ -330,7 +330,7 @@ python3 -m pip install --user --no-build-isolation .
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.6.md`](docs/releases/0.5.6.md)
+- [`docs/releases/0.5.7.md`](docs/releases/0.5.7.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -354,7 +354,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## 현재 상태
 
-Helm v0.5.6은 memory policy와 후속 review 상태를 더 운영 친화적으로 드러내는 릴리즈입니다.
+Helm v0.5.7은 workspace 탐지, checkpoint 라우팅, read-only survey 동작을 더 엄격하게 다듬어 잘못된 루트를 읽거나 검사만으로 상태를 만들 가능성을 줄이는 릴리즈입니다.
 
 이미 들어간 것:
 

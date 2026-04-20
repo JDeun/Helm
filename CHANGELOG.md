@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.7
+
+- fixed workspace detection so Helm prefers the real nested OpenClaw workspace over parent directories with misleading markers
+- fixed `checkpoint list` and `checkpoint show` so layout-aware state roots are used consistently, including OpenClaw-shaped workspaces
+- fixed `checkpoint` CLI routing so argparse subcommands are not shadowed by legacy passthrough behavior
+- fixed `survey` to stay read-only and avoid creating Helm state as a side effect of inspection
+- tightened onboarding suggestions so Helm does not recommend self-adoption of the workspace already being inspected
+
 ## 0.5.6
 
 - added typed memory operations for `write`, `promote`, `supersede`, `archive`, and `rollback`, plus crystallized session artifacts for task-level memory outcomes
