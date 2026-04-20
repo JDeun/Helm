@@ -3,16 +3,25 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 
 
 SKILL_ROOTS = ("skill_drafts", "skills")
 
 
+def _warn_parse_failure(path: Path, detail: str) -> None:
+    print(f"warning: ignoring malformed JSON file {path}: {detail}", file=sys.stderr)
+
+
 def load_json(path: Path, default: object) -> object:
     if not path.exists():
         return default
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _warn_parse_failure(path, str(exc))
+        return default
 
 
 def load_legacy_skill_policies(path: Path) -> dict[str, dict]:

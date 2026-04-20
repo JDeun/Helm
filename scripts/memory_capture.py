@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -99,10 +100,27 @@ def _task_timestamp(task: dict) -> str:
     return str(task.get("finished_at") or task.get("started_at") or task.get("created_at") or datetime.now(timezone.utc).isoformat())
 
 
+def _warn_parse_failure(path: Path, detail: str) -> None:
+    print(f"warning: ignoring malformed state file {path}: {detail}", file=sys.stderr)
+
+
 def _read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows: list[dict] = []
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            _warn_parse_failure(path, f"line {lineno}: {exc}")
+            continue
+        if not isinstance(payload, dict):
+            _warn_parse_failure(path, f"line {lineno}: expected JSON object")
+            continue
+        rows.append(payload)
+    return rows
 
 
 def _normalized_task_name(task: dict) -> str:

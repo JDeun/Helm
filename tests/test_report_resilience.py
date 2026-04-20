@@ -5,7 +5,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import helm
 from scripts import command_log_report, ops_daily_report, task_ledger_report
+from scripts import run_with_profile
 
 
 class ReportResilienceTests(unittest.TestCase):
@@ -44,6 +46,45 @@ class ReportResilienceTests(unittest.TestCase):
             ):
                 self.assertEqual(ops_daily_report.load_checkpoints(), [])
                 self.assertEqual(ops_daily_report.load_draft_assessments(), [])
+
+    def test_helm_status_payload_tolerates_malformed_state_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            state_root = workspace / ".helm"
+            drafts_root = workspace / "skill_drafts"
+            (state_root / "checkpoints").mkdir(parents=True)
+            (drafts_root / "draft-a" / "meta").mkdir(parents=True)
+            (state_root / "task-ledger.jsonl").write_text('{"task_id":"ok-1","status":"completed"}\nnot-json\n', encoding="utf-8")
+            (state_root / "command-log.jsonl").write_text('{"label":"cmd","exit_code":0}\n', encoding="utf-8")
+            (state_root / "memory-operations.jsonl").write_text('{"id":"memop-1"}\n', encoding="utf-8")
+            (state_root / "crystallized-sessions.jsonl").write_text('{"id":"crystal-1"}\n', encoding="utf-8")
+            (state_root / "checkpoints" / "index.json").write_text("{not-json\n", encoding="utf-8")
+            (drafts_root / "draft-a" / "meta" / "assessment.json").write_text("{not-json\n", encoding="utf-8")
+
+            with patch.object(helm, "configured_context_sources", return_value=[]):
+                payload = helm.build_status_payload(workspace)
+
+            self.assertEqual(payload["recent_tasks"][0]["task_id"], "ok-1")
+            self.assertEqual(payload["recent_checkpoints"], [])
+            self.assertEqual(payload["draft_assessments"], [])
+
+    def test_run_with_profile_load_checkpoints_reports_invalid_json_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "index.json"
+            path.write_text("{not-json\n", encoding="utf-8")
+
+            with patch.object(run_with_profile, "CHECKPOINT_INDEX", path):
+                with self.assertRaisesRegex(SystemExit, "Invalid checkpoint index"):
+                    run_with_profile.load_checkpoints()
+
+    def test_run_with_profile_latest_task_entries_reports_non_object_line_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "task-ledger.jsonl"
+            path.write_text('"not-an-object"\n', encoding="utf-8")
+
+            with patch.object(run_with_profile, "TASK_LEDGER", path):
+                with self.assertRaisesRegex(SystemExit, "expected JSON object"):
+                    run_with_profile.latest_task_entries()
 
 
 if __name__ == "__main__":

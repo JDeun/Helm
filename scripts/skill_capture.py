@@ -100,7 +100,20 @@ def create_skill(args: argparse.Namespace) -> int:
 def read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows: list[dict] = []
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            print(f"warning: ignoring malformed JSONL line {lineno} in {path}: {exc}", file=sys.stderr)
+            continue
+        if not isinstance(payload, dict):
+            print(f"warning: ignoring non-object JSONL line {lineno} in {path}", file=sys.stderr)
+            continue
+        rows.append(payload)
+    return rows
 
 
 def load_policies() -> dict[str, dict]:
@@ -261,6 +274,8 @@ def substantive_artifacts(root: Path) -> tuple[list[str], list[str]]:
 def duplicate_candidates(name: str, description: str) -> list[dict]:
     draft_tokens = normalized_tokens(f"{name} {description}")
     candidates: list[dict] = []
+    if not SKILLS_ROOT.exists():
+        return candidates
     for skill_dir in sorted(SKILLS_ROOT.iterdir()):
         if not skill_dir.is_dir():
             continue

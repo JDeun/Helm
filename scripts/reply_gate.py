@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 import sys
 
@@ -19,7 +20,20 @@ TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
 def load_entries() -> list[dict]:
     if not TASK_LEDGER.exists():
         return []
-    return [json.loads(line) for line in TASK_LEDGER.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows: list[dict] = []
+    for lineno, line in enumerate(TASK_LEDGER.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            print(f"warning: ignoring malformed task ledger line {lineno}: {exc}", file=sys.stderr)
+            continue
+        if not isinstance(payload, dict):
+            print(f"warning: ignoring non-object task ledger line {lineno}", file=sys.stderr)
+            continue
+        rows.append(payload)
+    return rows
 
 
 def latest_entries(entries: list[dict]) -> list[dict]:

@@ -72,16 +72,65 @@ def render_banner() -> str:
     return "\n".join(rendered)
 
 
+def _warn_parse_failure(path: Path, detail: str) -> None:
+    print(f"warning: ignoring malformed state file {path}: {detail}", file=sys.stderr)
+
+
 def read_json(path: Path, default: object) -> object:
     if not path.exists():
         return default
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _warn_parse_failure(path, str(exc))
+        return default
 
 
 def read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows: list[dict] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        _warn_parse_failure(path, str(exc))
+        return rows
+    for lineno, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            _warn_parse_failure(path, f"line {lineno}: {exc}")
+            continue
+        if not isinstance(payload, dict):
+            _warn_parse_failure(path, f"line {lineno}: expected JSON object")
+            continue
+        rows.append(payload)
+    return rows
+
+
+def load_draft_assessments(root: Path) -> list[dict]:
+    assessments: list[dict] = []
+    drafts_root = root / "skill_drafts"
+    if not drafts_root.exists():
+        return assessments
+    for draft in sorted(drafts_root.iterdir()):
+        if not draft.is_dir():
+            continue
+        assessment = draft / "meta" / "assessment.json"
+        if not assessment.exists():
+            continue
+        try:
+            payload = json.loads(assessment.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            _warn_parse_failure(assessment, str(exc))
+            continue
+        if not isinstance(payload, dict):
+            _warn_parse_failure(assessment, "expected JSON object")
+            continue
+        assessments.append(payload)
+    return assessments
 
 
 def state_root_for(root: Path) -> Path:
@@ -217,13 +266,7 @@ def build_status_payload(root: Path) -> dict:
     command_entries = read_jsonl(state_root / "command-log.jsonl")
     checkpoints = read_json(state_root / "checkpoints" / "index.json", [])
 
-    draft_assessments: list[dict] = []
-    drafts_root = root / "skill_drafts"
-    if drafts_root.exists():
-        for draft in sorted(drafts_root.iterdir()):
-            assessment = draft / "meta" / "assessment.json"
-            if assessment.exists():
-                draft_assessments.append(json.loads(assessment.read_text(encoding="utf-8")))
+    draft_assessments = load_draft_assessments(root)
 
     recent_tasks = task_entries[-10:]
     failed_commands = [entry for entry in command_entries[-100:] if entry.get("exit_code") not in (0, None)]
@@ -236,7 +279,7 @@ def build_status_payload(root: Path) -> dict:
     return {
         "workspace": str(root),
         "layout": layout.kind,
-        "state_dir": str(state_root.relative_to(root)),
+        "state_dir": relative_or_absolute(state_root, root),
         "context_sources": [
             {"name": source.name, "kind": source.kind, "root": str(source.root), "mode": source.mode}
             for source in context_sources
@@ -363,13 +406,7 @@ def build_report_payload(root: Path, limit: int) -> dict:
     commands = read_jsonl(state_root / "command-log.jsonl")
     checkpoints = read_json(state_root / "checkpoints" / "index.json", [])
     context_sources = configured_context_sources(root)
-    assessments: list[dict] = []
-    drafts_root = root / "skill_drafts"
-    if drafts_root.exists():
-        for draft in sorted(drafts_root.iterdir()):
-            assessment = draft / "meta" / "assessment.json"
-            if assessment.exists():
-                assessments.append(json.loads(assessment.read_text(encoding="utf-8")))
+    assessments = load_draft_assessments(root)
 
     recent_tasks = tasks[-limit:]
     failed_tasks = [task for task in recent_tasks if task.get("status") == "failed"]

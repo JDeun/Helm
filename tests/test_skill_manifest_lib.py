@@ -9,6 +9,17 @@ from scripts.skill_manifest_lib import audit_skill_markdown_contracts, manifest_
 
 
 class SkillManifestLibTests(unittest.TestCase):
+    def test_manifest_quality_audit_tolerates_invalid_profile_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "references").mkdir()
+            (root / "references" / "execution_profiles.json").write_text("{not-json\n", encoding="utf-8")
+
+            report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
+
+            self.assertTrue(report["ok"])
+            self.assertEqual(report["manifest_count"], 0)
+
     def test_template_headings_do_not_trigger_placeholder_warning(self) -> None:
         skill_md = """# Demo
 

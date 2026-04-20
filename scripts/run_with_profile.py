@@ -49,9 +49,53 @@ def iso_to_compact(value: str | None) -> str | None:
     return dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
+def _load_json_object(path: Path, *, label: str) -> dict:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise SystemExit(f"Missing {label}: {path}")
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid {label}: {exc}")
+    if not isinstance(payload, dict):
+        raise SystemExit(f"Invalid {label}: expected JSON object")
+    return payload
+
+
+def _load_json_array(path: Path, *, label: str) -> list[object]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise SystemExit(f"Missing {label}: {path}")
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid {label}: {exc}")
+    if not isinstance(payload, list):
+        raise SystemExit(f"Invalid {label}: expected JSON array")
+    return payload
+
+
+def _load_json_object_lines(path: Path, *, label: str) -> list[dict]:
+    if not path.exists():
+        return []
+    entries: list[dict] = []
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Invalid {label} line {lineno}: {exc}")
+        if not isinstance(payload, dict):
+            raise SystemExit(f"Invalid {label} line {lineno}: expected JSON object")
+        entries.append(payload)
+    return entries
+
+
 def load_profiles() -> dict[str, dict]:
-    data = json.loads(PROFILE_FILE.read_text(encoding="utf-8"))
-    return data["profiles"]
+    data = _load_json_object(PROFILE_FILE, label="execution profile file")
+    profiles = data.get("profiles")
+    if not isinstance(profiles, dict):
+        raise SystemExit("Invalid execution profile file: missing `profiles` object")
+    return profiles
 
 
 def load_policies() -> dict[str, dict]:
@@ -75,7 +119,15 @@ def finalize_task(task: dict) -> None:
 
 def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dict:
     config = load_profiles()[profile]
-    meta = json.loads(args.meta_json) if args.meta_json else {}
+    if args.meta_json:
+        try:
+            meta = json.loads(args.meta_json)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Invalid --meta-json payload: {exc}")
+        if not isinstance(meta, dict):
+            raise SystemExit("Invalid --meta-json payload: expected JSON object")
+    else:
+        meta = {}
     return {
         "task_id": args.task_id or str(uuid.uuid4()),
         "task_name": args.task_name or " ".join(command[:3]),
@@ -144,13 +196,17 @@ def run_checkpoint(profile: str, args: argparse.Namespace) -> dict | None:
 def load_checkpoints() -> list[dict]:
     if not CHECKPOINT_INDEX.exists():
         return []
-    return json.loads(CHECKPOINT_INDEX.read_text(encoding="utf-8"))
+    checkpoints = _load_json_array(CHECKPOINT_INDEX, label="checkpoint index")
+    valid: list[dict] = []
+    for idx, item in enumerate(checkpoints, start=1):
+        if not isinstance(item, dict):
+            raise SystemExit(f"Invalid checkpoint index entry {idx}: expected JSON object")
+        valid.append(item)
+    return valid
 
 
 def latest_task_entries() -> list[dict]:
-    if not TASK_LEDGER.exists():
-        return []
-    entries = [json.loads(line) for line in TASK_LEDGER.read_text(encoding="utf-8").splitlines() if line.strip()]
+    entries = _load_json_object_lines(TASK_LEDGER, label="task ledger")
     by_task: dict[str, dict] = {}
     for entry in entries:
         task_id = entry.get("task_id")
