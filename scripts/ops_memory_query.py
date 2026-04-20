@@ -70,6 +70,18 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def read_json_array(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
 def apply_mode_defaults(args: argparse.Namespace) -> None:
     if not args.mode:
         return
@@ -339,9 +351,7 @@ def load_command_results(source: ContextSource, args: argparse.Namespace) -> Ite
 
 def load_checkpoint_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
     index_path = source.state_root / "checkpoints" / "index.json"
-    if not index_path.exists():
-        return
-    records = json.loads(index_path.read_text(encoding="utf-8"))
+    records = read_json_array(index_path)
     for record in records:
         blob = json.dumps(record, ensure_ascii=False)
         if not matches_query(blob, args.query):
