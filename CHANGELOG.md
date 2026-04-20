@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.8
+
+- hardened adaptive harness hydration commands so empty include lists do not generate invalid `ops_memory_query` invocations
+- hardened route-decision tool inference for nested shell commands that prepend environment variables before the real runner
+- hardened context source loading so corrupted or partial `.helm/context_sources.json` data does not break local context inspection
+- hardened checkpoint restore so archive symlink and hardlink members are rejected instead of being restored into the workspace
+- tightened Obsidian and file-intake audit handling so relative path evidence, Office OOXML attachments, and capture-index sync failures are classified more safely
+
 ## 0.5.7
 
 - fixed workspace detection so Helm prefers the real nested OpenClaw workspace over parent directories with misleading markers
