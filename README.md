@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.5.5</strong></p>
+<p align="center"><strong>Current release: v0.5.6</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -59,6 +59,9 @@ In the current release, that means:
 - smaller or weaker local models can be forced through narrower runners and stricter defaults
 - operators can audit not only whether manifests exist, but whether they are still too generic to be trusted
 - knowledge policy can be described independently from the runtime so memory, artifact, supersession, and review decisions stay inspectable
+- typed memory operations and crystallized sessions can be recorded explicitly instead of living only in task prose
+- review backlog can be inspected directly through `helm memory review-queue`
+- status and reporting now follow the active workspace layout so OpenClaw-shaped workspaces do not silently hide Helm memory state
 
 Helm is especially useful if you already have:
 
@@ -314,6 +317,7 @@ A meaningful task should leave behind:
 - an explicit decision about whether durable state now needs to be captured
 
 Current Helm releases implement this as a visible `memory_capture` plan in the task ledger. The planner recommends whether `daily_memory`, `long_term_memory`, `ontology`, or human-readable `notes` should be updated next.
+Operators can also record typed follow-up outcomes through `helm memory op ...`, persist run digests with `helm memory crystallize`, and inspect unresolved review items with `helm memory review-queue`.
 
 ## Installation Notes
 
@@ -329,7 +333,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.5.md`](docs/releases/0.5.5.md)
+- [`docs/releases/0.5.6.md`](docs/releases/0.5.6.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -346,13 +350,14 @@ helm doctor --path examples/demo-workspace
 helm validate --path examples/demo-workspace
 helm context --path examples/demo-workspace recent-state --limit 5
 helm memory --path examples/demo-workspace pending-captures --limit 5
+helm memory --path examples/demo-workspace review-queue --limit 5
 helm ops --path examples/demo-workspace capture-state --limit 10
 helm report --path examples/demo-workspace --format markdown
 ```
 
 ## Current Status
 
-Helm v0.5.2 sharpens Helm's governance guidance around support artifacts versus breakage and makes source-priority expectations more explicit in new skill drafts.
+Helm v0.5.6 makes memory policy and follow-up state more operationally explicit.
 
 Included:
 
@@ -361,7 +366,10 @@ Included:
 - file-native context hydration
 - task finalization with durable capture planning
 - operator-facing finalization inspection commands
+- typed memory operations and crystallized session artifacts
+- review-queue visibility for unresolved capture, supersession, and confidence issues
 - manifest-based adaptive harness governance
+- adaptive harness contract surfaces for route decisions, result consistency, and downgrade behavior
 - manifest auditing for missing or malformed skill contracts
 - manifest quality auditing for generic or weak skill contracts
 - `SKILL.md` quality guidance and contract-driven drafting templates

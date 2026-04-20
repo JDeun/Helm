@@ -83,6 +83,10 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def state_root_for(root: Path) -> Path:
+    return detect_layout(root).state_root
+
+
 def validate_workspace_config(root: Path) -> dict:
     issues: list[str] = []
     profiles_path = root / "references" / "execution_profiles.json"
@@ -194,7 +198,7 @@ def target_root(path: str | None, *, create: bool = False) -> Path:
 
 def build_status_payload(root: Path) -> dict:
     layout = detect_layout(root)
-    state_root = root / ".helm"
+    state_root = state_root_for(root)
     context_sources = configured_context_sources(root)
     task_entries = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
     command_entries = read_jsonl(state_root / "command-log.jsonl")
@@ -214,6 +218,14 @@ def build_status_payload(root: Path) -> dict:
         (entry.get("memory_capture") or {}).get("finalization_status", "unknown")
         for entry in recent_tasks
     )
+    memory_operations = read_jsonl(state_root / "memory-operations.jsonl")
+    crystallized_sessions = read_jsonl(state_root / "crystallized-sessions.jsonl")
+    review_queue = [
+        task
+        for task in task_entries
+        if (task.get("memory_capture") or {}).get("finalization_status") in {"capture_planned", "capture_partial"}
+        or (task.get("memory_capture") or {}).get("review_flags")
+    ]
     return {
         "workspace": str(root),
         "layout": layout.kind,
@@ -228,6 +240,9 @@ def build_status_payload(root: Path) -> dict:
         "recent_failed_commands": failed_commands[-5:],
         "recent_checkpoints": checkpoints[-5:],
         "draft_assessments": draft_assessments[-5:],
+        "recent_memory_operations": memory_operations[-5:],
+        "recent_crystallized_sessions": crystallized_sessions[-5:],
+        "memory_review_queue_count": len(review_queue[-20:]),
         "session_card": build_session_card_payload(root),
     }
 
@@ -268,7 +283,7 @@ def _task_capability_fields(task: dict | None, root: Path) -> dict:
 
 
 def build_run_contract_payload(root: Path, task_id: str | None = None) -> dict:
-    tasks = latest_tasks(read_jsonl(root / ".helm" / "task-ledger.jsonl"))
+    tasks = latest_tasks(read_jsonl(state_root_for(root) / "task-ledger.jsonl"))
     target = None
     if task_id:
         target = next((task for task in tasks if task.get("task_id") == task_id), None)
@@ -282,7 +297,7 @@ def build_run_contract_payload(root: Path, task_id: str | None = None) -> dict:
 
 
 def build_capability_diff_payload(root: Path, older_task_id: str | None = None, newer_task_id: str | None = None) -> dict:
-    tasks = latest_tasks(read_jsonl(root / ".helm" / "task-ledger.jsonl"))
+    tasks = latest_tasks(read_jsonl(state_root_for(root) / "task-ledger.jsonl"))
     older = None
     newer = None
     if older_task_id or newer_task_id:
@@ -312,10 +327,10 @@ def build_capability_diff_payload(root: Path, older_task_id: str | None = None, 
 def build_session_card_payload(root: Path) -> dict:
     status = build_run_contract_payload(root)
     task = status.get("task") or {}
-    command_entries = read_jsonl(root / ".helm" / "command-log.jsonl")
+    command_entries = read_jsonl(state_root_for(root) / "command-log.jsonl")
     recent_failures = [entry for entry in command_entries[-50:] if entry.get("exit_code") not in (0, None)]
     finalization = None
-    tasks = latest_tasks(read_jsonl(root / ".helm" / "task-ledger.jsonl"))
+    tasks = latest_tasks(read_jsonl(state_root_for(root) / "task-ledger.jsonl"))
     if task.get("task_id"):
         raw_task = next((entry for entry in tasks if entry.get("task_id") == task.get("task_id")), None)
         if raw_task:
@@ -336,7 +351,7 @@ def build_session_card_payload(root: Path) -> dict:
 
 
 def build_report_payload(root: Path, limit: int) -> dict:
-    state_root = root / ".helm"
+    state_root = state_root_for(root)
     tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
     commands = read_jsonl(state_root / "command-log.jsonl")
     checkpoints = read_json(state_root / "checkpoints" / "index.json", [])
@@ -354,6 +369,14 @@ def build_report_payload(root: Path, limit: int) -> dict:
     running_tasks = [task for task in recent_tasks if task.get("status") == "running"]
     handoffs = [task for task in recent_tasks if task.get("status") == "handoff_required"]
     failed_commands = [cmd for cmd in commands[-200:] if cmd.get("exit_code") not in (0, None)]
+    memory_operations = read_jsonl(state_root / "memory-operations.jsonl")
+    crystallized_sessions = read_jsonl(state_root / "crystallized-sessions.jsonl")
+    review_queue = [
+        task
+        for task in recent_tasks
+        if task_finalization_status(task) in {"capture_planned", "capture_partial"}
+        or (task.get("memory_capture") or {}).get("review_flags")
+    ]
     source_breakdown = Counter(source.kind for source in context_sources)
     finalization_counts = Counter(
         (task.get("memory_capture") or {}).get("finalization_status", "unknown")
@@ -371,12 +394,15 @@ def build_report_payload(root: Path, limit: int) -> dict:
         "handoff_tasks": handoffs[-5:],
         "failed_commands": failed_commands[-10:],
         "recent_checkpoints": checkpoints[-10:],
+        "recent_memory_operations": memory_operations[-10:],
+        "recent_crystallized_sessions": crystallized_sessions[-10:],
+        "memory_review_queue_count": len(review_queue),
         "draft_assessments": assessments[-10:],
     }
 
 
 def recommend_checkpoint(root: Path, task_id: str | None = None) -> dict:
-    state_root = root / ".helm"
+    state_root = state_root_for(root)
     tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
     checkpoints = read_json(state_root / "checkpoints" / "index.json", [])
     target = None
@@ -405,7 +431,7 @@ def task_finalization_status(task: dict) -> str:
 
 
 def build_recent_state_payload(root: Path, limit: int, *, pending_only: bool = False) -> dict:
-    state_root = root / ".helm"
+    state_root = state_root_for(root)
     tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
     if pending_only:
         tasks = [
@@ -445,7 +471,7 @@ def build_recent_state_payload(root: Path, limit: int, *, pending_only: bool = F
 
 
 def build_capture_state_payload(root: Path, limit: int) -> dict:
-    state_root = root / ".helm"
+    state_root = state_root_for(root)
     tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
     recent_tasks = tasks[-limit:]
     finalization_counts = Counter(task_finalization_status(task) for task in recent_tasks)
@@ -505,12 +531,38 @@ def format_report_markdown(payload: dict) -> str:
         f"- Context sources: `{payload['context_source_count']}` `{json.dumps(payload['context_source_breakdown'], ensure_ascii=False, sort_keys=True)}`",
         f"- Status counts: `{json.dumps(payload['task_status_counts'], ensure_ascii=False, sort_keys=True)}`",
         f"- Finalization counts: `{json.dumps(payload['finalization_counts'], ensure_ascii=False, sort_keys=True)}`",
+        f"- Memory ops in window: `{len(payload.get('recent_memory_operations', []))}`",
+        f"- Crystallized sessions in window: `{len(payload.get('recent_crystallized_sessions', []))}`",
+        f"- Memory review queue: `{payload.get('memory_review_queue_count', 0)}`",
         "",
         "## Onboarding Actions",
     ]
     if payload.get("onboarding", {}).get("actions"):
         for action in payload["onboarding"]["actions"][:5]:
             lines.append(f"- {action}")
+    else:
+        lines.append("- None")
+    lines.extend([
+        "",
+        "## Memory Operations",
+    ])
+    if payload.get("recent_memory_operations"):
+        for item in payload["recent_memory_operations"][:5]:
+            lines.append(
+                f"- `{item.get('timestamp')}` `{item.get('operation')}` `{item.get('subject')}` scope=`{item.get('scope')}`"
+            )
+    else:
+        lines.append("- None")
+    lines.extend([
+        "",
+        "## Crystallized Sessions",
+    ])
+    if payload.get("recent_crystallized_sessions"):
+        for item in payload["recent_crystallized_sessions"][:5]:
+            crystal = item.get("crystallization") or {}
+            lines.append(
+                f"- `{item.get('task_id')}` `{crystal.get('question', item.get('task_name') or '-')}` result=`{crystal.get('result', '-')}`"
+            )
     else:
         lines.append("- None")
     lines.extend([
@@ -901,6 +953,9 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"recent_tasks={len(payload['recent_tasks'])}")
     print(f"recent_failed_commands={len(payload['recent_failed_commands'])}")
     print(f"recent_checkpoints={len(payload['recent_checkpoints'])}")
+    print(f"recent_memory_operations={len(payload['recent_memory_operations'])}")
+    print(f"recent_crystallized_sessions={len(payload['recent_crystallized_sessions'])}")
+    print(f"memory_review_queue_count={payload['memory_review_queue_count']}")
     print(f"draft_assessments={len(payload['draft_assessments'])}")
     print(f"onboarding_actions={len(onboarding['actions'])}")
     card = payload["session_card"]
@@ -930,6 +985,21 @@ def cmd_status(args: argparse.Namespace) -> int:
                 f"{task.get('task_id')} status={task.get('status')} profile={task.get('profile')} "
                 f"name={task.get('task_name')}"
             )
+        for item in payload["recent_memory_operations"]:
+            print(
+                "memory_op="
+                f"{item.get('timestamp')} op={item.get('operation')} scope={item.get('scope')} "
+                f"subject={item.get('subject')}"
+            )
+        for item in payload["recent_crystallized_sessions"]:
+            crystal = item.get("crystallization") or {}
+            print(
+                "crystallized="
+                f"{item.get('task_id')} question={crystal.get('question') or item.get('task_name')} "
+                f"result={crystal.get('result') or '-'}"
+            )
+        if payload["memory_review_queue_count"]:
+            print(f"next=review memory queue: helm memory review-queue --path {root}")
         for action in onboarding["actions"]:
             print(f"next={action}")
     return 0
@@ -1393,7 +1463,7 @@ def cmd_ops(args: argparse.Namespace) -> int:
 def cmd_memory(args: argparse.Namespace) -> int:
     root = target_root(args.path) if args.path else discover_workspace().root
     help_parser = argparse.ArgumentParser(prog="helm memory")
-    help_parser.add_argument("subcommand", nargs="?", help="Currently supported: pending-captures")
+    help_parser.add_argument("subcommand", nargs="?", help="Supported: pending-captures, review-queue, history, crystallize, op")
     if not args.args:
         help_parser.print_help()
         return 0
@@ -1401,28 +1471,30 @@ def cmd_memory(args: argparse.Namespace) -> int:
         help_parser.print_help()
         return 0
     subcommand, *remainder = args.args
-    if subcommand != "pending-captures":
-        print(f"Unknown memory subcommand: {subcommand}", file=sys.stderr)
-        return 2
-    parser = argparse.ArgumentParser(prog="helm memory pending-captures")
-    parser.add_argument("--limit", type=int, default=20)
-    parser.add_argument("--json", action="store_true")
-    parsed = parser.parse_args(remainder)
-    payload = build_recent_state_payload(root, parsed.limit, pending_only=True)
-    if parsed.json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    if subcommand == "pending-captures":
+        parser = argparse.ArgumentParser(prog="helm memory pending-captures")
+        parser.add_argument("--limit", type=int, default=20)
+        parser.add_argument("--json", action="store_true")
+        parsed = parser.parse_args(remainder)
+        payload = build_recent_state_payload(root, parsed.limit, pending_only=True)
+        if parsed.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 0
+        if not payload["items"]:
+            print("No pending durable captures found.")
+            return 0
+        for item in payload["items"]:
+            print(
+                f"{item['task_id']} profile={item['profile']} status={item['status']} "
+                f"finalization={item['finalization_status']} confidence={item['claim_state'].get('confidence_hint', '-')} "
+                f"layers={','.join(item['recommended_layers'])} review_flags={len(item['review_flags'])} "
+                f"name={item['task_name']}"
+            )
         return 0
-    if not payload["items"]:
-        print("No pending durable captures found.")
-        return 0
-    for item in payload["items"]:
-        print(
-            f"{item['task_id']} profile={item['profile']} status={item['status']} "
-            f"finalization={item['finalization_status']} confidence={item['claim_state'].get('confidence_hint', '-')} "
-            f"layers={','.join(item['recommended_layers'])} review_flags={len(item['review_flags'])} "
-            f"name={item['task_name']}"
-        )
-    return 0
+    if subcommand in {"history", "crystallize", "op", "review-queue"}:
+        return run_script("memory_ops.py", [subcommand, *remainder], root)
+    print(f"Unknown memory subcommand: {subcommand}", file=sys.stderr)
+    return 2
 
 
 def cmd_harness(args: argparse.Namespace) -> int:

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from datetime import datetime, timezone
+from pathlib import Path
+
+from helm_workspace import get_workspace_layout
 
 
 PROFILE_SIGNAL_MAP = {
@@ -95,6 +99,30 @@ def _task_timestamp(task: dict) -> str:
     return str(task.get("finished_at") or task.get("started_at") or task.get("created_at") or datetime.now(timezone.utc).isoformat())
 
 
+def _read_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _normalized_task_name(task: dict) -> str:
+    return " ".join(str(task.get("task_name") or "").casefold().split())
+
+
+def _recent_final_tasks(task: dict) -> list[dict]:
+    state_root = get_workspace_layout().state_root
+    ledger = _read_jsonl(state_root / "task-ledger.jsonl")
+    by_task: dict[str, dict] = {}
+    for entry in ledger:
+        task_id = entry.get("task_id")
+        if task_id and entry.get("status") in {"completed", "handoff_required", "failed"}:
+            by_task[task_id] = entry
+    current_id = task.get("task_id")
+    rows = [entry for entry in by_task.values() if entry.get("task_id") != current_id]
+    rows.sort(key=_task_timestamp)
+    return rows[-80:]
+
+
 def _retention_profile(event_types: list[str]) -> dict:
     if not event_types:
         return {"tier": "ephemeral", "decay_hint": "drop_if_unreferenced"}
@@ -130,7 +158,39 @@ def _supersession(task: dict) -> dict:
     status = str(task.get("status") or "")
     if status not in {"completed", "handoff_required"}:
         return {"state": "not_applicable", "supersedes_task_ids": []}
-    return {"state": "none", "supersedes_task_ids": []}
+    current_name = _normalized_task_name(task)
+    current_skill = str(task.get("skill") or "")
+    current_runtime = str(task.get("runtime_target") or "")
+    matches: list[dict] = []
+    for entry in reversed(_recent_final_tasks(task)):
+        score = 0
+        if current_name and current_name == _normalized_task_name(entry):
+            score += 4
+        if current_skill and current_skill == entry.get("skill"):
+            score += 2
+        if current_runtime and current_runtime == entry.get("runtime_target"):
+            score += 1
+        if score < 4:
+            continue
+        matches.append(
+            {
+                "task_id": entry.get("task_id"),
+                "task_name": entry.get("task_name"),
+                "status": entry.get("status"),
+                "score": score,
+            }
+        )
+        if len(matches) >= 3:
+            break
+    if not matches:
+        return {"state": "none", "supersedes_task_ids": [], "superseded_by": None, "replacement_reason": None}
+    failed_matches = [item for item in matches if item.get("status") == "failed"]
+    return {
+        "state": "retries_or_replaces_prior_work" if failed_matches else "refreshes_prior_state",
+        "supersedes_task_ids": [item["task_id"] for item in matches],
+        "superseded_by": None,
+        "replacement_reason": "newer finalized task overlaps prior work with the same task or runtime identity",
+    }
 
 
 def _crystallization(task: dict, event_types: list[str], reasons: list[str]) -> dict:
@@ -152,9 +212,12 @@ def _crystallization(task: dict, event_types: list[str], reasons: list[str]) -> 
 def _review_flags(task: dict, claim_state: dict) -> list[dict]:
     flags: list[dict] = []
     name_blob = _norm(task.get("task_name"))
+    supersession = _supersession(task)
+    if supersession.get("supersedes_task_ids"):
+        flags.append({"type": "supersession_review", "severity": "medium"})
     if claim_state.get("confidence_hint") == "low":
         flags.append({"type": "low_confidence_review", "severity": "low"})
-    if any(token in name_blob for token in ("replace", "rewrite", "rename", "correct", "refresh", "update")):
+    if any(token in name_blob for token in ("replace", "rewrite", "rename", "correct", "refresh", "update", "fix", "supersede")):
         flags.append({"type": "contradiction_review", "severity": "medium"})
     return flags
 

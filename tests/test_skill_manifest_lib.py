@@ -140,6 +140,34 @@ Use the strict runner for all mutations.
             warnings = report["items"][0]["warnings"]
             self.assertIn("manifest requires file intake evidence but SKILL.md does not explain the intake boundary", warnings)
 
+    def test_route_decision_without_tool_rules_is_flagged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "references").mkdir()
+            (root / "skills" / "route-skill").mkdir(parents=True)
+            (root / "references" / "execution_profiles.json").write_text(
+                json.dumps({"profiles": {"inspect_local": {}}}),
+                encoding="utf-8",
+            )
+            (root / "skills" / "route-skill" / "contract.json").write_text(
+                json.dumps(
+                    {
+                        "skill": "route-skill",
+                        "allowed_profiles": ["inspect_local"],
+                        "default_profile": "inspect_local",
+                        "route_decision": {"required": True, "task_type": "generic"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "skills" / "route-skill" / "SKILL.md").write_text("# Route Skill\n", encoding="utf-8")
+
+            report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
+
+            self.assertFalse(report["ok"])
+            warnings = report["items"][0]["warnings"]
+            self.assertIn("route_decision exists but no tool_rules are declared", warnings)
+
 
 if __name__ == "__main__":
     unittest.main()

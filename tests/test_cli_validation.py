@@ -58,6 +58,101 @@ class CliValidationTests(unittest.TestCase):
             self.assertFalse(payload["ok"])
             self.assertIn("skill `demo-skill` is missing contract.json", payload["issues"])
 
+    def test_status_surfaces_memory_operation_and_crystallized_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_minimal_workspace(root)
+            (root / ".helm" / "task-ledger.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task-review",
+                        "task_name": "replace router memory",
+                        "status": "completed",
+                        "memory_capture": {
+                            "finalization_status": "capture_partial",
+                            "review_flags": [{"type": "truth_resolution_review"}],
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".helm" / "memory-operations.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": "memop-1",
+                        "timestamp": "2026-04-20T00:00:00+00:00",
+                        "operation": "write",
+                        "subject": "router policy",
+                        "scope": "private",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".helm" / "crystallized-sessions.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": "crystal-1",
+                        "task_id": "task-1",
+                        "crystallization": {"question": "What changed?", "result": "updated"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_cli("status", "--path", str(root), "--verbose")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("recent_memory_operations=1", result.stdout)
+            self.assertIn("recent_crystallized_sessions=1", result.stdout)
+            self.assertIn("memory_review_queue_count=1", result.stdout)
+
+    def test_status_uses_openclaw_state_root_when_layout_is_openclaw(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / ".openclaw" / "checkpoints").mkdir(parents=True)
+            (root / "references").mkdir()
+            (root / "skills").mkdir()
+            (root / "skill_drafts").mkdir()
+            (root / "memory").mkdir()
+            (root / ".openclaw" / "context_sources.json").write_text('{"sources": []}\n', encoding="utf-8")
+            (root / ".openclaw" / "task-ledger.jsonl").write_text("", encoding="utf-8")
+            (root / ".openclaw" / "command-log.jsonl").write_text("", encoding="utf-8")
+            (root / ".openclaw" / "checkpoints" / "index.json").write_text("[]\n", encoding="utf-8")
+            (root / ".openclaw" / "memory-operations.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": "memop-1",
+                        "timestamp": "2026-04-20T00:00:00+00:00",
+                        "operation": "supersede",
+                        "subject": "resolved retry",
+                        "scope": "private",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".openclaw" / "crystallized-sessions.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": "crystal-1",
+                        "task_id": "task-1",
+                        "crystallization": {"question": "What changed?", "result": "updated"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_cli("status", "--path", str(root), "--verbose")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("layout=openclaw", result.stdout)
+            self.assertIn("recent_memory_operations=1", result.stdout)
+            self.assertIn("recent_crystallized_sessions=1", result.stdout)
+
     def test_run_with_profile_honors_workspace_env_for_demo_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

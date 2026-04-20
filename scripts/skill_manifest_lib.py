@@ -207,6 +207,9 @@ def validate_contract_manifest(skill: str, manifest: dict, profiles: dict[str, d
     browser_work = manifest.get("browser_work", {})
     retrieval_policy = manifest.get("retrieval_policy", {})
     file_intake = manifest.get("file_intake", {})
+    route_decision = manifest.get("route_decision", {})
+    result_contract = manifest.get("result_contract", {})
+    failure_downgrade = manifest.get("failure_downgrade", {})
 
     if allowed is not None:
         if not isinstance(allowed, list) or not allowed:
@@ -274,6 +277,49 @@ def validate_contract_manifest(skill: str, manifest: dict, profiles: dict[str, d
         ):
             issues.append(f"{skill}: {section_name}.when_any must be a string list")
 
+    if route_decision:
+        if not isinstance(route_decision, dict):
+            issues.append(f"{skill}: route_decision must be an object")
+        else:
+            for field_name in ("required_fields", "allowed_stages", "allowed_next_actions"):
+                value = route_decision.get(field_name)
+                if value is not None and (
+                    not isinstance(value, list) or any(not isinstance(item, str) or not item.strip() for item in value)
+                ):
+                    issues.append(f"{skill}: route_decision.{field_name} must be a string list")
+            tool_rules = route_decision.get("tool_rules")
+            if tool_rules is not None:
+                if not isinstance(tool_rules, list):
+                    issues.append(f"{skill}: route_decision.tool_rules must be a list")
+                else:
+                    for index, rule in enumerate(tool_rules):
+                        if not isinstance(rule, dict):
+                            issues.append(f"{skill}: route_decision.tool_rules[{index}] must be an object")
+                            continue
+                        match_any = rule.get("match_any")
+                        if not isinstance(match_any, list) or any(not isinstance(item, str) or not item.strip() for item in match_any):
+                            issues.append(f"{skill}: route_decision.tool_rules[{index}].match_any must be a non-empty string list")
+
+    if result_contract and not isinstance(result_contract, dict):
+        issues.append(f"{skill}: result_contract must be an object")
+    if failure_downgrade:
+        if not isinstance(failure_downgrade, dict):
+            issues.append(f"{skill}: failure_downgrade must be an object")
+        else:
+            steps = failure_downgrade.get("steps")
+            if steps is not None:
+                if not isinstance(steps, list):
+                    issues.append(f"{skill}: failure_downgrade.steps must be a list")
+                else:
+                    for index, step in enumerate(steps):
+                        if not isinstance(step, dict):
+                            issues.append(f"{skill}: failure_downgrade.steps[{index}] must be an object")
+                            continue
+                        if not isinstance(step.get("when"), str) or not str(step.get("when")).strip():
+                            issues.append(f"{skill}: failure_downgrade.steps[{index}].when must be a string")
+                        if not isinstance(step.get("action"), str) or not str(step.get("action")).strip():
+                            issues.append(f"{skill}: failure_downgrade.steps[{index}].action must be a string")
+
     return issues
 
 
@@ -316,6 +362,9 @@ def manifest_quality_audit(workspace: Path, profile_path: Path) -> dict:
         browser_work = manifest.get("browser_work") or {}
         retrieval_policy = manifest.get("retrieval_policy") or {}
         file_intake = manifest.get("file_intake") or {}
+        route_decision = manifest.get("route_decision") or {}
+        result_contract = manifest.get("result_contract") or {}
+        failure_downgrade = manifest.get("failure_downgrade") or {}
         warnings: list[str] = []
 
         if sorted(allowed) == full_profile_set:
@@ -328,6 +377,12 @@ def manifest_quality_audit(workspace: Path, profile_path: Path) -> dict:
             warnings.append("approval_keywords missing despite remote handoff capability")
         if not runner and "risky_edit" in allowed:
             warnings.append("runner policy missing for a risky-edit capable skill")
+        if route_decision and not route_decision.get("tool_rules"):
+            warnings.append("route_decision exists but no tool_rules are declared")
+        if result_contract and not result_contract.get("required"):
+            warnings.append("result_contract exists but does not require result consistency checks")
+        if failure_downgrade and not failure_downgrade.get("steps"):
+            warnings.append("failure_downgrade exists but does not list downgrade steps")
 
         skill_dir = resolve_skill_dir(workspace, skill)
         if skill_dir is None:

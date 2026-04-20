@@ -1,12 +1,12 @@
-# Helm 0.5.5 Release Checklist
+# Helm 0.5.6 Release Checklist
 
-Use this checklist before cutting the `0.5.5` release.
+Use this checklist before cutting the `0.5.6` release.
 
 ## Version and metadata
 
-- confirm `pyproject.toml` version is `0.5.5`
-- confirm `setup.py` version is `0.5.5`
-- confirm `CHANGELOG.md` includes `0.5.5`
+- confirm `pyproject.toml` version is `0.5.6`
+- confirm `setup.py` version is `0.5.6`
+- confirm `CHANGELOG.md` includes `0.5.6`
 - confirm README asset links and docs links render correctly
 
 ## Packaging
@@ -16,9 +16,10 @@ Use this checklist before cutting the `0.5.5` release.
 - verify installed `helm --help` works
 - verify `helm survey` appears in help output
 - verify `helm memory` appears in help output
+- verify `helm memory review-queue` works
 - verify `python3 scripts/run_with_profile.py validate-manifests --json` reports `ok: true`
 - verify `python3 scripts/run_with_profile.py audit-manifest-quality --json` reports `ok: true`
-- verify `python3 -m unittest tests.test_cli_validation tests.test_retrieval_policy` passes
+- verify `python3 -m unittest tests.test_cli_validation tests.test_memory_ops tests.test_skill_manifest_lib tests.test_retrieval_policy` passes
 
 ## Workspace and onboarding smoke tests
 
@@ -29,6 +30,7 @@ Use this checklist before cutting the `0.5.5` release.
 - `helm doctor --path /tmp/helm-release-smoke`
 - `helm validate --path /tmp/helm-release-smoke`
 - `helm status --path /tmp/helm-release-smoke --verbose`
+- confirm memory operation counts and review queue counts are visible in status output when state exists
 - `helm ops --path /tmp/helm-release-smoke capture-state`
 - `HELM_WORKSPACE=examples/demo-workspace python3 scripts/run_with_profile.py validate-manifests --json`
 - `HELM_WORKSPACE=examples/demo-workspace python3 scripts/run_with_profile.py audit-manifest-quality --json`
@@ -45,6 +47,7 @@ Use this checklist before cutting the `0.5.5` release.
 - `helm context --path examples/demo-workspace --include notes tasks commands --summary --limit 8`
 - `helm context --path examples/demo-workspace recent-state --limit 5`
 - `helm memory --path examples/demo-workspace pending-captures --limit 5`
+- `helm memory --path examples/demo-workspace review-queue --limit 5`
 - `helm ops --path examples/demo-workspace capture-state --limit 10`
 - `helm checkpoint --path examples/demo-workspace finalize`
 - `helm checkpoint-recommend --path examples/demo-workspace`
@@ -52,7 +55,7 @@ Use this checklist before cutting the `0.5.5` release.
 
 ## Release outputs
 
-- create git tag: `v0.5.5`
-- draft GitHub release notes from `docs/releases/0.5.5.md`
+- create git tag: `v0.5.6`
+- draft GitHub release notes from `docs/releases/0.5.6.md`
 - attach screenshots or README visuals if needed
 - publish source release after the checklist passes

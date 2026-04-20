@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.6
+
+- added typed memory operations for `write`, `promote`, `supersede`, `archive`, and `rollback`, plus crystallized session artifacts for task-level memory outcomes
+- added `helm memory review-queue` and surfaced memory-operation / crystallization / review-queue visibility in `status` and `report`
+- extended the adaptive harness and manifest validation with `route_decision`, `result_contract`, and `failure_downgrade` policy surfaces
+- hardened memory-capture truth resolution and write validation so durable-state contradictions are easier to detect before promotion
+- fixed Helm status and reporting to read the layout-aware state root instead of assuming `.helm/` in every workspace
+
 ## 0.5.5
 
 - documented a runtime-neutral memory operations policy covering crystallization, confidence/recency metadata, supersession, review flags, and scope boundaries

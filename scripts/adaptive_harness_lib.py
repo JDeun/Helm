@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.route_contract_lib import applicable_downgrade_steps, infer_route_decision, validate_route_decision
 from scripts.retrieval_policy_lib import build_retrieval_plan
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies as load_manifest_policies
 
@@ -82,6 +83,16 @@ def base_skill_contract(skill: str | None) -> dict:
         "browser_work": {"required": False, "required_fields": ["reason", "evidence", "api_reusable", "next_action"]},
         "retrieval_policy": {"required": False, "required_fields": ["attempt_stage", "exit_classification", "recovery_artifact"]},
         "file_intake": {"required": False, "required_fields": ["path", "claimed_type", "detected_type", "detector", "route_decision"]},
+        "route_decision": {
+            "required": False,
+            "task_type": "generic",
+            "required_fields": ["task_type", "stage", "chosen_tool", "next_action"],
+            "allowed_stages": ["classify", "input_check", "route", "execute", "review", "write"],
+            "allowed_next_actions": ["ask", "run", "stop", "review"],
+            "tool_rules": [],
+        },
+        "result_contract": {"required": False},
+        "failure_downgrade": {"steps": []},
         "allowed_profiles": policy.get("allowed_profiles", []),
         "default_profile": policy.get("default_profile"),
         "runner": {},
@@ -314,6 +325,28 @@ def infer_missing_evidence(entry: dict, contract: dict) -> tuple[dict | None, di
     return inferred_browser, inferred_retrieval
 
 
+def infer_result_consistency(entry: dict) -> dict:
+    harness_meta = ((entry.get("meta") or {}).get("harness") or {})
+    status = str(entry.get("status") or "unknown")
+    evidence_count = 0
+    if harness_meta.get("browser_evidence"):
+        evidence_count += 1
+    if harness_meta.get("retrieval_evidence"):
+        evidence_count += 1
+    if entry.get("checkpoint_paths"):
+        evidence_count += 1
+    warnings: list[str] = []
+    grounded = evidence_count > 0 or (status in {"completed", "handoff_required"} and entry.get("profile") == "inspect_local")
+    if status == "completed" and evidence_count == 0 and entry.get("profile") in {"service_ops", "risky_edit", "remote_handoff"}:
+        warnings.append("high-impact completion has no explicit evidence buckets")
+    return {
+        "outcome": status,
+        "grounded": grounded,
+        "evidence_summary": f"{evidence_count} evidence bucket(s)",
+        "warnings": warnings,
+    }
+
+
 def preflight_payload(
     *,
     skill: str | None,
@@ -328,6 +361,7 @@ def preflight_payload(
     browser_evidence: dict | None,
     retrieval_evidence: dict | None,
     file_intake_evidence: dict | None,
+    route_decision: dict | None,
 ) -> dict:
     harness_policy = load_harness_policy()
     contract = resolve_skill_contract(skill)
@@ -420,6 +454,23 @@ def preflight_payload(
             "file intake evidence is required for this request shape; attach it before treating the task as complete",
         )
 
+    resolved_route_decision = route_decision or infer_route_decision(
+        command=command,
+        request=user_request or task_name,
+        contract=contract,
+    )
+    route_ok, route_detail = validate_route_decision(
+        resolved_route_decision,
+        contract,
+        command=command,
+    )
+    append_check(checks, "route_decision", route_ok, route_detail)
+
+    downgrade_hints: list[dict] = []
+    for check in checks:
+        if not check["ok"]:
+            downgrade_hints.extend(applicable_downgrade_steps(contract, check["name"]))
+
     return {
         "task_id": str(uuid.uuid4()),
         "skill": skill,
@@ -433,6 +484,8 @@ def preflight_payload(
         "browser_evidence": browser_evidence,
         "retrieval_evidence": retrieval_evidence,
         "file_intake_evidence": file_intake_evidence,
+        "route_decision": resolved_route_decision,
+        "downgrade_hints": downgrade_hints,
         "checks": checks,
         "ok": all(item["ok"] for item in checks),
     }
@@ -524,6 +577,28 @@ def postflight_payload_for_entry(
         append_check(checks, "file_intake_evidence", ok, detail)
     else:
         append_check(checks, "file_intake_evidence", True, "file intake evidence not required")
+
+    route_ok, route_detail = validate_route_decision(
+        harness_meta.get("route_decision"),
+        contract,
+        command=entry.get("command") or [],
+    )
+    append_check(checks, "route_decision", route_ok, route_detail)
+
+    result_contract = contract.get("result_contract") or {}
+    if result_contract.get("required"):
+        result_consistency = infer_result_consistency(entry)
+        ok = not result_consistency["warnings"] and (
+            result_consistency["grounded"] or entry.get("status") in {"failed", "handoff_required"}
+        )
+        append_check(
+            checks,
+            "result_consistency",
+            ok,
+            f"outcome={result_consistency['outcome']} grounded={result_consistency['grounded']} warnings={len(result_consistency['warnings'])}",
+        )
+    else:
+        append_check(checks, "result_consistency", True, "result consistency contract not required")
 
     return {
         "task_id": task_id,

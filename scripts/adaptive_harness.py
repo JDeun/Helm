@@ -46,6 +46,7 @@ def build_preflight(args: argparse.Namespace, *, context_confirmed: bool) -> dic
         browser_evidence=parse_evidence_json(args.browser_evidence_json, label="--browser-evidence-json"),
         retrieval_evidence=parse_evidence_json(args.retrieval_evidence_json, label="--retrieval-evidence-json"),
         file_intake_evidence=parse_evidence_json(args.file_intake_evidence_json, label="--file-intake-evidence-json"),
+        route_decision=parse_evidence_json(args.route_decision_json, label="--route-decision-json"),
     )
 
 
@@ -92,6 +93,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             "browser_evidence": payload["browser_evidence"],
             "retrieval_evidence": payload["retrieval_evidence"],
             "file_intake_evidence": payload["file_intake_evidence"],
+            "route_decision": payload["route_decision"],
         }
     }
     run_cmd = [
@@ -198,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--browser-evidence-json", help="Structured browser evidence JSON recorded in harness metadata.")
     common.add_argument("--retrieval-evidence-json", help="Structured retrieval evidence JSON recorded in harness metadata.")
     common.add_argument("--file-intake-evidence-json", help="Structured file intake evidence JSON recorded in harness metadata.")
+    common.add_argument("--route-decision-json", help="Structured stage/route decision JSON recorded in harness metadata.")
 
     preflight = subparsers.add_parser("preflight", parents=[common], help="Validate a task before execution.")
     preflight.add_argument("command", nargs=argparse.REMAINDER)
