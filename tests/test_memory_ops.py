@@ -219,6 +219,51 @@ class MemoryOpsTests(unittest.TestCase):
             payload = json.loads(result.stdout)
             self.assertEqual(payload["count"], 0)
 
+    def test_memory_coherence_audit_reports_cross_layer_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.create_workspace(root)
+            ledger_entry = {
+                "task_id": "task-1",
+                "task_name": "write durable note",
+                "profile": "workspace_edit",
+                "status": "completed",
+                "memory_capture": {
+                    "relevant": True,
+                    "finalization_status": "capture_written",
+                    "claim_state": {"confidence_hint": "high"},
+                    "review_flags": [],
+                    "supersession": {"state": "refreshes_prior_state", "supersedes_task_ids": ["task-old"]},
+                },
+            }
+            (root / ".helm" / "task-ledger.jsonl").write_text(json.dumps(ledger_entry) + "\n", encoding="utf-8")
+            (root / ".helm" / "memory-operations.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": "memop-1",
+                        "operation": "supersede",
+                        "task_id": "task-missing",
+                        "supersedes": ["task-old"],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".helm" / "crystallized-sessions.jsonl").write_text(
+                json.dumps({"id": "crystal-1", "task_id": "task-missing"}) + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_cli(root, "memory", "audit-coherence", "--json")
+
+            self.assertEqual(result.returncode, 1)
+            payload = json.loads(result.stdout)
+            kinds = {issue["kind"] for issue in payload["issues"]}
+            self.assertIn("memory_review_queue_blocker", kinds)
+            self.assertIn("memory_operation_unknown_task", kinds)
+            self.assertIn("memory_operation_supersedes_unknown_task", kinds)
+            self.assertIn("crystallized_session_unknown_task", kinds)
+
 
 if __name__ == "__main__":
     unittest.main()

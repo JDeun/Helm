@@ -166,6 +166,56 @@ def _review_queue(limit: int) -> list[dict]:
     return review_queue_items(_state_root(), limit)
 
 
+def memory_coherence_issues(state_root: Path) -> list[dict]:
+    tasks = _latest_tasks_for_state(state_root)
+    task_ids = {str(task.get("task_id")) for task in tasks if task.get("task_id")}
+    issues: list[dict] = []
+
+    for item in review_queue_items(state_root, limit=None):
+        issues.append(
+            {
+                "kind": "memory_review_queue_blocker",
+                "task_id": item.get("task_id"),
+                "task_name": item.get("task_name"),
+                "blockers": item.get("blockers", []),
+                "actions": item.get("actions", []),
+            }
+        )
+
+    for row in _read_jsonl(state_root / "memory-operations.jsonl"):
+        operation_id = row.get("id")
+        task_id = row.get("task_id")
+        if task_id and str(task_id) not in task_ids:
+            issues.append(
+                {
+                    "kind": "memory_operation_unknown_task",
+                    "operation_id": operation_id,
+                    "task_id": task_id,
+                }
+            )
+        for superseded in row.get("supersedes") or []:
+            if str(superseded) not in task_ids:
+                issues.append(
+                    {
+                        "kind": "memory_operation_supersedes_unknown_task",
+                        "operation_id": operation_id,
+                        "supersedes": superseded,
+                    }
+                )
+
+    for row in _read_jsonl(state_root / "crystallized-sessions.jsonl"):
+        task_id = row.get("task_id")
+        if task_id and str(task_id) not in task_ids:
+            issues.append(
+                {
+                    "kind": "crystallized_session_unknown_task",
+                    "crystallization_id": row.get("id"),
+                    "task_id": task_id,
+                }
+            )
+    return issues
+
+
 def _record_operation(kind: str, args: argparse.Namespace) -> dict:
     record = {
         "id": f"memop-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
@@ -248,6 +298,21 @@ def cmd_review_queue(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit_coherence(args: argparse.Namespace) -> int:
+    issues = memory_coherence_issues(_state_root())
+    payload = {"ok": not issues, "issue_count": len(issues), "issues": issues}
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0 if payload["ok"] else 1
+    if payload["ok"]:
+        print("Memory coherence audit: ok")
+        return 0
+    print(f"Memory coherence audit: {len(issues)} issue(s)")
+    for issue in issues[: args.limit]:
+        print(f"- {issue['kind']}: {json.dumps(issue, ensure_ascii=False, sort_keys=True)}")
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Typed Helm memory operations and crystallized session artifacts.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -265,6 +330,11 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--limit", type=int, default=20)
     review.add_argument("--json", action="store_true")
     review.set_defaults(func=cmd_review_queue)
+
+    audit = subparsers.add_parser("audit-coherence", help="Audit cross-layer memory operation consistency.")
+    audit.add_argument("--limit", type=int, default=20)
+    audit.add_argument("--json", action="store_true")
+    audit.set_defaults(func=cmd_audit_coherence)
 
     operation = subparsers.add_parser("op", help="Record a typed memory operation.")
     operation.add_argument("operation", choices=["write", "promote", "supersede", "archive", "rollback"])

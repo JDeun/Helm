@@ -351,6 +351,7 @@ helm validate --path examples/demo-workspace
 helm context --path examples/demo-workspace recent-state --limit 5
 helm memory --path examples/demo-workspace pending-captures --limit 5
 helm memory --path examples/demo-workspace review-queue --limit 5
+helm memory --path examples/demo-workspace audit-coherence --json
 helm ops --path examples/demo-workspace capture-state --limit 10
 helm report --path examples/demo-workspace --format markdown
 ```

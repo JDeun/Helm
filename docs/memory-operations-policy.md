@@ -112,6 +112,22 @@ Good initial review triggers include:
 - private-to-shared promotion attempts
 - overwrite or supersession of durable rules
 
+## Coherence Audits
+
+Durable memory work is not complete just because one file was written.
+
+Runtimes should be able to audit whether the visible layers still agree:
+
+- task-ledger memory decisions
+- typed memory operations
+- crystallized session artifacts
+- supersession references
+- review queues
+
+The audit should flag unresolved blockers, operations that point to unknown tasks, crystallized artifacts without source tasks, and supersession links that no longer resolve.
+
+In Helm CLI terms, `helm memory audit-coherence` is the runtime-neutral check for this layer.
+
 ## Scope Boundaries
 
 Memory operations should preserve visibility around scope:

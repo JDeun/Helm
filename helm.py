@@ -1502,7 +1502,11 @@ def cmd_ops(args: argparse.Namespace) -> int:
 def cmd_memory(args: argparse.Namespace) -> int:
     root = target_root(args.path) if args.path else discover_workspace().root
     help_parser = argparse.ArgumentParser(prog="helm memory")
-    help_parser.add_argument("subcommand", nargs="?", help="Supported: pending-captures, review-queue, history, crystallize, op")
+    help_parser.add_argument(
+        "subcommand",
+        nargs="?",
+        help="Supported: pending-captures, review-queue, audit-coherence, history, crystallize, op",
+    )
     if not args.args:
         help_parser.print_help()
         return 0
@@ -1530,7 +1534,7 @@ def cmd_memory(args: argparse.Namespace) -> int:
                 f"name={item['task_name']}"
             )
         return 0
-    if subcommand in {"history", "crystallize", "op", "review-queue"}:
+    if subcommand in {"history", "crystallize", "op", "review-queue", "audit-coherence"}:
         return run_script("memory_ops.py", [subcommand, *remainder], root)
     print(f"Unknown memory subcommand: {subcommand}", file=sys.stderr)
     return 2
