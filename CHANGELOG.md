@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.10
+
+- hardened context source loading and query readers so malformed local state degrades instead of aborting operator inspection
+- tightened local context and memory query paths around corrupted workspace artifacts
+- expanded regression coverage for malformed context and query-state handling
+
 ## 0.5.9
 
 - hardened report and ledger readers so malformed JSONL lines no longer break command-log, task-ledger, or daily-report inspection flows
