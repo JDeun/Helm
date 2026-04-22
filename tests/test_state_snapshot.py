@@ -25,6 +25,12 @@ class StateSnapshotTests(unittest.TestCase):
                 "status": "completed",
                 "finished_at": "2026-04-22T12:00:00+00:00",
                 "memory_capture": {"finalization_status": "capture_planned", "recommended_layers": ["notes"]},
+                "meta": {
+                    "harness": {
+                        "interaction_workflow": {"mode": "converge"},
+                        "skill_relevance": {"verdict": "strong", "score": 60},
+                    }
+                },
             }
 
             meta = write_state_snapshot(task, workspace=workspace, state_root=state_root)
@@ -35,6 +41,8 @@ class StateSnapshotTests(unittest.TestCase):
             self.assertIn("[STATE_SNAPSHOT]", content)
             self.assertIn("- task_id: task-1", content)
             self.assertIn("- objective: demo task", content)
+            self.assertIn("harness=", content)
+            self.assertIn("skill_relevance", content)
 
     def test_finalize_task_links_state_snapshot_in_ledger_entry(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

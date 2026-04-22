@@ -200,6 +200,15 @@ def append_check(checks: list[dict], name: str, ok: bool, detail: str) -> None:
     checks.append({"name": name, "ok": ok, "detail": detail})
 
 
+def skill_relevance_policy(policy: dict) -> dict:
+    validation = policy.get("validation") or {}
+    return {
+        "min_score": int(validation.get("skill_relevance_min_score", 25)),
+        "block_verdicts": [str(item) for item in validation.get("skill_relevance_block_verdicts", ["poor"])],
+        "warn_verdicts": [str(item) for item in validation.get("skill_relevance_warn_verdicts", ["weak"])],
+    }
+
+
 def validate_evidence_payload(
     payload: dict | None,
     required_fields: list[str],
@@ -425,10 +434,20 @@ def preflight_payload(
         task_name=task_name,
         command=command,
     )
-    if skill and skill_relevance["verdict"] == "poor":
+    relevance_policy = skill_relevance_policy(harness_policy)
+    skill_relevance["policy"] = relevance_policy
+    relevance_blocks = (
+        skill
+        and (
+            skill_relevance["score"] < relevance_policy["min_score"]
+            or skill_relevance["verdict"] in relevance_policy["block_verdicts"]
+        )
+    )
+    if relevance_blocks:
         append_check(checks, "skill_relevance", False, skill_relevance["fallback"] or "selected skill is poorly supported")
     else:
-        append_check(checks, "skill_relevance", True, f"verdict={skill_relevance['verdict']} score={skill_relevance['score']}")
+        warning = " warning=review" if skill and skill_relevance["verdict"] in relevance_policy["warn_verdicts"] else ""
+        append_check(checks, "skill_relevance", True, f"verdict={skill_relevance['verdict']} score={skill_relevance['score']}{warning}")
 
     required_task_profiles = set((harness_policy.get("validation") or {}).get("task_name_required_profiles", []))
     if profile in required_task_profiles and not task_name:

@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.5.11</strong></p>
+<p align="center"><strong>Current release: v0.5.12</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -255,7 +255,7 @@ The key design change in the current release is that harness policy is now skill
 - file-oriented workflows can require structured `file_intake_evidence` so parser routing and mismatch handling stay auditable
 - when explicit evidence is missing, the harness can infer minimal browser, retrieval, or file-intake evidence from the task ledger and still force operators to make the escalation path inspectable
 - planning, design, comparison, and drafting requests are tagged with `interaction_workflow` so operators can separate divergence from execution
-- selected skills are scored with `skill_relevance`; poor matches fail preflight instead of forcing a request through the wrong abstraction
+- selected skills are scored with `skill_relevance`; block and warning thresholds are tunable in `references/adaptive_harness_policy.json`
 - `python3 scripts/adaptive_harness.py backfill-evidence` can append inferred evidence to prior runs without rewriting the original ledger history
 - `python3 scripts/run_with_profile.py validate-manifests --json` audits missing or malformed manifests before release
 - `python3 scripts/run_with_profile.py audit-manifest-quality --json` flags contracts that are still too broad, too generic, or missing approval boundaries
@@ -329,6 +329,7 @@ Current Helm releases implement this as a visible `memory_capture` plan in the t
 Operators can also record typed follow-up outcomes through `helm memory op ...`, persist run digests with `helm memory crystallize`, and inspect unresolved review items with `helm memory review-queue`.
 
 Finalized `run_with_profile.py` tasks also write a short markdown handoff artifact under `.helm/state-snapshots/` and link it from the task ledger as `state_snapshot`.
+Snapshots include the task status, memory-capture summary, harness routing metadata, skill relevance, route decision, and evidence presence.
 The next profiled run receives the previous snapshot path through `HELM_PREVIOUS_STATE_SNAPSHOT` and `OPENCLAW_PREVIOUS_STATE_SNAPSHOT`, so OpenClaw-shaped workflows can opt into the same resume hint without Helm directly editing OpenClaw.
 
 ## Installation Notes
@@ -345,7 +346,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.11.md`](docs/releases/0.5.11.md)
+- [`docs/releases/0.5.12.md`](docs/releases/0.5.12.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -370,7 +371,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.5.11 adds explicit state snapshots, divergence/convergence routing metadata, and skill relevance guardrails for safer long-running agent work.
+Helm v0.5.12 makes skill relevance guardrails policy-tunable and enriches state snapshots with harness evidence for better resume quality.
 
 Included:
 

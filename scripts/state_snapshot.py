@@ -47,6 +47,7 @@ def build_state_snapshot(task: dict, *, workspace: Path) -> dict:
     command_preview = task.get("command_preview") or _json_inline(task.get("command") or [])
     checkpoint_id = task.get("checkpoint_id")
     memory_capture = task.get("memory_capture") or {}
+    harness_meta = ((task.get("meta") or {}).get("harness") or {})
     failure_reason = task.get("failure_reason")
     exit_code = task.get("exit_code")
 
@@ -88,6 +89,20 @@ def build_state_snapshot(task: dict, *, workspace: Path) -> dict:
                     "finalization_status": memory_capture.get("finalization_status"),
                     "recommended_layers": memory_capture.get("recommended_layers", []),
                     "event_types": memory_capture.get("event_types", []),
+                }
+            )
+        )
+    if harness_meta:
+        confirmed_facts.append(
+            "harness="
+            + _json_inline(
+                {
+                    "interaction_workflow": harness_meta.get("interaction_workflow"),
+                    "skill_relevance": harness_meta.get("skill_relevance"),
+                    "route_decision": harness_meta.get("route_decision"),
+                    "file_intake_evidence": harness_meta.get("file_intake_evidence"),
+                    "browser_evidence_present": isinstance(harness_meta.get("browser_evidence"), dict),
+                    "retrieval_evidence_present": isinstance(harness_meta.get("retrieval_evidence"), dict),
                 }
             )
         )

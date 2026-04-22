@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.12
+
+- made skill relevance blocking policy-tunable through adaptive harness validation settings
+- enriched state snapshots with harness routing, skill relevance, route decision, and evidence presence details
+
 ## 0.5.11
 
 - added markdown state snapshot artifacts for finalized profiled tasks, linked from the task ledger and inspectable through `helm context state-snapshot`

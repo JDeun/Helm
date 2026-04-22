@@ -40,6 +40,9 @@
     "context_required_at_or_above": "balanced",
     "task_name_required_profiles": ["service_ops", "risky_edit", "remote_handoff"],
     "runtime_target_required_profiles": ["remote_handoff"],
-    "finalization_must_not_be_pending_at_or_above": "balanced"
+    "finalization_must_not_be_pending_at_or_above": "balanced",
+    "skill_relevance_min_score": 25,
+    "skill_relevance_block_verdicts": ["poor"],
+    "skill_relevance_warn_verdicts": ["weak"]
   }
 }

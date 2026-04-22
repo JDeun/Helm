@@ -98,6 +98,35 @@ class AdaptiveHarnessLibTests(unittest.TestCase):
         self.assertEqual(payload["skill_relevance"]["verdict"], "poor")
         self.assertIn("skill_relevance", {check["name"] for check in payload["checks"] if not check["ok"]})
 
+    def test_skill_relevance_policy_can_relax_poor_match_blocking(self) -> None:
+        policy = {
+            "validation": {
+                "skill_relevance_min_score": 0,
+                "skill_relevance_block_verdicts": [],
+                "skill_relevance_warn_verdicts": ["poor"],
+            }
+        }
+        with patch.object(adaptive_harness_lib, "load_harness_policy", return_value=policy):
+            payload = preflight_payload(
+                skill="travel-ops-ko",
+                profile="inspect_local",
+                model=None,
+                model_tier=None,
+                task_name="household ledger",
+                runtime_target=None,
+                user_request="가계부 항목을 정리해",
+                context_confirmed=False,
+                command=["true"],
+                browser_evidence=None,
+                retrieval_evidence=None,
+                file_intake_evidence=None,
+                route_decision=None,
+            )
+
+        failed = {check["name"] for check in payload["checks"] if not check["ok"]}
+        self.assertNotIn("skill_relevance", failed)
+        self.assertEqual(payload["skill_relevance"]["policy"]["min_score"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
