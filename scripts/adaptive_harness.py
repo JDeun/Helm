@@ -94,6 +94,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             "retrieval_evidence": payload["retrieval_evidence"],
             "file_intake_evidence": payload["file_intake_evidence"],
             "route_decision": payload["route_decision"],
+            "interaction_workflow": payload["interaction_workflow"],
+            "skill_relevance": payload["skill_relevance"],
         }
     }
     run_cmd = [

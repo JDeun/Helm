@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.11
+
+- added markdown state snapshot artifacts for finalized profiled tasks, linked from the task ledger and inspectable through `helm context state-snapshot`
+- added previous-snapshot environment hints for subsequent Helm/OpenClaw-shaped runs via `HELM_PREVIOUS_STATE_SNAPSHOT` and `OPENCLAW_PREVIOUS_STATE_SNAPSHOT`
+- added adaptive harness divergence/convergence routing metadata for planning, design, comparison, and drafting requests
+- added skill relevance scoring so poorly matched explicit skills fail preflight instead of being forced onto unrelated requests
+- promoted OpenClaw's file-intake evidence probing into Helm so required local-file evidence can be inferred from existing command paths during backfill
+
 ## 0.5.10
 
 - hardened context source loading and query readers so malformed local state degrades instead of aborting operator inspection

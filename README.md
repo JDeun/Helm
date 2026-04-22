@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.5.10</strong></p>
+<p align="center"><strong>Current release: v0.5.11</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -201,6 +201,13 @@ helm checkpoint list --path ~/.helm/workspace
 helm checkpoint show --path ~/.helm/workspace <checkpoint-id>
 ```
 
+Inspect the latest task handoff snapshot:
+
+```bash
+helm context --path ~/.helm/workspace state-snapshot
+helm context --path ~/.helm/workspace state-snapshot --task-id <task-id> --json
+```
+
 Create and review a draft skill:
 
 ```bash
@@ -246,7 +253,9 @@ The key design change in the current release is that harness policy is now skill
 - browser-heavy workflows can require structured `browser_evidence` in task metadata before the work is treated as complete
 - blocked retrieval workflows can require structured `retrieval_evidence` so escalation exits stay inspectable instead of living only in prose
 - file-oriented workflows can require structured `file_intake_evidence` so parser routing and mismatch handling stay auditable
-- when explicit evidence is missing, the harness can infer a minimal evidence record from the task ledger and still force operators to make the escalation path inspectable
+- when explicit evidence is missing, the harness can infer minimal browser, retrieval, or file-intake evidence from the task ledger and still force operators to make the escalation path inspectable
+- planning, design, comparison, and drafting requests are tagged with `interaction_workflow` so operators can separate divergence from execution
+- selected skills are scored with `skill_relevance`; poor matches fail preflight instead of forcing a request through the wrong abstraction
 - `python3 scripts/adaptive_harness.py backfill-evidence` can append inferred evidence to prior runs without rewriting the original ledger history
 - `python3 scripts/run_with_profile.py validate-manifests --json` audits missing or malformed manifests before release
 - `python3 scripts/run_with_profile.py audit-manifest-quality --json` flags contracts that are still too broad, too generic, or missing approval boundaries
@@ -319,6 +328,9 @@ A meaningful task should leave behind:
 Current Helm releases implement this as a visible `memory_capture` plan in the task ledger. The planner recommends whether `daily_memory`, `long_term_memory`, `ontology`, or human-readable `notes` should be updated next.
 Operators can also record typed follow-up outcomes through `helm memory op ...`, persist run digests with `helm memory crystallize`, and inspect unresolved review items with `helm memory review-queue`.
 
+Finalized `run_with_profile.py` tasks also write a short markdown handoff artifact under `.helm/state-snapshots/` and link it from the task ledger as `state_snapshot`.
+The next profiled run receives the previous snapshot path through `HELM_PREVIOUS_STATE_SNAPSHOT` and `OPENCLAW_PREVIOUS_STATE_SNAPSHOT`, so OpenClaw-shaped workflows can opt into the same resume hint without Helm directly editing OpenClaw.
+
 ## Installation Notes
 
 Local checkout install:
@@ -333,7 +345,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.10.md`](docs/releases/0.5.10.md)
+- [`docs/releases/0.5.11.md`](docs/releases/0.5.11.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -358,7 +370,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.5.10 hardens context loading and query paths so malformed local state degrades gracefully instead of taking down operator-facing views.
+Helm v0.5.11 adds explicit state snapshots, divergence/convergence routing metadata, and skill relevance guardrails for safer long-running agent work.
 
 Included:
 

@@ -11,6 +11,7 @@ __pycache__/
 .pytest_cache/
 
 # Local runtime state
+.helm/
 .openclaw/
 memory/
 skill_drafts/

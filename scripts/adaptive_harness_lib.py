@@ -11,7 +11,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
-from scripts.route_contract_lib import applicable_downgrade_steps, infer_route_decision, validate_route_decision
+from scripts.file_intake_lib import probe_file_intake
+from scripts.route_contract_lib import (
+    applicable_downgrade_steps,
+    infer_interaction_workflow,
+    infer_route_decision,
+    score_skill_relevance,
+    validate_route_decision,
+)
 from scripts.retrieval_policy_lib import build_retrieval_plan
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies as load_manifest_policies
 
@@ -316,19 +323,48 @@ def infer_retrieval_evidence(entry: dict) -> dict | None:
     }
 
 
-def infer_missing_evidence(entry: dict, contract: dict) -> tuple[dict | None, dict | None]:
+def infer_file_intake_evidence(entry: dict) -> dict | None:
+    command = entry.get("command") or []
+    candidates: list[Path] = []
+    for token in command:
+        if not isinstance(token, str):
+            continue
+        if token.startswith("-"):
+            continue
+        expanded = Path(token).expanduser()
+        if not expanded.is_absolute():
+            expanded = WORKSPACE / expanded
+        if expanded.is_file():
+            candidates.append(expanded)
+
+    for candidate in candidates:
+        try:
+            payload = probe_file_intake(candidate)
+        except Exception:
+            continue
+        payload["inferred"] = True
+        payload["inference_source"] = "task_ledger_existing_path"
+        return payload
+    return None
+
+
+def infer_missing_evidence(entry: dict, contract: dict) -> tuple[dict | None, dict | None, dict | None]:
     harness_meta = ((entry.get("meta") or {}).get("harness") or {})
     browser_evidence = harness_meta.get("browser_evidence")
     retrieval_evidence = harness_meta.get("retrieval_evidence")
+    file_intake_evidence = harness_meta.get("file_intake_evidence")
     blob = _command_blob_from_entry(entry)
 
     inferred_browser = None
     inferred_retrieval = None
+    inferred_file_intake = None
     if evidence_requirement_active(contract.get("browser_work") or {}, blob=blob) and not isinstance(browser_evidence, dict):
         inferred_browser = infer_browser_evidence(entry)
     if evidence_requirement_active(contract.get("retrieval_policy") or {}, blob=blob) and not isinstance(retrieval_evidence, dict):
         inferred_retrieval = infer_retrieval_evidence(entry)
-    return inferred_browser, inferred_retrieval
+    if evidence_requirement_active(contract.get("file_intake") or {}, blob=blob) and not isinstance(file_intake_evidence, dict):
+        inferred_file_intake = infer_file_intake_evidence(entry)
+    return inferred_browser, inferred_retrieval, inferred_file_intake
 
 
 def infer_result_consistency(entry: dict) -> dict:
@@ -380,6 +416,19 @@ def preflight_payload(
         append_check(checks, "skill_profile", False, f"{skill} does not allow profile {profile}")
     else:
         append_check(checks, "skill_profile", True, "profile allowed for skill")
+
+    skill_relevance = score_skill_relevance(
+        skill=skill,
+        profile=profile,
+        contract=contract,
+        request=user_request,
+        task_name=task_name,
+        command=command,
+    )
+    if skill and skill_relevance["verdict"] == "poor":
+        append_check(checks, "skill_relevance", False, skill_relevance["fallback"] or "selected skill is poorly supported")
+    else:
+        append_check(checks, "skill_relevance", True, f"verdict={skill_relevance['verdict']} score={skill_relevance['score']}")
 
     required_task_profiles = set((harness_policy.get("validation") or {}).get("task_name_required_profiles", []))
     if profile in required_task_profiles and not task_name:
@@ -472,6 +521,12 @@ def preflight_payload(
     )
     append_check(checks, "route_decision", route_ok, route_detail)
 
+    interaction_workflow = infer_interaction_workflow(
+        request=user_request,
+        task_name=task_name,
+        command=command,
+    )
+
     downgrade_hints: list[dict] = []
     for check in checks:
         if not check["ok"]:
@@ -491,6 +546,8 @@ def preflight_payload(
         "retrieval_evidence": retrieval_evidence,
         "file_intake_evidence": file_intake_evidence,
         "route_decision": resolved_route_decision,
+        "interaction_workflow": interaction_workflow,
+        "skill_relevance": skill_relevance,
         "downgrade_hints": downgrade_hints,
         "checks": checks,
         "ok": all(item["ok"] for item in checks),
@@ -666,14 +723,14 @@ def ensure_task_evidence(task_id: str, contract: dict) -> dict | None:
     entry = latest_task_entry(task_id)
     if entry is None:
         return None
-    inferred_browser, inferred_retrieval = infer_missing_evidence(entry, contract)
-    if inferred_browser is None and inferred_retrieval is None:
+    inferred_browser, inferred_retrieval, inferred_file_intake = infer_missing_evidence(entry, contract)
+    if inferred_browser is None and inferred_retrieval is None and inferred_file_intake is None:
         return entry
     return record_task_evidence(
         task_id,
         browser_evidence=inferred_browser,
         retrieval_evidence=inferred_retrieval,
-        file_intake_evidence=None,
+        file_intake_evidence=inferred_file_intake,
     )
 
 
@@ -707,6 +764,7 @@ def backfill_task_evidence(
     updated = 0
     browser_backfilled = 0
     retrieval_backfilled = 0
+    file_intake_backfilled = 0
     skipped_without_contract = 0
     skipped_without_active_requirement = 0
     skipped_without_inference = 0
@@ -725,21 +783,23 @@ def backfill_task_evidence(
         if not any(requirements.values()):
             skipped_without_active_requirement += 1
             continue
-        inferred_browser, inferred_retrieval = infer_missing_evidence(entry, contract)
-        if inferred_browser is None and inferred_retrieval is None:
+        inferred_browser, inferred_retrieval, inferred_file_intake = infer_missing_evidence(entry, contract)
+        if inferred_browser is None and inferred_retrieval is None and inferred_file_intake is None:
             skipped_without_inference += 1
             continue
         record_task_evidence(
             task_id,
             browser_evidence=inferred_browser,
             retrieval_evidence=inferred_retrieval,
-            file_intake_evidence=None,
+            file_intake_evidence=inferred_file_intake,
         )
         updated += 1
         if inferred_browser is not None:
             browser_backfilled += 1
         if inferred_retrieval is not None:
             retrieval_backfilled += 1
+        if inferred_file_intake is not None:
+            file_intake_backfilled += 1
         touched_task_ids.append(task_id)
 
     return {
@@ -747,6 +807,7 @@ def backfill_task_evidence(
         "updated": updated,
         "browser_backfilled": browser_backfilled,
         "retrieval_backfilled": retrieval_backfilled,
+        "file_intake_backfilled": file_intake_backfilled,
         "skipped_without_contract": skipped_without_contract,
         "skipped_without_active_requirement": skipped_without_active_requirement,
         "skipped_without_inference": skipped_without_inference,

@@ -15,6 +15,7 @@ from helm_context import adopt_context_source, configured_context_sources, load_
 from helm_workspace import DEFAULT_WORKSPACE, detect_layout, discover_workspace, resolve_nested_workspace, suggest_external_sources
 from scripts.memory_ops import review_queue_items
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies, manifest_audit
+from scripts.state_snapshot import latest_snapshot_path
 
 
 ROOT = Path(__file__).resolve().parent
@@ -505,6 +506,38 @@ def build_recent_state_payload(root: Path, limit: int, *, pending_only: bool = F
         "pending_only": pending_only,
         "count": len(items),
         "items": items,
+    }
+
+
+def build_state_snapshot_payload(root: Path, task_id: str | None = None) -> dict:
+    state_root = state_root_for(root)
+    tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
+    target = None
+    if task_id:
+        target = next((task for task in tasks if task.get("task_id") == task_id), None)
+    elif tasks:
+        target = next((task for task in reversed(tasks) if task.get("state_snapshot")), None)
+
+    snapshot_meta = (target or {}).get("state_snapshot") or {}
+    snapshot_path = None
+    if snapshot_meta.get("path"):
+        snapshot_path = root / snapshot_meta["path"]
+    elif not task_id:
+        snapshot_path = latest_snapshot_path(state_root)
+
+    content = None
+    if snapshot_path and snapshot_path.exists():
+        try:
+            content = snapshot_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            _warn_parse_failure(snapshot_path, str(exc))
+
+    return {
+        "workspace": str(root),
+        "task": target,
+        "snapshot": snapshot_meta or None,
+        "snapshot_path": str(snapshot_path) if snapshot_path else None,
+        "content": content,
     }
 
 
@@ -1440,6 +1473,20 @@ def cmd_context(args: argparse.Namespace) -> int:
                     f"finalization={item['finalization_status']} confidence={item['claim_state'].get('confidence_hint', '-')} "
                     f"retention={item['retention'].get('tier', '-')} review_flags={len(item['review_flags'])} name={item['task_name']}"
                 )
+            return 0
+        if subcommand == "state-snapshot":
+            parser = argparse.ArgumentParser(prog="helm context state-snapshot")
+            parser.add_argument("--task-id")
+            parser.add_argument("--json", action="store_true")
+            parsed = parser.parse_args(remainder)
+            payload = build_state_snapshot_payload(root, parsed.task_id)
+            if parsed.json:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
+                return 0
+            if not payload["content"]:
+                print("No state snapshot found.")
+                return 0
+            print(payload["content"], end="" if payload["content"].endswith("\n") else "\n")
             return 0
     return run_script("ops_memory_query.py", args.args, root)
 

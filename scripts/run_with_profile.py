@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 from helm_workspace import get_workspace_layout
 from scripts.memory_capture import build_memory_capture_plan
+from scripts.state_snapshot import latest_snapshot_path, write_state_snapshot
 from scripts.skill_manifest_lib import (
     load_skill_policies as load_manifest_policies,
     load_skill_contract_manifests,
@@ -33,6 +34,7 @@ POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"
 CHECKPOINT_SCRIPT = WORKSPACE / "scripts" / "workspace_checkpoint.py"
 TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
 CHECKPOINT_INDEX = get_workspace_layout().checkpoints_root / "index.json"
+STATE_ROOT = get_workspace_layout().state_root
 
 
 def utc_now_iso() -> str:
@@ -114,6 +116,10 @@ def append_ledger(entry: dict) -> None:
 
 def finalize_task(task: dict) -> None:
     task["memory_capture"] = build_memory_capture_plan(task)
+    try:
+        task["state_snapshot"] = write_state_snapshot(task, workspace=WORKSPACE, state_root=STATE_ROOT)
+    except OSError as exc:
+        task["state_snapshot_error"] = str(exc)
     append_ledger(task)
 
 
@@ -367,7 +373,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         task["finished_at"] = utc_now_iso()
         task["failure_stage"] = "checkpoint"
         task["failure_reason"] = checkpoint["error"]
-        append_ledger(task)
+        finalize_task(task)
         return 1
     if checkpoint:
         task["checkpoint_id"] = checkpoint.get("checkpoint_id")
@@ -414,6 +420,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     child_env["HELM_TASK_ID"] = task["task_id"]
     child_env["HELM_TASK_PROFILE"] = str(task["profile"])
     child_env["OPENCLAW_TASK_ID"] = task["task_id"]
+    previous_snapshot = latest_snapshot_path(STATE_ROOT)
+    if previous_snapshot:
+        child_env["HELM_PREVIOUS_STATE_SNAPSHOT"] = str(previous_snapshot)
+        child_env["OPENCLAW_PREVIOUS_STATE_SNAPSHOT"] = str(previous_snapshot)
+        task["previous_state_snapshot"] = str(previous_snapshot)
     if task.get("skill"):
         child_env["HELM_TASK_SKILL"] = str(task["skill"])
         child_env["OPENCLAW_TASK_SKILL"] = str(task["skill"])
