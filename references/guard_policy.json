@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "default_guard_mode": "enforce",
+  "approval_flag": "--approve-risk",
+  "absolute_deny": [
+    {"id": "deny.rm_root", "description": "Block recursive deletion of filesystem root", "patterns": ["rm -rf /", "rm -rf /*", "sudo rm -rf /", "sudo rm -rf /*"]},
+    {"id": "deny.rm_home", "description": "Block recursive deletion of home directory", "patterns": ["rm -rf ~", "rm -rf $HOME", "rm -rf \"$HOME\"", "sudo rm -rf ~"]},
+    {"id": "deny.rm_parent_escape", "description": "Block recursive deletion escaping parent directories", "patterns": ["rm -rf ../..", "rm -rf ../../.."]},
+    {"id": "deny.dd_device", "description": "Block raw device writes via dd", "patterns": ["dd if=", "sudo dd if="]},
+    {"id": "deny.mkfs", "description": "Block filesystem format commands", "patterns": ["mkfs", "diskutil eraseDisk", "sudo mkfs"]},
+    {"id": "deny.fork_bomb", "description": "Block fork bomb patterns", "patterns": [":(){ :|:& };:", ":(){ :|:& };"]},
+    {"id": "deny.chmod_root", "description": "Block recursive permission change on root", "patterns": ["chmod -R 777 /", "sudo chmod -R 777 /"]},
+    {"id": "deny.sudo_destructive", "description": "Block sudo combined with destructive operations", "patterns": ["sudo rm -rf", "sudo dd", "sudo mkfs"]},
+    {"id": "deny.format_disk_win", "description": "Block Windows disk format commands", "patterns": ["format C:", "format D:", "diskpart"]},
+    {"id": "deny.del_system_win", "description": "Block Windows system directory deletion", "patterns": ["del /s /q C:\\Windows", "rmdir /s /q C:\\Windows", "del /s /q C:\\"]}
+  ],
+  "require_approval": [
+    {"id": "risk.rm_recursive_workspace", "description": "Recursive delete within workspace", "patterns": ["rm -rf"], "recommended_profile": "risky_edit"},
+    {"id": "risk.find_delete", "description": "Find with delete action", "patterns": ["find . -delete", "find . -exec rm"], "recommended_profile": "risky_edit"},
+    {"id": "risk.git_clean", "description": "Destructive git clean", "patterns": ["git clean -fd", "git clean -fdx"], "recommended_profile": "risky_edit"},
+    {"id": "risk.git_reset_hard", "description": "Hard git reset", "patterns": ["git reset --hard"], "recommended_profile": "risky_edit"},
+    {"id": "risk.chmod_recursive", "description": "Recursive permission change", "patterns": ["chmod -R"], "recommended_profile": "risky_edit"},
+    {"id": "risk.chown_recursive", "description": "Recursive ownership change", "patterns": ["chown -R"], "recommended_profile": "risky_edit"},
+    {"id": "risk.curl_pipe_shell", "description": "Download and execute pattern", "patterns": ["curl|sh", "curl|bash", "wget|sh", "wget|bash"], "recommended_profile": "service_ops"},
+    {"id": "risk.sudo", "description": "Elevated privilege command", "patterns": ["sudo"], "recommended_profile": "risky_edit"},
+    {"id": "risk.remote_shell", "description": "Remote shell execution", "patterns": ["ssh"], "recommended_profile": "remote_handoff"},
+    {"id": "risk.docker_prune", "description": "Docker destructive cleanup", "patterns": ["docker system prune", "docker volume prune"], "recommended_profile": "risky_edit"},
+    {"id": "risk.package_install", "description": "Package installation", "patterns": ["pip install", "npm install", "brew install", "apt install", "apt-get install"], "recommended_profile": "service_ops"},
+    {"id": "risk.del_recursive_win", "description": "Windows recursive delete", "patterns": ["del /s", "rmdir /s"], "recommended_profile": "risky_edit"}
+  ],
+  "profile_rules": {
+    "inspect_local": {"writes_allowed": false, "network_allowed": false, "on_write": "deny", "on_network": "deny"},
+    "workspace_edit": {"writes_allowed": true, "network_allowed": false, "on_network": "deny", "on_destructive": "require_approval"},
+    "risky_edit": {"writes_allowed": true, "network_allowed": false, "on_destructive": "require_approval"},
+    "service_ops": {"writes_allowed": true, "network_allowed": true, "on_destructive": "require_approval"},
+    "remote_handoff": {"handoff_required": true, "on_execute": "require_approval"}
+  }
+}
