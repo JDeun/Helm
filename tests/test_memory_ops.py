@@ -36,6 +36,7 @@ def create_workspace(root: Path) -> None:
 def run_cli(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["HELM_WORKSPACE"] = str(workspace)
+    env["PYTHONPATH"] = str(REPO_ROOT)
     return subprocess.run(
         [sys.executable, str(REPO_ROOT / "helm.py"), *args],
         capture_output=True,

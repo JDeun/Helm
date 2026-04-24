@@ -19,3 +19,6 @@ py-modules = ["helm", "helm_workspace", "helm_context"]
 
 [tool.setuptools.packages.find]
 include = ["scripts", "commands"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
