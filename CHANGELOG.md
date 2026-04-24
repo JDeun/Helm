@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Added — Helm 2.0: Runtime Guard & Provider-Agnostic Memory Index
+
+- **Command Guard**: deterministic command classification and risk scoring before execution (`scripts/command_guard.py`)
+  - Absolute deny rules for catastrophic commands (`rm -rf /`, `dd` to device, `mkfs`, fork bombs)
+  - Profile compatibility enforcement: `inspect_local` blocks writes/network, `workspace_edit` blocks network
+  - Risk score calculation with configurable thresholds
+  - `--guard-mode {enforce,audit,off}` and `--approve-risk` CLI flags
+  - Guard policy file at `references/guard_policy.json`
+- **Provider-Agnostic Discovery**: detect any LLM provider without calling APIs (`scripts/model_provider_probe.py`, `scripts/discovery.py`)
+  - API provider detection via environment variable presence (OpenAI, Anthropic, Gemini, OpenRouter, Azure, Bedrock, Vertex, Mistral, Groq, Together, Fireworks, Cohere, DeepSeek, xAI)
+  - Local provider detection via short-timeout endpoint probes (Ollama, LM Studio, llama.cpp, vLLM)
+  - Separate `runtime_model_state` and `helm_intelligence_state` concepts
+  - Hardware profile detection (OS, architecture, memory, Apple Silicon)
+- **SQLite Query Index**: read-only index over JSONL source of truth (`scripts/ops_db.py`)
+  - `helm db init/rebuild/verify/status` subcommands
+  - Best-effort index updates after task execution
+  - JSONL remains the append-only source of truth
+- **Atomic JSONL Append**: cross-platform file-locking JSONL writer (`scripts/state_io.py`)
+- **Extended `helm doctor`**: Discovery, Hardware, Runtime model state, Helm intelligence state, Guard, and Ops DB sections
+- **Intelligence Tier Skeleton**: documented L0-L4 extension points (`scripts/intelligence_tier.py`)
+
+### Changed
+
+- Migrated all tests from `unittest.TestCase` to pytest function style
+- Split `helm.py` into `commands/` package for single-responsibility modules
+- `run_with_profile.py` now evaluates command guard before `subprocess.run()`
+- Task ledger entries now include `guard` and `discovery` payloads
+
 ## 0.5.12
 
 - made skill relevance blocking policy-tunable through adaptive harness validation settings
