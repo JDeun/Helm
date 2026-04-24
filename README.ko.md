@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v2.0.0</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.6.0</strong></p>
 
 <p align="center">
   <a href="README.md">English README</a>
@@ -224,7 +224,7 @@ helm report --path ~/.helm/workspace --format markdown
 
 ## 명령 가드
 
-Helm 2.0은 모든 명령 실행 전에 결정론적 명령 가드를 평가합니다:
+Helm은 모든 명령 실행 전에 결정론적 명령 가드를 평가합니다:
 
 - **절대 차단**: `rm -rf /` 같은 치명적 명령은 항상 차단됩니다
 - **프로파일 강제**: `inspect_local`은 쓰기/네트워크를 차단하고, `workspace_edit`은 네트워크를 차단합니다

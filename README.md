@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v2.0.0</strong></p>
+<p align="center"><strong>Current release: v0.6.0</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -233,7 +233,7 @@ helm report --path ~/.helm/workspace --format markdown
 
 ## Command Guard
 
-Helm 2.0 includes a deterministic command guard that evaluates every command before execution:
+Helm includes a deterministic command guard that evaluates every command before execution:
 
 - **Absolute deny**: Catastrophic commands like `rm -rf /` are always blocked
 - **Profile enforcement**: `inspect_local` blocks writes and network access; `workspace_edit` blocks network

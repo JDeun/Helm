@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-### Added — Helm 2.0: Runtime Guard & Provider-Agnostic Memory Index
+## [0.6.0] — 2026-04-24
+
+### Added — Runtime Guard & Provider-Agnostic Memory Index
 
 - **Command Guard**: deterministic command classification and risk scoring before execution (`scripts/command_guard.py`)
   - Absolute deny rules for catastrophic commands (`rm -rf /`, `dd` to device, `mkfs`, fork bombs)
