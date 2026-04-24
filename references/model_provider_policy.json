@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "default_cloud_calls_enabled": false,
+  "default_local_model_calls_enabled": false,
+  "provider_priority_policy": "runtime_defined",
+  "api_provider_env_registry": {
+    "openai": ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_API_BASE"],
+    "anthropic": ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
+    "google_gemini": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+    "openrouter": ["OPENROUTER_API_KEY"],
+    "azure_openai": ["AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT"],
+    "aws_bedrock": ["AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_REGION"],
+    "google_vertex": ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_PROJECT_ID"],
+    "mistral": ["MISTRAL_API_KEY"],
+    "groq": ["GROQ_API_KEY"],
+    "together": ["TOGETHER_API_KEY"],
+    "fireworks": ["FIREWORKS_API_KEY"],
+    "cohere": ["COHERE_API_KEY"],
+    "deepseek": ["DEEPSEEK_API_KEY"],
+    "xai": ["XAI_API_KEY"]
+  },
+  "local_provider_endpoint_registry": {
+    "ollama": "http://localhost:11434/api/tags",
+    "lm_studio": "http://localhost:1234/v1/models",
+    "llama_cpp": "http://localhost:8080/v1/models",
+    "vllm": "http://localhost:8000/v1/models"
+  }
+}
