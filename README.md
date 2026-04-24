@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.5.12</strong></p>
+<p align="center"><strong>Current release: v2.0.0</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -26,6 +26,9 @@
   <a href="#quick-start">Quick Start</a> ·
   <a href="#onboarding-and-workspace-model">Onboarding</a> ·
   <a href="#core-commands">Core Commands</a> ·
+  <a href="#command-guard">Command Guard</a> ·
+  <a href="#provider-discovery">Provider Discovery</a> ·
+  <a href="#operations-database">Operations Database</a> ·
   <a href="#adaptive-harness">Adaptive Harness</a> ·
   <a href="#skill-quality-and-policy">Skill Quality</a> ·
   <a href="#docs-and-demo">Docs and Demo</a>
@@ -227,6 +230,56 @@ Generate operational summaries:
 helm status --path ~/.helm/workspace --verbose
 helm report --path ~/.helm/workspace --format markdown
 ```
+
+## Command Guard
+
+Helm 2.0 includes a deterministic command guard that evaluates every command before execution:
+
+- **Absolute deny**: Catastrophic commands like `rm -rf /` are always blocked
+- **Profile enforcement**: `inspect_local` blocks writes and network access; `workspace_edit` blocks network
+- **Risk scoring**: Commands receive a risk score (0.0–1.0) based on detected categories
+- **Approval workflow**: Risky commands require `--approve-risk` to proceed
+
+```bash
+# Guard blocks dangerous commands
+helm profile run inspect_local -- rm -rf build
+# GUARD DENY: write detected under inspect_local
+
+# Override with approval for known-risky operations
+helm profile run risky_edit --approve-risk -- rm -rf build
+
+# Audit mode records but does not block
+helm profile run workspace_edit --guard-mode audit -- curl https://example.com
+
+# Check guard decision without running
+helm profile run workspace_edit --guard-json -- rm -rf build
+```
+
+Guard modes: `enforce` (default), `audit` (record only), `off` (disabled but recorded).
+
+## Provider Discovery
+
+Helm detects available LLM providers without calling any API:
+
+- **API providers**: Detected by environment variable presence (Anthropic, OpenAI, Gemini, OpenRouter, Azure, Bedrock, Vertex, and more)
+- **Local providers**: Detected by short-timeout endpoint probe (Ollama, LM Studio, llama.cpp, vLLM)
+- **No API calls**: Provider detection never sends requests to cloud APIs
+- **No secrets stored**: API key values are never logged or persisted
+
+Run `helm doctor` to see the full discovery report.
+
+## Operations Database
+
+Helm maintains a SQLite query index over the JSONL task ledger:
+
+```bash
+helm db init              # Create the SQLite index
+helm db rebuild           # Rebuild from JSONL source files
+helm db verify            # Check for JSONL/SQLite drift
+helm db status            # Show index statistics
+```
+
+JSONL remains the append-only source of truth. SQLite failures never block command execution.
 
 ## Adaptive Harness
 

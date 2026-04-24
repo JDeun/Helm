@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.5.10</strong></p>
+<p align="center"><strong>현재 릴리즈: v2.0.0</strong></p>
 
 <p align="center">
   <a href="README.md">English README</a>
@@ -26,6 +26,9 @@
   <a href="#quick-start">Quick Start</a> ·
   <a href="#온보딩과-workspace-모델">온보딩</a> ·
   <a href="#핵심-명령">핵심 명령</a> ·
+  <a href="#명령-가드">명령 가드</a> ·
+  <a href="#프로바이더-탐지">프로바이더 탐지</a> ·
+  <a href="#운영-데이터베이스">운영 데이터베이스</a> ·
   <a href="#adaptive-harness">Adaptive Harness</a> ·
   <a href="#스킬-품질과-운영-정책">스킬 품질</a> ·
   <a href="#문서와-데모">문서와 데모</a>
@@ -218,6 +221,56 @@ helm skill-approve --path ~/.helm/workspace --name example-skill --dry-run
 helm status --path ~/.helm/workspace --verbose
 helm report --path ~/.helm/workspace --format markdown
 ```
+
+## 명령 가드
+
+Helm 2.0은 모든 명령 실행 전에 결정론적 명령 가드를 평가합니다:
+
+- **절대 차단**: `rm -rf /` 같은 치명적 명령은 항상 차단됩니다
+- **프로파일 강제**: `inspect_local`은 쓰기/네트워크를 차단하고, `workspace_edit`은 네트워크를 차단합니다
+- **위험 점수**: 명령은 감지된 카테고리에 따라 위험 점수(0.0–1.0)를 받습니다
+- **승인 워크플로우**: 위험한 명령은 `--approve-risk`를 필요로 합니다
+
+```bash
+# 가드가 위험한 명령을 차단합니다
+helm profile run inspect_local -- rm -rf build
+# GUARD DENY: write detected under inspect_local
+
+# 알려진 위험 작업에 대해 승인으로 재정의
+helm profile run risky_edit --approve-risk -- rm -rf build
+
+# 감사 모드는 기록만 하고 차단하지 않습니다
+helm profile run workspace_edit --guard-mode audit -- curl https://example.com
+
+# 실행 없이 가드 결정 확인
+helm profile run workspace_edit --guard-json -- rm -rf build
+```
+
+가드 모드: `enforce` (기본값), `audit` (기록만), `off` (비활성화하되 기록).
+
+## 프로바이더 탐지
+
+Helm은 API를 호출하지 않고 사용 가능한 LLM 프로바이더를 감지합니다:
+
+- **API 프로바이더**: 환경 변수 존재 여부로 감지 (Anthropic, OpenAI, Gemini, OpenRouter, Azure, Bedrock, Vertex 등)
+- **로컬 프로바이더**: 짧은 타임아웃 엔드포인트 프로브로 감지 (Ollama, LM Studio, llama.cpp, vLLM)
+- **API 호출 없음**: 프로바이더 감지는 클라우드 API에 요청을 보내지 않습니다
+- **시크릿 저장 없음**: API 키 값은 로깅이나 저장되지 않습니다
+
+전체 디스커버리 보고서를 보려면 `helm doctor`를 실행하세요.
+
+## 운영 데이터베이스
+
+Helm은 JSONL 작업 원장에 대한 SQLite 쿼리 인덱스를 유지합니다:
+
+```bash
+helm db init              # SQLite 인덱스 생성
+helm db rebuild           # JSONL 소스 파일에서 재빌드
+helm db verify            # JSONL/SQLite 드리프트 확인
+helm db status            # 인덱스 통계 표시
+```
+
+JSONL은 추가 전용 진실 소스(source of truth)로 유지됩니다. SQLite 실패는 명령 실행을 차단하지 않습니다.
 
 ## Adaptive Harness
 
