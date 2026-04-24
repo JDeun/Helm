@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.ops_db import db_path_for_state_root, init_db, rebuild_index, index_task_entry, verify_index
+from scripts.ops_db import db_path_for_state_root, init_db, rebuild_index, index_task_entry, verify_index, query_tasks, query_guard_decisions, _connect
 
 
 def test_init_db_creates_schema(tmp_path: Path) -> None:
@@ -110,3 +110,106 @@ def test_sqlite_failure_does_not_delete_jsonl(tmp_path: Path) -> None:
 def test_db_path_for_state_root(tmp_path: Path) -> None:
     result = db_path_for_state_root(tmp_path / ".helm")
     assert result == tmp_path / ".helm" / "ops-index.sqlite3"
+
+
+def test_streaming_rebuild_large_file(tmp_path: Path) -> None:
+    """Rebuild should work with streaming, not load entire file into memory."""
+    state_root = tmp_path / ".helm"
+    state_root.mkdir()
+    ledger = state_root / "task-ledger.jsonl"
+    with ledger.open("w", encoding="utf-8") as f:
+        for i in range(100):
+            f.write(json.dumps({"task_id": f"task-{i:04d}", "status": "completed", "profile": "inspect_local"}) + "\n")
+    result = rebuild_index(state_root=state_root)
+    assert result["task_rows"] == 100
+
+
+def test_query_tasks_filter_by_status(tmp_path: Path) -> None:
+    state_root = tmp_path / ".helm"
+    state_root.mkdir()
+    ledger = state_root / "task-ledger.jsonl"
+    entries = [
+        {"task_id": "t1", "status": "completed", "profile": "inspect_local"},
+        {"task_id": "t2", "status": "failed", "profile": "workspace_edit"},
+        {"task_id": "t3", "status": "completed", "profile": "workspace_edit"},
+    ]
+    ledger.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
+    rebuild_index(state_root=state_root)
+    failed = query_tasks(state_root=state_root, status="failed")
+    assert len(failed) == 1
+    assert failed[0]["task_id"] == "t2"
+
+
+def test_query_tasks_filter_by_profile(tmp_path: Path) -> None:
+    state_root = tmp_path / ".helm"
+    state_root.mkdir()
+    ledger = state_root / "task-ledger.jsonl"
+    entries = [
+        {"task_id": "t1", "status": "completed", "profile": "inspect_local"},
+        {"task_id": "t2", "status": "failed", "profile": "workspace_edit"},
+    ]
+    ledger.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
+    rebuild_index(state_root=state_root)
+    ws_tasks = query_tasks(state_root=state_root, profile="workspace_edit")
+    assert len(ws_tasks) == 1
+
+
+def test_query_guard_decisions_filter_by_action(tmp_path: Path) -> None:
+    state_root = tmp_path / ".helm"
+    state_root.mkdir()
+    db = db_path_for_state_root(state_root)
+    init_db(db)
+    entries = [
+        {"task_id": "t1", "guard": {"action": "deny", "risk_score": 1.0, "selected_profile": "inspect_local", "matched_rules": ["deny.rm_root"], "reasons": ["abs deny"], "classification": {}}},
+        {"task_id": "t2", "guard": {"action": "allow", "risk_score": 0.0, "selected_profile": "inspect_local", "matched_rules": [], "reasons": [], "classification": {}}},
+    ]
+    for e in entries:
+        index_task_entry(state_root=state_root, entry=e, source_file="test.jsonl", source_line=1)
+    deny_decisions = query_guard_decisions(state_root=state_root, action="deny")
+    assert len(deny_decisions) == 1
+    assert deny_decisions[0]["action"] == "deny"
+
+
+def test_auto_uuid_for_null_task_id(tmp_path: Path) -> None:
+    state_root = tmp_path / ".helm"
+    state_root.mkdir()
+    db = db_path_for_state_root(state_root)
+    init_db(db)
+    index_task_entry(state_root=state_root, entry={"task_id": None, "status": "completed"}, source_file="test.jsonl")
+    index_task_entry(state_root=state_root, entry={"task_id": None, "status": "failed"}, source_file="test.jsonl")
+    conn = sqlite3.connect(str(db))
+    rows = conn.execute("SELECT task_id FROM task_index").fetchall()
+    conn.close()
+    ids = [r[0] for r in rows]
+    assert len(ids) == 2
+    assert ids[0] != ids[1]
+    assert all(tid.startswith("auto-") for tid in ids)
+
+
+def test_connect_helper_sets_pragmas(tmp_path: Path) -> None:
+    db = tmp_path / "test.sqlite3"
+    init_db(db)
+    conn = _connect(db)
+    journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+    busy_timeout = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+    conn.close()
+    assert journal_mode == "wal"
+    assert busy_timeout == 5000
+
+
+def test_indexing_failure_warns_once(tmp_path: Path, capsys) -> None:
+    """index_task_entry should warn once on failure, then be silent."""
+    import scripts.ops_db as ops_db_mod
+    ops_db_mod._INDEX_FAILURE_WARNED = False
+    state_root = tmp_path / ".helm"
+    state_root.mkdir()
+    db = db_path_for_state_root(state_root)
+    db.mkdir(parents=True)
+    import warnings
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        index_task_entry(state_root=state_root, entry={"task_id": "t1"}, source_file="test.jsonl")
+        index_task_entry(state_root=state_root, entry={"task_id": "t2"}, source_file="test.jsonl")
+    sqlite_warnings = [x for x in w if "SQLite indexing failed" in str(x.message)]
+    assert len(sqlite_warnings) <= 1
+    ops_db_mod._INDEX_FAILURE_WARNED = False
