@@ -393,56 +393,57 @@ def cmd_run(args: argparse.Namespace) -> int:
         task["checkpoint_id"] = checkpoint.get("checkpoint_id")
         task["checkpoint_label"] = checkpoint.get("label")
 
-    if config["backend"] == "manual-remote":
-        if not args.runtime_target:
-            task["status"] = "failed"
-            task["finished_at"] = utc_now_iso()
-            task["failure_stage"] = "handoff"
-            task["failure_reason"] = "remote_handoff requires --runtime-target"
-            finalize_task(task)
-            print("remote_handoff requires --runtime-target", file=sys.stderr)
-            return 2
-        task["status"] = "handoff_required"
-        task["finished_at"] = utc_now_iso()
-        finalize_task(task)
-        print(
-            json.dumps(
-                {
-                    "task_id": task["task_id"],
-                    "status": task["status"],
-                    "runtime_target": args.runtime_target,
-                    "runtime_note": args.runtime_note,
-                    "command_preview": task["command_preview"],
-                },
-                indent=2,
-                ensure_ascii=False,
-            )
-        )
-        return 0
-
-    if args.profile == "service_ops" and not args.task_name:
-        print(
-            "service_ops should include --task-name so the ledger stays readable.",
-            file=sys.stderr,
-        )
-
-    # --- Guard evaluation ---
+    # --- Guard evaluation (before any backend check) ---
+    guard_mode_source = "cli" if getattr(args, "guard_mode", None) else "env"
     guard_mode = getattr(args, "guard_mode", None) or os.environ.get("HELM_GUARD_MODE", "enforce")
     guard_decision = None
 
+    if guard_mode == "off" and guard_mode_source == "env":
+        print("WARNING: Guard disabled via HELM_GUARD_MODE environment variable", file=sys.stderr)
+
     if guard_mode != "off":
-        guard_decision = evaluate_command_guard(
-            command=command,
-            selected_profile=args.profile,
-            profiles=profiles,
-            workspace=WORKSPACE,
-            task_name=getattr(args, "task_name", None),
-        )
+        try:
+            guard_decision = evaluate_command_guard(
+                command=command,
+                selected_profile=args.profile,
+                profiles=profiles,
+                workspace=WORKSPACE,
+                task_name=getattr(args, "task_name", None),
+                task_goal=getattr(args, "task_goal", None),
+            )
+        except Exception as exc:
+            print(f"WARNING: Guard evaluation failed: {exc}. Defaulting to require_approval.", file=sys.stderr)
+            from scripts.command_guard import GuardDecision, CommandClassification
+            guard_decision = GuardDecision(
+                action="require_approval",
+                risk_score=0.5,
+                score_breakdown={"guard_error": 0.5},
+                selected_profile=args.profile,
+                recommended_profile=None,
+                reasons=[f"guard evaluation error: {exc}"],
+                matched_rules=[],
+                classification=CommandClassification(
+                    normalized_command=" ".join(command),
+                    argv=command,
+                    shell_wrapped=False,
+                    shell_inner_command=None,
+                    categories=["unknown"],
+                    matched_rules=[],
+                    writes_detected=False,
+                    network_detected=False,
+                    destructive_detected=False,
+                    privilege_detected=False,
+                    remote_detected=False,
+                ),
+                approval_required=True,
+                approval_hint="--approve-risk",
+            )
 
     task["guard"] = (
         decision_to_json(guard_decision) if guard_decision
         else {"enabled": False, "mode": guard_mode}
     )
+    task["guard"]["source"] = guard_mode_source
 
     if guard_decision and getattr(args, "guard_json", False):
         print(json.dumps(decision_to_json(guard_decision), indent=2, ensure_ascii=False))
@@ -472,6 +473,34 @@ def cmd_run(args: argparse.Namespace) -> int:
         if getattr(args, "approve_risk", False) and guard_decision.action == "require_approval":
             task["guard"]["approved"] = True
     # --- End guard evaluation ---
+
+    # --- Backend-specific handling ---
+    if config["backend"] == "manual-remote":
+        if not args.runtime_target:
+            task["status"] = "failed"
+            task["finished_at"] = utc_now_iso()
+            task["failure_stage"] = "handoff"
+            task["failure_reason"] = "remote_handoff requires --runtime-target"
+            finalize_task(task)
+            print("remote_handoff requires --runtime-target", file=sys.stderr)
+            return 2
+        task["status"] = "handoff_required"
+        task["finished_at"] = utc_now_iso()
+        finalize_task(task)
+        print(
+            json.dumps(
+                {
+                    "task_id": task["task_id"],
+                    "status": task["status"],
+                    "runtime_target": args.runtime_target,
+                    "runtime_note": args.runtime_note,
+                    "command_preview": task["command_preview"],
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return 0
 
     task["status"] = "running"
     task["started_execution_at"] = utc_now_iso()

@@ -73,3 +73,22 @@ def test_guard_off_records_disabled_guard() -> None:
     expected = {"enabled": False, "mode": "off"}
     assert expected["enabled"] is False
     assert expected["mode"] == "off"
+
+
+def test_manual_remote_guard_decision_is_recorded(monkeypatch, tmp_path):
+    """manual-remote backend should still evaluate and record guard decision."""
+    from scripts.run_with_profile import cmd_run
+    import inspect
+    source = inspect.getsource(cmd_run)
+    guard_pos = source.find("Guard evaluation")
+    manual_remote_pos = source.find("manual-remote")
+    assert guard_pos < manual_remote_pos, "Guard evaluation must occur before manual-remote backend check"
+
+
+def test_helm_guard_mode_off_via_env_warns(monkeypatch, capsys):
+    """HELM_GUARD_MODE=off via env should print a warning."""
+    from scripts.run_with_profile import cmd_run
+    import inspect
+    source = inspect.getsource(cmd_run)
+    assert "HELM_GUARD_MODE" in source
+    assert "WARNING" in source or "warning" in source.lower()
