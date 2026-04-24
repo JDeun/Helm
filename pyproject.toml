@@ -18,4 +18,4 @@ helm = "helm:main"
 py-modules = ["helm", "helm_workspace", "helm_context"]
 
 [tool.setuptools.packages.find]
-include = ["scripts"]
+include = ["scripts", "commands"]
