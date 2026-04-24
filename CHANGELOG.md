@@ -25,6 +25,42 @@
 - **Extended `helm doctor`**: Discovery, Hardware, Runtime model state, Helm intelligence state, Guard, and Ops DB sections
 - **Intelligence Tier Skeleton**: documented L0-L4 extension points (`scripts/intelligence_tier.py`)
 
+### Security & Hardening
+- **command_guard**: 7 new command categories (database, cloud, package, credential, process, firewall, cron)
+- **command_guard**: Flag normalization (`--recursive --force` → `-rf`)
+- **command_guard**: Interpreter unwrapping (python3/perl/ruby/node `-c`/`-e`)
+- **command_guard**: Heredoc, base64 pipe, /dev/tcp bypass detection
+- **command_guard**: Fail-closed policy on malformed/unknown-version JSON
+- **command_guard**: Regex pattern support in guard_policy.json
+- **command_guard**: score_breakdown, evaluated_at, policy_version in audit output
+- **run_with_profile**: Guard evaluation before manual-remote (closes bypass)
+- **run_with_profile**: HELM_GUARD_MODE=off environment warning
+- **run_with_profile**: Fail-closed guard exception handling (require_approval on error)
+
+### Reliability
+- **model_provider_probe**: Empty string env var false positive fix
+- **model_provider_probe**: Required/optional/weak key combinations (AWS, GCP)
+- **model_provider_probe**: Response body validation (port_open_unverified status)
+- **model_provider_probe**: Runtime policy JSON loading with fallback
+- **model_provider_probe**: 5 new API providers (Replicate, Perplexity, HuggingFace, Cerebras, NVIDIA NIM)
+- **model_provider_probe**: Confidence field (high/low)
+- **discovery**: GPU/VRAM detection (NVIDIA + Apple Silicon)
+- **ops_db**: Streaming JSONL read (no OOM on large files)
+- **ops_db**: query_tasks() and query_guard_decisions() functions
+- **ops_db**: _connect helper with standard pragmas
+- **ops_db**: Auto-UUID for null task_id (prevents PK collision)
+- **ops_db**: Indexing failure warning (once, then silent)
+- **state_io**: Windows LK_LOCK with actual write size
+- **state_io**: Lock failure warnings
+
+### CLI
+- `helm doctor --skip-discovery` flag
+- `helm db query` subcommand with --status, --profile, --guard-action filters
+- Discovery failure diagnostics in doctor output
+
+### Tests
+- 58 new tests (173 total, was 115)
+
 ### Changed
 
 - Migrated all tests from `unittest.TestCase` to pytest function style
