@@ -140,12 +140,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         )
 
     # --- Discovery sections ---
-    try:
-        snapshot = discover_environment(workspace=root, timeout_ms=500)
-        discovery_payload = snapshot_to_json(snapshot)
-    except Exception:
-        snapshot = None
-        discovery_payload = None
+    skip_discovery = getattr(args, "skip_discovery", False)
+    snapshot = None
+    discovery_payload = None
+
+    if not skip_discovery:
+        try:
+            snapshot = discover_environment(workspace=root, timeout_ms=500)
+            discovery_payload = snapshot_to_json(snapshot)
+        except Exception as exc:
+            snapshot = None
+            discovery_payload = None
+            checks.append({"name": "discovery", "ok": False, "detail": f"discovery failed: {exc}"})
 
     # --- Ops DB check ---
     ops_db_path = state_root / "ops-index.sqlite3"
@@ -205,6 +211,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(f"  memory_total_gb: {snapshot.hardware.memory_total_gb:.1f}")
             print(f"  low_ram_strategy: {snapshot.hardware.low_ram}")
         print(f"  python_version: {snapshot.hardware.python_version}")
+        if snapshot.hardware.gpu_detected:
+            print(f"  gpu: {snapshot.hardware.gpu_name}")
+            if snapshot.hardware.vram_gb is not None:
+                print(f"  vram_gb: {snapshot.hardware.vram_gb:.1f}")
         print()
         rms = snapshot.runtime_model_state
         print("Runtime model state:")

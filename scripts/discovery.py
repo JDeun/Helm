@@ -1,4 +1,4 @@
-"""Environment discovery for Helm 2.0.
+"""Environment discovery for Helm.
 
 Discovers runtime fingerprint, hardware profile, model provider state,
 and helm intelligence state. Read-only — never mutates configs.
@@ -58,6 +58,9 @@ class HardwareProfile:
     memory_total_gb: float | None
     low_ram: bool
     python_version: str
+    gpu_detected: bool = False
+    gpu_name: str | None = None
+    vram_gb: float | None = None
 
 
 @dataclass(frozen=True)
@@ -201,6 +204,33 @@ def _read_memory_total_gb() -> float | None:
 _LOW_RAM_THRESHOLD_GB = 17.0
 
 
+def _detect_gpu() -> tuple[bool, str | None, float | None]:
+    """Detect GPU presence. Returns (detected, name, vram_gb)."""
+    import subprocess
+
+    # Try NVIDIA
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=1,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            line = result.stdout.strip().splitlines()[0]
+            parts = [p.strip() for p in line.split(",")]
+            name = parts[0] if parts else "NVIDIA GPU"
+            vram: float | None = None
+            if len(parts) > 1:
+                try:
+                    vram = float(parts[1]) / 1024.0  # MiB to GiB
+                except (ValueError, IndexError):
+                    pass
+            return True, name, vram
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        pass
+
+    return False, None, None
+
+
 def _detect_hardware() -> HardwareProfile:
     os_name = platform.system()
     machine = platform.machine()
@@ -211,6 +241,14 @@ def _detect_hardware() -> HardwareProfile:
     low_ram = (memory_total_gb is not None and memory_total_gb <= _LOW_RAM_THRESHOLD_GB)
     python_version = platform.python_version()
 
+    gpu_detected, gpu_name, vram_gb = _detect_gpu()
+
+    # Apple Silicon: unified memory = GPU memory
+    if is_apple_silicon and not gpu_detected:
+        gpu_detected = True
+        gpu_name = "Apple Silicon"
+        vram_gb = memory_total_gb
+
     return HardwareProfile(
         os_name=os_name,
         machine=machine,
@@ -220,6 +258,9 @@ def _detect_hardware() -> HardwareProfile:
         memory_total_gb=memory_total_gb,
         low_ram=low_ram,
         python_version=python_version,
+        gpu_detected=gpu_detected,
+        gpu_name=gpu_name,
+        vram_gb=vram_gb,
     )
 
 
@@ -404,6 +445,9 @@ def snapshot_to_json(snapshot: DiscoverySnapshot) -> dict:
             "memory_total_gb": snapshot.hardware.memory_total_gb,
             "low_ram": snapshot.hardware.low_ram,
             "python_version": snapshot.hardware.python_version,
+            "gpu_detected": snapshot.hardware.gpu_detected,
+            "gpu_name": snapshot.hardware.gpu_name,
+            "vram_gb": snapshot.hardware.vram_gb,
         },
         "runtime_model_state": {
             "runtime_model_detected": snapshot.runtime_model_state.runtime_model_detected,

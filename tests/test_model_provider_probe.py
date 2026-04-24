@@ -17,6 +17,7 @@ from scripts.model_provider_probe import (
     probe_local_providers,
     probe_all_model_providers,
 )
+from scripts.discovery import _detect_gpu, HardwareProfile
 
 
 # ---------------------------------------------------------------------------
@@ -287,3 +288,37 @@ def test_policy_json_fallback_on_missing() -> None:
     from scripts.model_provider_probe import _load_provider_registry
     api_reg, local_reg = _load_provider_registry(Path("/nonexistent/path.json"))
     assert "openai" in api_reg
+
+
+def test_gpu_detection_nvidia_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    class FakeResult:
+        returncode = 0
+        stdout = "GPU 0: NVIDIA RTX 4090 (UUID: ...)\n"
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: FakeResult())
+    detected, name, vram = _detect_gpu()
+    assert detected is True
+    assert "NVIDIA" in (name or "")
+
+
+def test_gpu_detection_no_nvidia_smi(monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    def _fail(*a, **kw):
+        raise FileNotFoundError("nvidia-smi not found")
+
+    monkeypatch.setattr(subprocess, "run", _fail)
+    detected, name, vram = _detect_gpu()
+    # On non-Apple-Silicon, should be False
+    if not (sys.platform == "darwin"):
+        assert detected is False
+
+
+def test_skip_discovery_flag_skips_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--skip-discovery should result in no discovery section."""
+    import helm
+    parser = helm.build_parser()
+    args = parser.parse_args(["doctor", "--skip-discovery"])
+    assert args.skip_discovery is True

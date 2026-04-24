@@ -197,6 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = subparsers.add_parser("doctor", help="Validate Helm workspace structure and references.")
     doctor.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     doctor.add_argument("--json", action="store_true")
+    doctor.add_argument("--skip-discovery", action="store_true", help="Skip provider and hardware discovery (faster).")
     doctor.set_defaults(func=cmd_doctor)
 
     survey = subparsers.add_parser("survey", help="Show onboarding guidance for external runtimes and note vaults.")
