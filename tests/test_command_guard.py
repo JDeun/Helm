@@ -333,3 +333,17 @@ def test_risk_score_write_boundary():
 def test_risk_score_destructive_boundary():
     d = _guard(["rm", "-rf", "some/dir"], "risky_edit")
     assert d.risk_score >= 0.70
+
+
+def test_policy_json_has_new_category_rules():
+    import json
+    policy_path = Path(__file__).resolve().parents[1] / "references" / "guard_policy.json"
+    data = json.loads(policy_path.read_text(encoding="utf-8"))
+    all_ids = [r["id"] for r in data["absolute_deny"] + data["require_approval"]]
+    assert any("database" in rid for rid in all_ids)
+    assert any("cloud" in rid for rid in all_ids)
+    assert any("cron" in rid for rid in all_ids)
+    assert any("firewall" in rid for rid in all_ids)
+    assert any("process" in rid for rid in all_ids)
+    assert any("package" in rid for rid in all_ids)
+    assert any("base64" in rid for rid in all_ids)
