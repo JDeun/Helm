@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.command_guard import evaluate_command_guard
+from scripts.command_guard import evaluate_command_guard, decision_to_json
 
 PROFILES = {
     "inspect_local": {"writes_allowed": False, "network_allowed": False, "checkpoint": "never"},
@@ -242,3 +242,94 @@ def test_rm_recursive_force_long_form_normalized():
     decision = _guard(["rm", "--recursive", "--force", "some/dir"], "workspace_edit")
     assert decision.action == "require_approval"
     assert decision.classification.destructive_detected is True
+
+
+def test_malformed_policy_uses_fail_closed(tmp_path):
+    bad_policy = tmp_path / "bad.json"
+    bad_policy.write_text("{ broken json !!!", encoding="utf-8")
+    decision = evaluate_command_guard(
+        command=["ls"],
+        selected_profile="inspect_local",
+        profiles=PROFILES,
+        workspace=Path("/tmp/test"),
+        policy_path=bad_policy,
+    )
+    assert decision.action == "require_approval"
+
+
+def test_unknown_policy_version_uses_fail_closed(tmp_path):
+    policy = tmp_path / "future.json"
+    policy.write_text(json.dumps({"version": 999, "absolute_deny": [], "require_approval": []}), encoding="utf-8")
+    decision = evaluate_command_guard(
+        command=["ls"],
+        selected_profile="inspect_local",
+        profiles=PROFILES,
+        workspace=Path("/tmp/test"),
+        policy_path=policy,
+    )
+    assert decision.action == "require_approval"
+
+
+def test_regex_pattern_in_policy_matches(tmp_path):
+    policy = tmp_path / "regex_policy.json"
+    policy.write_text(json.dumps({
+        "version": 1,
+        "absolute_deny": [
+            {"id": "deny.rm_regex", "type": "regex", "patterns": [r"rm\s+(-\w*r\w*f|--recursive).*\s+/"]}
+        ],
+        "require_approval": [],
+    }), encoding="utf-8")
+    decision = evaluate_command_guard(
+        command=["rm", "-rf", "/"],
+        selected_profile="risky_edit",
+        profiles=PROFILES,
+        workspace=Path("/tmp/test"),
+        policy_path=policy,
+    )
+    assert decision.action == "deny"
+
+
+def test_decision_json_contains_score_breakdown():
+    decision = _guard(["rm", "-rf", "some/dir"], "workspace_edit")
+    output = decision_to_json(decision)
+    assert "score_breakdown" in output
+    assert isinstance(output["score_breakdown"], dict)
+
+
+def test_decision_json_contains_evaluated_at():
+    decision = _guard(["ls"], "inspect_local")
+    output = decision_to_json(decision)
+    assert "evaluated_at" in output
+    assert "T" in output["evaluated_at"]
+
+
+def test_decision_json_contains_policy_version():
+    decision = _guard(["ls"], "inspect_local")
+    output = decision_to_json(decision)
+    assert "policy_version" in output
+
+
+def test_decision_json_contains_workspace_and_task_fields():
+    ws = Path("/tmp/my-workspace")
+    decision = evaluate_command_guard(
+        command=["ls"],
+        selected_profile="inspect_local",
+        profiles=PROFILES,
+        workspace=ws,
+        task_name="test task",
+        task_goal="test goal",
+    )
+    output = decision_to_json(decision)
+    assert output["workspace"] == str(ws)
+    assert output["task_name"] == "test task"
+    assert output["task_goal"] == "test goal"
+
+
+def test_risk_score_write_boundary():
+    d = _guard(["touch", "file.txt"], "workspace_edit")
+    assert 0.30 <= d.risk_score <= 0.40
+
+
+def test_risk_score_destructive_boundary():
+    d = _guard(["rm", "-rf", "some/dir"], "risky_edit")
+    assert d.risk_score >= 0.70

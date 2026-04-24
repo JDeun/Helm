@@ -164,6 +164,15 @@ _BUILTIN_REQUIRE_APPROVAL: list[dict[str, Any]] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Fail-closed policy constant
+# ---------------------------------------------------------------------------
+
+_FAIL_CLOSED_POLICY: tuple[list[dict], list[dict]] = (
+    _BUILTIN_ABSOLUTE_DENY,  # keep absolute deny even on corruption
+    [{"id": "fail_closed.all", "patterns": [""]}],  # matches everything → require_approval
+)
+
+# ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
 
@@ -194,22 +203,26 @@ class GuardDecision:
     classification: CommandClassification
     approval_required: bool
     approval_hint: str | None = None
+    score_breakdown: dict[str, float] = field(default_factory=dict)
+    workspace: str | None = None
+    task_name: str | None = None
+    task_goal: str | None = None
+    policy_version: int = 1
+    evaluated_at: str = ""
 
 
 # ---------------------------------------------------------------------------
 # Policy loading
 # ---------------------------------------------------------------------------
 
-def _load_policy(policy_path: Path | None) -> tuple[list[dict], list[dict]]:
-    """Return (absolute_deny_rules, require_approval_rules).
-
-    Falls back to built-in defaults on any error.
+def _load_policy(policy_path: Path | None) -> tuple[list[dict], list[dict], int]:
+    """Return (absolute_deny_rules, require_approval_rules, policy_version).
+    Fail-closed on corruption or unknown version. Built-in fallback only when no file found.
     """
+    import warnings as _warnings
     candidates: list[Path] = []
     if policy_path is not None:
         candidates.append(policy_path)
-
-    # Default location relative to this file's grandparent (repo root)
     default = Path(__file__).resolve().parents[1] / "references" / "guard_policy.json"
     candidates.append(default)
 
@@ -220,16 +233,20 @@ def _load_policy(policy_path: Path | None) -> tuple[list[dict], list[dict]]:
             data = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 raise ValueError("policy root must be a JSON object")
+            version = data.get("version")
+            if version != 1:
+                _warnings.warn(f"Unknown guard policy version {version}, using fail-closed policy")
+                return _FAIL_CLOSED_POLICY[0], _FAIL_CLOSED_POLICY[1], 0
             deny = data.get("absolute_deny", [])
             approval = data.get("require_approval", [])
             if not isinstance(deny, list) or not isinstance(approval, list):
                 raise ValueError("absolute_deny and require_approval must be arrays")
-            return deny, approval
+            return deny, approval, version
         except Exception:
-            # Malformed — fall through to built-in defaults
-            continue
+            _warnings.warn("Malformed guard policy, using fail-closed policy")
+            return _FAIL_CLOSED_POLICY[0], _FAIL_CLOSED_POLICY[1], 0
 
-    return _BUILTIN_ABSOLUTE_DENY, _BUILTIN_REQUIRE_APPROVAL
+    return _BUILTIN_ABSOLUTE_DENY, _BUILTIN_REQUIRE_APPROVAL, 1
 
 
 # ---------------------------------------------------------------------------
@@ -331,19 +348,29 @@ def _pipe_pattern_matches(text_lower: str, pattern_lower: str) -> bool:
 
 def _match_patterns(text: str, rules: list[dict]) -> list[tuple[str, str | None]]:
     """Return list of (rule_id, recommended_profile | None) for each matching rule."""
+    import re
     matches: list[tuple[str, str | None]] = []
     text_lower = text.lower()
     for rule in rules:
         rule_id: str = rule.get("id", "")
         recommended: str | None = rule.get("recommended_profile")
+        rule_type: str = rule.get("type", "substring")
         for pattern in rule.get("patterns", []):
-            pat_lower = pattern.lower()
-            if pat_lower in text_lower:
-                matches.append((rule_id, recommended))
-                break
-            if "|" in pat_lower and _pipe_pattern_matches(text_lower, pat_lower):
-                matches.append((rule_id, recommended))
-                break
+            if rule_type == "regex":
+                try:
+                    if re.search(pattern, text, re.IGNORECASE):
+                        matches.append((rule_id, recommended))
+                        break
+                except re.error:
+                    continue
+            else:
+                pat_lower = pattern.lower()
+                if pat_lower in text_lower:
+                    matches.append((rule_id, recommended))
+                    break
+                if "|" in pat_lower and _pipe_pattern_matches(text_lower, pat_lower):
+                    matches.append((rule_id, recommended))
+                    break
     return matches
 
 
@@ -491,41 +518,39 @@ def _compute_risk_score(
     absolute_deny: bool,
     profile_mismatch: bool,
     profile: str,
-) -> float:
+) -> tuple[float, dict[str, float]]:
     if absolute_deny:
-        return 1.0
+        return 1.0, {"absolute_deny": 1.0}
 
+    breakdown: dict[str, float] = {}
     score = 0.0
     c = classification
 
     if c.writes_detected:
-        score += 0.35
+        breakdown["write_detected"] = 0.35; score += 0.35
     if c.network_detected:
-        score += 0.30
+        breakdown["network_detected"] = 0.30; score += 0.30
     if c.remote_detected:
-        score += 0.45
+        breakdown["remote_detected"] = 0.45; score += 0.45
     if c.privilege_detected:
-        score += 0.65
+        breakdown["privilege_detected"] = 0.65; score += 0.65
     if c.destructive_detected:
-        score += 0.75
+        breakdown["destructive_detected"] = 0.75; score += 0.75
 
-    # Recursive destructive (already covered by destructive, add extra)
     norm_lower = c.normalized_command.lower()
     if "rm -rf" in norm_lower or "rm -r " in norm_lower:
-        score += 0.10  # total 0.85 with destructive
+        breakdown["recursive_destructive"] = 0.10; score += 0.10
 
-    # Workspace escape
     if any(p in norm_lower for p in ["../", "..\\", "~", "$home"]):
-        score += 0.30
+        breakdown["workspace_escape"] = 0.30; score += 0.30
 
     if profile_mismatch:
-        score += 0.25
+        breakdown["profile_mismatch"] = 0.25; score += 0.25
 
-    # Unknown script under inspect_local
     if profile == "inspect_local" and "unknown" in classification.categories:
-        score += 0.35
+        breakdown["unknown_under_inspect"] = 0.35; score += 0.35
 
-    return min(score, 1.0)
+    return min(score, 1.0), breakdown
 
 
 # ---------------------------------------------------------------------------
@@ -548,7 +573,7 @@ def evaluate_command_guard(
     Must not execute the command. Must not call any remote API.
     Must not import heavy ML libraries.
     """
-    absolute_deny_rules, require_approval_rules = _load_policy(policy_path)
+    absolute_deny_rules, require_approval_rules, policy_version = _load_policy(policy_path)
 
     # Unwrap shell wrappers
     effective_argv, shell_wrapped, shell_inner = _effective_argv(command)
@@ -597,7 +622,7 @@ def evaluate_command_guard(
     )
 
     # Compute risk score
-    risk_score = _compute_risk_score(
+    risk_score, score_breakdown = _compute_risk_score(
         classification=classification,
         absolute_deny=is_absolute_deny,
         profile_mismatch=profile_mismatch,
@@ -756,6 +781,8 @@ def evaluate_command_guard(
         target_paths=classification.target_paths,
     )
 
+    from datetime import datetime, timezone
+
     return GuardDecision(
         action=action,
         risk_score=risk_score,
@@ -766,6 +793,12 @@ def evaluate_command_guard(
         classification=classification,
         approval_required=approval_required,
         approval_hint=approval_hint,
+        score_breakdown=score_breakdown,
+        workspace=str(workspace) if workspace else None,
+        task_name=task_name,
+        task_goal=task_goal,
+        policy_version=policy_version,
+        evaluated_at=datetime.now(timezone.utc).isoformat(),
     )
 
 
@@ -775,12 +808,18 @@ def decision_to_json(decision: GuardDecision) -> dict[str, Any]:
     return {
         "action": decision.action,
         "risk_score": decision.risk_score,
+        "score_breakdown": decision.score_breakdown,
         "selected_profile": decision.selected_profile,
         "recommended_profile": decision.recommended_profile,
         "reasons": decision.reasons,
         "matched_rules": decision.matched_rules,
         "approval_required": decision.approval_required,
         "approval_hint": decision.approval_hint,
+        "evaluated_at": decision.evaluated_at,
+        "policy_version": decision.policy_version,
+        "workspace": decision.workspace,
+        "task_name": decision.task_name,
+        "task_goal": decision.task_goal,
         "classification": {
             "normalized_command": c.normalized_command,
             "argv": c.argv,
