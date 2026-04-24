@@ -106,3 +106,82 @@ def test_approve_risk_does_not_override_deny():
         metadata={"approve_risk": True},
     )
     assert decision.action == "deny"
+
+
+# --- New category tests ---
+
+def test_database_drop_requires_approval():
+    decision = _guard(["psql", "-c", "DROP DATABASE mydb"], "workspace_edit")
+    assert decision.action == "require_approval"
+    assert "database" in decision.classification.categories
+
+
+def test_database_select_is_allowed():
+    decision = _guard(["psql", "-c", "SELECT * FROM users"], "workspace_edit")
+    assert decision.action == "allow"
+
+
+def test_cloud_terraform_destroy_requires_approval():
+    decision = _guard(["terraform", "destroy", "-auto-approve"], "workspace_edit")
+    assert decision.action == "require_approval"
+    assert "cloud" in decision.classification.categories
+
+
+def test_cloud_aws_s3_ls_is_allowed():
+    decision = _guard(["aws", "s3", "ls"], "workspace_edit")
+    assert decision.action == "allow"
+
+
+def test_cloud_aws_s3_rm_recursive_requires_approval():
+    decision = _guard(["aws", "s3", "rm", "--recursive", "s3://bucket"], "workspace_edit")
+    assert decision.action == "require_approval"
+
+
+def test_package_npm_publish_requires_approval():
+    decision = _guard(["npm", "publish"], "workspace_edit")
+    assert decision.action == "require_approval"
+    assert "package_publish" in decision.classification.categories
+
+
+def test_package_docker_push_requires_approval():
+    decision = _guard(["docker", "push", "myimage:latest"], "workspace_edit")
+    assert decision.action == "require_approval"
+
+
+def test_credential_env_warns_inspect_local():
+    decision = _guard(["env"], "inspect_local")
+    assert decision.action == "warn"
+    assert "credential_exposure" in decision.classification.categories
+
+
+def test_credential_printenv_warns_inspect_local():
+    decision = _guard(["printenv"], "inspect_local")
+    assert decision.action == "warn"
+    assert "credential_exposure" in decision.classification.categories
+
+
+def test_process_kill_requires_approval():
+    decision = _guard(["kill", "-9", "12345"], "workspace_edit")
+    assert decision.action == "require_approval"
+    assert "process" in decision.classification.categories
+
+
+def test_process_systemctl_stop_requires_approval():
+    decision = _guard(["systemctl", "stop", "nginx"], "workspace_edit")
+    assert decision.action == "require_approval"
+
+
+def test_firewall_iptables_requires_approval():
+    decision = _guard(["iptables", "-F"], "workspace_edit")
+    assert decision.action == "require_approval"
+    assert "firewall" in decision.classification.categories
+
+
+def test_cron_crontab_r_is_deny():
+    decision = _guard(["crontab", "-r"], "workspace_edit")
+    assert decision.action == "deny"
+
+
+def test_cron_crontab_e_requires_approval():
+    decision = _guard(["crontab", "-e"], "workspace_edit")
+    assert decision.action == "require_approval"

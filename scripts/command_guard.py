@@ -27,6 +27,13 @@ RiskCategory = Literal[
     "remote",
     "unknown",
     "profile_mismatch",
+    "database",
+    "cloud",
+    "package_publish",
+    "credential_exposure",
+    "process",
+    "firewall",
+    "cron",
 ]
 
 # ---------------------------------------------------------------------------
@@ -48,11 +55,45 @@ READ_ONLY_COMMANDS: frozenset[str] = frozenset(
     {
         "cat", "head", "tail", "less", "more", "grep", "find", "ls", "pwd",
         "echo", "git status", "git log", "git diff", "git show",
-        "wc", "file", "stat", "tree", "which", "type", "env", "printenv",
+        "wc", "file", "stat", "tree", "which", "type",
     }
 )
 SHELL_WRAPPERS: frozenset[str] = frozenset({"bash", "sh", "zsh", "fish", "cmd", "powershell", "pwsh"})
 SHELL_EXEC_FLAGS: frozenset[str] = frozenset({"-c", "-lc", "/c", "-Command"})
+
+DATABASE_COMMANDS: frozenset[str] = frozenset(
+    {"psql", "mysql", "mongo", "mongosh", "redis-cli", "dropdb", "mysqladmin", "sqlite3", "cockroach"}
+)
+DATABASE_DESTRUCTIVE_SUBCMDS: frozenset[str] = frozenset(
+    {"drop", "delete", "flush", "flushall", "flushdb", "rm", "destroy"}
+)
+CLOUD_CLI_COMMANDS: frozenset[str] = frozenset(
+    {"aws", "gcloud", "az", "terraform", "kubectl", "pulumi", "cdk", "sam", "serverless"}
+)
+CLOUD_DESTRUCTIVE_SUBCMDS: frozenset[str] = frozenset(
+    {"delete", "destroy", "terminate", "rm", "rb", "-auto-approve"}
+)
+PACKAGE_PUBLISH_COMMANDS: frozenset[str] = frozenset(
+    {"npm", "twine", "cargo", "gem", "docker"}
+)
+PACKAGE_PUBLISH_SUBCMDS: frozenset[str] = frozenset(
+    {"publish", "push", "upload"}
+)
+CREDENTIAL_EXPOSURE_COMMANDS: frozenset[str] = frozenset(
+    {"env", "printenv", "set"}
+)
+PROCESS_COMMANDS: frozenset[str] = frozenset(
+    {"kill", "killall", "pkill", "systemctl", "service", "launchctl"}
+)
+PROCESS_DESTRUCTIVE_SUBCMDS: frozenset[str] = frozenset(
+    {"stop", "disable", "mask"}
+)
+FIREWALL_COMMANDS: frozenset[str] = frozenset(
+    {"iptables", "ufw", "netsh", "firewall-cmd"}
+)
+CRON_COMMANDS: frozenset[str] = frozenset(
+    {"crontab", "at", "schtasks"}
+)
 
 # ---------------------------------------------------------------------------
 # Built-in policy fallback (mirrors guard_policy.json)
@@ -287,6 +328,47 @@ def _classify_argv(
         categories.append("destructive")
     if remote_detected:
         categories.append("remote")
+
+    # --- v2.1 new category detection ---
+    subcmds_lower = [a.lower() for a in effective_argv[1:]]
+
+    if cmd0 in DATABASE_COMMANDS:
+        # Also tokenize each arg so "-c DROP DATABASE mydb" is checked word-by-word
+        subcmds_words = [w for s in subcmds_lower for w in s.split()]
+        has_destructive_sub = any(s in DATABASE_DESTRUCTIVE_SUBCMDS for s in subcmds_words)
+        if has_destructive_sub:
+            categories.append("database")
+            destructive_detected = True
+
+    if cmd0 in CLOUD_CLI_COMMANDS:
+        has_destructive_sub = any(s in CLOUD_DESTRUCTIVE_SUBCMDS for s in subcmds_lower)
+        if has_destructive_sub:
+            categories.append("cloud")
+            destructive_detected = True
+
+    if cmd0 in PACKAGE_PUBLISH_COMMANDS:
+        has_publish_sub = any(s in PACKAGE_PUBLISH_SUBCMDS for s in subcmds_lower)
+        if has_publish_sub:
+            categories.append("package_publish")
+            network_detected = True
+
+    if cmd0 in CREDENTIAL_EXPOSURE_COMMANDS:
+        categories.append("credential_exposure")
+
+    if cmd0 in PROCESS_COMMANDS:
+        categories.append("process")
+        if cmd0 in {"systemctl", "service", "launchctl"}:
+            if any(s in PROCESS_DESTRUCTIVE_SUBCMDS for s in subcmds_lower):
+                destructive_detected = True
+
+    if cmd0 in FIREWALL_COMMANDS:
+        categories.append("firewall")
+
+    if cmd0 in CRON_COMMANDS:
+        categories.append("cron")
+        if "-r" in effective_argv[1:]:
+            destructive_detected = True
+
     if not categories:
         categories.append("unknown")
 
@@ -461,6 +543,42 @@ def evaluate_command_guard(
 
     if is_absolute_deny:
         action = "deny"
+
+    elif "cron" in classification.categories and classification.destructive_detected:
+        action = "deny"
+
+    elif "credential_exposure" in classification.categories and selected_profile == "inspect_local":
+        action = "warn"
+
+    elif "cron" in classification.categories:
+        action = "require_approval"
+        approval_required = True
+        approval_hint = "--approve-risk"
+
+    elif "firewall" in classification.categories:
+        action = "require_approval"
+        approval_required = True
+        approval_hint = "--approve-risk"
+
+    elif "process" in classification.categories:
+        action = "require_approval"
+        approval_required = True
+        approval_hint = "--approve-risk"
+
+    elif "package_publish" in classification.categories:
+        action = "require_approval"
+        approval_required = True
+        approval_hint = "--approve-risk"
+
+    elif "database" in classification.categories and classification.destructive_detected:
+        action = "require_approval"
+        approval_required = True
+        approval_hint = "--approve-risk"
+
+    elif "cloud" in classification.categories and classification.destructive_detected:
+        action = "require_approval"
+        approval_required = True
+        approval_hint = "--approve-risk"
 
     elif selected_profile == "inspect_local" and (
         classification.writes_detected or classification.network_detected
