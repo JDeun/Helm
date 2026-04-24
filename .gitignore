@@ -28,3 +28,6 @@ examples/demo-workspace/skill_drafts/**/meta/**
 .omc/
 dev_docs/
 docs/superpowers/
+
+.claude
+claude/
