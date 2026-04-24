@@ -213,3 +213,18 @@ def test_indexing_failure_warns_once(tmp_path: Path, capsys) -> None:
     sqlite_warnings = [x for x in w if "SQLite indexing failed" in str(x.message)]
     assert len(sqlite_warnings) <= 1
     ops_db_mod._INDEX_FAILURE_WARNED = False
+
+
+def test_cmd_db_query_returns_results(tmp_path: Path) -> None:
+    """Ensure the query function works end-to-end."""
+    state_root = tmp_path / ".helm"
+    state_root.mkdir()
+    ledger = state_root / "task-ledger.jsonl"
+    entries = [
+        {"task_id": "t1", "status": "completed", "profile": "inspect_local"},
+        {"task_id": "t2", "status": "failed", "profile": "risky_edit"},
+    ]
+    ledger.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
+    rebuild_index(state_root=state_root)
+    results = query_tasks(state_root=state_root, limit=10)
+    assert len(results) == 2

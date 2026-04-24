@@ -58,7 +58,7 @@ from commands.status import (
     format_report_markdown,
 )
 from commands.validate import cmd_validate
-from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status
+from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status, cmd_db_query
 
 
 # These functions are defined here (not just imported) so tests can patch
@@ -384,6 +384,16 @@ def build_parser() -> argparse.ArgumentParser:
     db_status.add_argument("--path", help="Workspace path.")
     db_status.add_argument("--json", action="store_true")
     db_status.set_defaults(func=cmd_db_status)
+
+    db_query = db_subparsers.add_parser("query", help="Query the SQLite operations index.")
+    db_query.add_argument("--path", help="Workspace path.")
+    db_query.add_argument("--status", help="Filter tasks by status (completed, failed, running).")
+    db_query.add_argument("--profile", help="Filter tasks by profile.")
+    db_query.add_argument("--guard-action", help="Query guard decisions by action (allow, warn, require_approval, deny).")
+    db_query.add_argument("--task-id", help="Filter by task ID.")
+    db_query.add_argument("--limit", type=int, default=50)
+    db_query.add_argument("--json", action="store_true")
+    db_query.set_defaults(func=cmd_db_query)
 
     return parser
 
