@@ -2,26 +2,25 @@ from __future__ import annotations
 
 import json
 import tempfile
-import unittest
 from pathlib import Path
 
 from scripts.skill_manifest_lib import audit_skill_markdown_contracts, manifest_quality_audit
 
 
-class SkillManifestLibTests(unittest.TestCase):
-    def test_manifest_quality_audit_tolerates_invalid_profile_json(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            (root / "references").mkdir()
-            (root / "references" / "execution_profiles.json").write_text("{not-json\n", encoding="utf-8")
+def test_manifest_quality_audit_tolerates_invalid_profile_json() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "references").mkdir()
+        (root / "references" / "execution_profiles.json").write_text("{not-json\n", encoding="utf-8")
 
-            report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
+        report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
 
-            self.assertTrue(report["ok"])
-            self.assertEqual(report["manifest_count"], 0)
+        assert report["ok"]
+        assert report["manifest_count"] == 0
 
-    def test_template_headings_do_not_trigger_placeholder_warning(self) -> None:
-        skill_md = """# Demo
+
+def test_template_headings_do_not_trigger_placeholder_warning() -> None:
+    skill_md = """# Demo
 
 ## Core rule
 
@@ -59,126 +58,126 @@ Use the strict runner for all mutations.
 - Fallback behavior: stop before mutation
 - User-facing failure language: explain the blocked step plainly
 """
-        warnings = audit_skill_markdown_contracts(skill_md, {"allowed_profiles": ["inspect_local"]})
-        self.assertNotIn("SKILL.md still contains template-style placeholder language", warnings)
-
-    def test_manifest_without_skill_markdown_is_flagged(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            (root / "references").mkdir()
-            (root / "skills" / "demo-skill").mkdir(parents=True)
-            (root / "references" / "execution_profiles.json").write_text(
-                json.dumps({"profiles": {"inspect_local": {}, "service_ops": {}}}),
-                encoding="utf-8",
-            )
-            (root / "skills" / "demo-skill" / "contract.json").write_text(
-                json.dumps(
-                    {
-                        "skill": "demo-skill",
-                        "allowed_profiles": ["inspect_local", "service_ops"],
-                        "default_profile": "inspect_local",
-                        "context": {"required": False, "query": "demo"},
-                    }
-                ),
-                encoding="utf-8",
-            )
-
-            report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
-
-            self.assertFalse(report["ok"])
-            self.assertEqual(report["flagged_count"], 1)
-            self.assertIn("manifest exists but SKILL.md operator contract is missing", report["items"][0]["warnings"])
-
-    def test_skill_draft_scripts_without_runner_are_flagged(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            (root / "references").mkdir()
-            (root / "skill_drafts" / "draft-skill" / "scripts").mkdir(parents=True)
-            (root / "references" / "execution_profiles.json").write_text(
-                json.dumps({"profiles": {"service_ops": {}, "risky_edit": {}}}),
-                encoding="utf-8",
-            )
-            (root / "skill_drafts" / "draft-skill" / "contract.json").write_text(
-                json.dumps(
-                    {
-                        "skill": "draft-skill",
-                        "allowed_profiles": ["service_ops"],
-                        "default_profile": "service_ops",
-                        "context": {"required": False, "query": "draft"},
-                    }
-                ),
-                encoding="utf-8",
-            )
-            (root / "skill_drafts" / "draft-skill" / "scripts" / "runner.sh").write_text(
-                "#!/bin/sh\nexit 0\n",
-                encoding="utf-8",
-            )
-
-            report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
-
-            self.assertFalse(report["ok"])
-            warnings = report["items"][0]["warnings"]
-            self.assertIn("skill ships scripts but no runner guidance is declared", warnings)
-
-    def test_file_intake_manifest_without_skill_guidance_is_flagged(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            (root / "references").mkdir()
-            (root / "skills" / "file-skill").mkdir(parents=True)
-            (root / "references" / "execution_profiles.json").write_text(
-                json.dumps({"profiles": {"inspect_local": {}}}),
-                encoding="utf-8",
-            )
-            (root / "skills" / "file-skill" / "contract.json").write_text(
-                json.dumps(
-                    {
-                        "skill": "file-skill",
-                        "allowed_profiles": ["inspect_local"],
-                        "default_profile": "inspect_local",
-                        "file_intake": {"required": True},
-                    }
-                ),
-                encoding="utf-8",
-            )
-            (root / "skills" / "file-skill" / "SKILL.md").write_text(
-                "# File Skill\n\n## Core rule\n\nInspect first.\n",
-                encoding="utf-8",
-            )
-
-            report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
-
-            self.assertFalse(report["ok"])
-            warnings = report["items"][0]["warnings"]
-            self.assertIn("manifest requires file intake evidence but SKILL.md does not explain the intake boundary", warnings)
-
-    def test_route_decision_without_tool_rules_is_flagged(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            (root / "references").mkdir()
-            (root / "skills" / "route-skill").mkdir(parents=True)
-            (root / "references" / "execution_profiles.json").write_text(
-                json.dumps({"profiles": {"inspect_local": {}}}),
-                encoding="utf-8",
-            )
-            (root / "skills" / "route-skill" / "contract.json").write_text(
-                json.dumps(
-                    {
-                        "skill": "route-skill",
-                        "allowed_profiles": ["inspect_local"],
-                        "default_profile": "inspect_local",
-                        "route_decision": {"required": True, "task_type": "generic"},
-                    }
-                ),
-                encoding="utf-8",
-            )
-            (root / "skills" / "route-skill" / "SKILL.md").write_text("# Route Skill\n", encoding="utf-8")
-
-            report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
-
-            self.assertFalse(report["ok"])
-            warnings = report["items"][0]["warnings"]
-            self.assertIn("route_decision exists but no tool_rules are declared", warnings)
+    warnings = audit_skill_markdown_contracts(skill_md, {"allowed_profiles": ["inspect_local"]})
+    assert "SKILL.md still contains template-style placeholder language" not in warnings
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_manifest_without_skill_markdown_is_flagged() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "references").mkdir()
+        (root / "skills" / "demo-skill").mkdir(parents=True)
+        (root / "references" / "execution_profiles.json").write_text(
+            json.dumps({"profiles": {"inspect_local": {}, "service_ops": {}}}),
+            encoding="utf-8",
+        )
+        (root / "skills" / "demo-skill" / "contract.json").write_text(
+            json.dumps(
+                {
+                    "skill": "demo-skill",
+                    "allowed_profiles": ["inspect_local", "service_ops"],
+                    "default_profile": "inspect_local",
+                    "context": {"required": False, "query": "demo"},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
+
+        assert not report["ok"]
+        assert report["flagged_count"] == 1
+        assert "manifest exists but SKILL.md operator contract is missing" in report["items"][0]["warnings"]
+
+
+def test_skill_draft_scripts_without_runner_are_flagged() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "references").mkdir()
+        (root / "skill_drafts" / "draft-skill" / "scripts").mkdir(parents=True)
+        (root / "references" / "execution_profiles.json").write_text(
+            json.dumps({"profiles": {"service_ops": {}, "risky_edit": {}}}),
+            encoding="utf-8",
+        )
+        (root / "skill_drafts" / "draft-skill" / "contract.json").write_text(
+            json.dumps(
+                {
+                    "skill": "draft-skill",
+                    "allowed_profiles": ["service_ops"],
+                    "default_profile": "service_ops",
+                    "context": {"required": False, "query": "draft"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / "skill_drafts" / "draft-skill" / "scripts" / "runner.sh").write_text(
+            "#!/bin/sh\nexit 0\n",
+            encoding="utf-8",
+        )
+
+        report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
+
+        assert not report["ok"]
+        warnings = report["items"][0]["warnings"]
+        assert "skill ships scripts but no runner guidance is declared" in warnings
+
+
+def test_file_intake_manifest_without_skill_guidance_is_flagged() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "references").mkdir()
+        (root / "skills" / "file-skill").mkdir(parents=True)
+        (root / "references" / "execution_profiles.json").write_text(
+            json.dumps({"profiles": {"inspect_local": {}}}),
+            encoding="utf-8",
+        )
+        (root / "skills" / "file-skill" / "contract.json").write_text(
+            json.dumps(
+                {
+                    "skill": "file-skill",
+                    "allowed_profiles": ["inspect_local"],
+                    "default_profile": "inspect_local",
+                    "file_intake": {"required": True},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / "skills" / "file-skill" / "SKILL.md").write_text(
+            "# File Skill\n\n## Core rule\n\nInspect first.\n",
+            encoding="utf-8",
+        )
+
+        report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
+
+        assert not report["ok"]
+        warnings = report["items"][0]["warnings"]
+        assert "manifest requires file intake evidence but SKILL.md does not explain the intake boundary" in warnings
+
+
+def test_route_decision_without_tool_rules_is_flagged() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "references").mkdir()
+        (root / "skills" / "route-skill").mkdir(parents=True)
+        (root / "references" / "execution_profiles.json").write_text(
+            json.dumps({"profiles": {"inspect_local": {}}}),
+            encoding="utf-8",
+        )
+        (root / "skills" / "route-skill" / "contract.json").write_text(
+            json.dumps(
+                {
+                    "skill": "route-skill",
+                    "allowed_profiles": ["inspect_local"],
+                    "default_profile": "inspect_local",
+                    "route_decision": {"required": True, "task_type": "generic"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / "skills" / "route-skill" / "SKILL.md").write_text("# Route Skill\n", encoding="utf-8")
+
+        report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
+
+        assert not report["ok"]
+        warnings = report["items"][0]["warnings"]
+        assert "route_decision exists but no tool_rules are declared" in warnings
