@@ -17,6 +17,8 @@ if str(ROOT) not in sys.path:
 
 from helm_workspace import get_workspace_layout
 from scripts.memory_capture import build_memory_capture_plan
+from scripts.state_io import append_jsonl_atomic
+from scripts.command_guard import evaluate_command_guard, decision_to_json
 from scripts.state_snapshot import latest_snapshot_path, write_state_snapshot
 from scripts.skill_manifest_lib import (
     load_skill_policies as load_manifest_policies,
@@ -27,6 +29,9 @@ from scripts.skill_manifest_lib import (
     validate_contract_manifest,
 )
 
+
+EXIT_GUARD_REQUIRE_APPROVAL = 24
+EXIT_GUARD_DENY = 25
 
 WORKSPACE = get_workspace_layout().root
 PROFILE_FILE = WORKSPACE / "references" / "execution_profiles.json"
@@ -109,9 +114,8 @@ def ensure_ledger_dir() -> None:
 
 
 def append_ledger(entry: dict) -> None:
-    ensure_ledger_dir()
-    with TASK_LEDGER.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    from scripts.state_io import append_jsonl_atomic
+    append_jsonl_atomic(TASK_LEDGER, entry)
 
 
 def finalize_task(task: dict) -> None:
@@ -412,6 +416,51 @@ def cmd_run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
+    # --- Guard evaluation ---
+    guard_mode = getattr(args, "guard_mode", None) or os.environ.get("HELM_GUARD_MODE", "enforce")
+    guard_decision = None
+
+    if guard_mode != "off":
+        guard_decision = evaluate_command_guard(
+            command=command,
+            selected_profile=args.profile,
+            profiles=profiles,
+            workspace=WORKSPACE,
+            task_name=getattr(args, "task_name", None),
+        )
+
+    task["guard"] = (
+        decision_to_json(guard_decision) if guard_decision
+        else {"enabled": False, "mode": guard_mode}
+    )
+
+    if guard_decision and getattr(args, "guard_json", False):
+        print(json.dumps(decision_to_json(guard_decision), indent=2, ensure_ascii=False))
+        return 0
+
+    if guard_mode == "enforce" and guard_decision:
+        if guard_decision.action == "deny":
+            task["status"] = "blocked"
+            task["failure_stage"] = "guard"
+            task["failure_reason"] = "guard deny"
+            append_ledger(task)
+            print(f"GUARD DENY: {', '.join(guard_decision.reasons)}", file=sys.stderr)
+            return EXIT_GUARD_DENY
+
+        if guard_decision.action == "require_approval" and not getattr(args, "approve_risk", False):
+            task["status"] = "blocked"
+            task["failure_stage"] = "guard"
+            task["failure_reason"] = "approval required"
+            append_ledger(task)
+            hint = guard_decision.approval_hint or "Use --approve-risk to proceed."
+            print(f"GUARD APPROVAL REQUIRED: {', '.join(guard_decision.reasons)}", file=sys.stderr)
+            print(f"Hint: {hint}", file=sys.stderr)
+            return EXIT_GUARD_REQUIRE_APPROVAL
+
+        if getattr(args, "approve_risk", False) and guard_decision.action == "require_approval":
+            task["guard"]["approved"] = True
+    # --- End guard evaluation ---
+
     task["status"] = "running"
     task["started_execution_at"] = utc_now_iso()
     append_ledger(task)
@@ -493,6 +542,22 @@ def parse_run_args() -> argparse.Namespace:
         choices=["inline", "background", "announce", "none"],
         default="inline",
         help="Delivery mode for task-ledger context.",
+    )
+    parser.add_argument(
+        "--guard-mode",
+        choices=["enforce", "audit", "off"],
+        default=None,
+        help="Guard evaluation mode. Default: enforce (or HELM_GUARD_MODE env).",
+    )
+    parser.add_argument(
+        "--approve-risk",
+        action="store_true",
+        help="Approve commands that require_approval. Does not override deny.",
+    )
+    parser.add_argument(
+        "--guard-json",
+        action="store_true",
+        help="Print guard decision as JSON and exit without running the command.",
     )
     args, remainder = parser.parse_known_args()
     if remainder and remainder[0] == "--":
