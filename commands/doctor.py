@@ -16,6 +16,7 @@ from commands import (
     detect_layout,
 )
 from commands.context import build_onboarding_payload, format_onboarding_text
+from scripts.discovery import discover_environment, snapshot_to_json
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -138,6 +139,27 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             }
         )
 
+    # --- Discovery sections ---
+    try:
+        snapshot = discover_environment(workspace=root, timeout_ms=500)
+        discovery_payload = snapshot_to_json(snapshot)
+    except Exception:
+        snapshot = None
+        discovery_payload = None
+
+    # --- Ops DB check ---
+    ops_db_path = state_root / "ops-index.sqlite3"
+    checks.append({
+        "name": "ops-db",
+        "ok": True,  # ops db missing is not a failure
+        "detail": f"present at {ops_db_path}" if ops_db_path.exists() else "missing (run helm db init to create)",
+    })
+    if snapshot:
+        discovery_payload["ops_db"] = {
+            "path": str(ops_db_path),
+            "status": "present" if ops_db_path.exists() else "missing",
+        }
+
     healthy = all(item["ok"] for item in checks)
     payload = {
         "workspace": str(root),
@@ -145,6 +167,17 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "healthy": healthy,
         "checks": checks,
     }
+    if snapshot:
+        payload["discovery"] = discovery_payload
+        payload["hardware"] = discovery_payload.get("hardware", {})
+        payload["runtime_model_state"] = discovery_payload.get("runtime_model_state", {})
+        payload["helm_intelligence_state"] = discovery_payload.get("helm_intelligence_state", {})
+        payload["guard"] = {
+            "default_mode": "enforce",
+            "unknown_command_action": "require_approval",
+            "policy_file": str(root / "references" / "guard_policy.json"),
+        }
+
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0 if healthy else 1
@@ -154,6 +187,59 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     for item in checks:
         status = "ok" if item["ok"] else "fail"
         print(f"{status:>4} {item['name']}: {item['detail']}")
+
+    if snapshot and not args.json:
+        print()
+        print("Discovery:")
+        print(f"  runtime_kind: {snapshot.runtime.kind}")
+        print(f"  runtime_confidence: {snapshot.runtime.confidence}")
+        print(f"  adapter: {snapshot.runtime.adapter}")
+        print(f"  markers: {', '.join(snapshot.runtime.markers) or 'none'}")
+        print()
+        print("Hardware:")
+        print(f"  os: {snapshot.hardware.os_name}")
+        print(f"  machine: {snapshot.hardware.machine}")
+        if snapshot.hardware.is_apple_silicon:
+            print("  apple_silicon: true")
+        if snapshot.hardware.memory_total_gb is not None:
+            print(f"  memory_total_gb: {snapshot.hardware.memory_total_gb:.1f}")
+            print(f"  low_ram_strategy: {snapshot.hardware.low_ram}")
+        print(f"  python_version: {snapshot.hardware.python_version}")
+        print()
+        rms = snapshot.runtime_model_state
+        print("Runtime model state:")
+        print(f"  detected: {rms.runtime_model_detected}")
+        print(f"  mode: {rms.mode}")
+        print(f"  priority: {rms.priority}")
+        print(f"  readiness: {rms.readiness}")
+        if rms.api_candidates:
+            print("  api_candidates:")
+            for c in rms.api_candidates:
+                name = c.get("provider", c) if isinstance(c, dict) else c
+                print(f"    - {name}")
+        if rms.local_candidates:
+            print("  local_candidates:")
+            for c in rms.local_candidates:
+                name = c.get("provider", c) if isinstance(c, dict) else c
+                print(f"    - {name}")
+        print()
+        his = snapshot.helm_intelligence_state
+        print("Helm intelligence state:")
+        print(f"  mode: {his.mode}")
+        print(f"  cloud_calls_enabled: {his.cloud_calls_enabled}")
+        print(f"  local_model_calls_enabled: {his.local_model_calls_enabled}")
+        print(f"  reason: {his.reason}")
+        print()
+        print("Guard:")
+        print("  default_mode: enforce")
+        policy_path = root / "references" / "guard_policy.json"
+        print(f"  policy_file: {policy_path}")
+        print(f"  policy_exists: {policy_path.exists()}")
+        print()
+        print("Ops DB:")
+        print(f"  path: {ops_db_path}")
+        print(f"  status: {'present' if ops_db_path.exists() else 'missing'}")
+
     return 0 if healthy else 1
 
 
