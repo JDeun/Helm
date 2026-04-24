@@ -22,3 +22,9 @@ examples/demo-workspace/skill_drafts/**/meta/
 examples/demo-workspace/skill_drafts/**/meta/**
 .env
 .env.*
+
+# Development tools and docs (not for distribution)
+.claude/
+.omc/
+dev_docs/
+docs/superpowers/
