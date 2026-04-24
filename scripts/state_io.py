@@ -5,24 +5,20 @@ from __future__ import annotations
 import json
 import os
 import sys
+import warnings as _warnings
 from pathlib import Path
 from typing import Any
 
+_LOCK_WARNING_ISSUED = False
+
 
 def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
-    """Append one JSON object to a JSONL file.
+    """Append one JSON object to a JSONL file with best-effort locking."""
+    global _LOCK_WARNING_ISSUED
 
-    - Creates parent directory if missing.
-    - Serializes with ensure_ascii=False and sort_keys=True.
-    - Writes exactly one JSON object per line.
-    - Uses fcntl.flock on POSIX when available.
-    - Uses msvcrt.locking on Windows when available.
-    - Flushes and fsyncs after write.
-    - Falls back to normal append when locking is unavailable.
-    - Does not silently drop entries.
-    """
     path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n"
+    line_bytes = line.encode("utf-8")
 
     with path.open("a", encoding="utf-8") as fh:
         locked = False
@@ -34,13 +30,20 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
                 locked = True
             except Exception:
                 locked = False
+                if not _LOCK_WARNING_ISSUED:
+                    _warnings.warn("File locking unavailable; concurrent writes may corrupt data")
+                    _LOCK_WARNING_ISSUED = True
         else:
             try:
                 import msvcrt
-                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                lock_size = max(len(line_bytes), 1)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, lock_size)
                 locked = True
             except Exception:
                 locked = False
+                if not _LOCK_WARNING_ISSUED:
+                    _warnings.warn("File locking unavailable; concurrent writes may corrupt data")
+                    _LOCK_WARNING_ISSUED = True
 
         try:
             fh.write(line)
@@ -57,6 +60,7 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
                 else:
                     try:
                         import msvcrt
-                        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+                        lock_size = max(len(line_bytes), 1)
+                        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, lock_size)
                     except Exception:
                         pass

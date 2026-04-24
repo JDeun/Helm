@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sys
+import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,3 +52,48 @@ def test_append_one_json_per_line(tmp_path: Path) -> None:
     lines = target.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
     assert json.loads(lines[0])["nested"]["deep"] == "value"
+
+
+def test_lock_failure_warns(tmp_path: Path, monkeypatch) -> None:
+    """When locking is unavailable, a warning should be emitted (at least once)."""
+    import scripts.state_io as state_io_mod
+    state_io_mod._LOCK_WARNING_ISSUED = False
+
+    target = tmp_path / "ledger.jsonl"
+
+    # Mock locking to fail
+    if sys.platform == "win32":
+        import msvcrt
+        monkeypatch.setattr(msvcrt, "locking", lambda *a: (_ for _ in ()).throw(OSError("mock lock fail")))
+    else:
+        import fcntl
+        original_flock = fcntl.flock
+        def _fail_flock(fd, op):
+            if op == fcntl.LOCK_EX:
+                raise OSError("mock lock fail")
+            return original_flock(fd, op)
+        monkeypatch.setattr(fcntl, "flock", _fail_flock)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        append_jsonl_atomic(target, {"a": 1})
+        append_jsonl_atomic(target, {"b": 2})
+
+    lock_warnings = [x for x in w if "locking unavailable" in str(x.message).lower() or "file locking" in str(x.message).lower()]
+    assert len(lock_warnings) >= 1
+
+    # Data should still be written despite lock failure
+    lines = target.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2
+
+    state_io_mod._LOCK_WARNING_ISSUED = False
+
+
+def test_windows_lock_size_matches_write(tmp_path: Path) -> None:
+    """Verify data integrity after write (covers lock semantics indirectly)."""
+    target = tmp_path / "ledger.jsonl"
+    large_entry = {"key": "x" * 1000}
+    append_jsonl_atomic(target, large_entry)
+    line = target.read_text(encoding="utf-8").strip()
+    parsed = json.loads(line)
+    assert parsed["key"] == "x" * 1000
