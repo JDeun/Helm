@@ -31,15 +31,13 @@ def _clear_all_provider_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "GEMINI_API_KEY", "GOOGLE_API_KEY",
         "OPENROUTER_API_KEY",
         "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT",
-        "AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_REGION",
+        "AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_REGION", "AWS_DEFAULT_REGION",
         "GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_PROJECT_ID",
-        "MISTRAL_API_KEY",
-        "GROQ_API_KEY",
-        "TOGETHER_API_KEY",
-        "FIREWORKS_API_KEY",
-        "COHERE_API_KEY",
-        "DEEPSEEK_API_KEY",
-        "XAI_API_KEY",
+        "MISTRAL_API_KEY", "GROQ_API_KEY", "TOGETHER_API_KEY",
+        "FIREWORKS_API_KEY", "COHERE_API_KEY", "DEEPSEEK_API_KEY", "XAI_API_KEY",
+        "REPLICATE_API_TOKEN", "PERPLEXITY_API_KEY",
+        "HF_TOKEN", "HUGGINGFACE_TOKEN",
+        "CEREBRAS_API_KEY", "NGC_API_KEY", "NVIDIA_API_KEY",
     ]
     for key in keys:
         monkeypatch.delenv(key, raising=False)
@@ -191,3 +189,101 @@ def test_secret_values_are_not_serialized(monkeypatch: pytest.MonkeyPatch) -> No
     assert secret + "-or" not in serialized
     # But the env var names (not values) should appear
     assert "ANTHROPIC_API_KEY" in serialized
+
+
+def test_empty_string_env_var_not_detected(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_all_provider_env(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    probes = probe_api_providers_from_env()
+    configured = [p for p in probes if p.status == "configured"]
+    assert len(configured) == 0
+
+
+def test_aws_region_alone_not_detected(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_all_provider_env(monkeypatch)
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    probes = probe_api_providers_from_env()
+    bedrock = [p for p in probes if p.provider == "aws_bedrock"]
+    assert len(bedrock) == 0
+
+
+def test_google_api_key_alone_low_confidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_all_provider_env(monkeypatch)
+    monkeypatch.setenv("GOOGLE_API_KEY", "some-key")
+    probes = probe_api_providers_from_env()
+    gemini = [p for p in probes if p.provider == "google_gemini"]
+    assert len(gemini) == 1
+    assert gemini[0].confidence == "low"
+
+
+def test_aws_bedrock_requires_access_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_all_provider_env(monkeypatch)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+    probes = probe_api_providers_from_env()
+    bedrock = [p for p in probes if p.provider == "aws_bedrock"]
+    assert len(bedrock) == 1
+    assert bedrock[0].confidence == "high"
+
+
+def test_local_probe_invalid_json_body_is_unverified(monkeypatch: pytest.MonkeyPatch) -> None:
+    import urllib.request
+
+    class FakeResponse:
+        status = 200
+        def read(self): return b"not json"
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda url, timeout=None: FakeResponse())
+    probes = probe_local_providers(timeout_ms=50)
+    ollama = [p for p in probes if p.provider == "ollama"][0]
+    assert ollama.status == "port_open_unverified"
+
+
+def test_local_probe_valid_ollama_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    import urllib.request
+
+    class FakeResponse:
+        status = 200
+        def read(self): return json.dumps({"models": [{"name": "llama3"}]}).encode()
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda url, timeout=None: FakeResponse())
+    probes = probe_local_providers(timeout_ms=50)
+    ollama = [p for p in probes if p.provider == "ollama"][0]
+    assert ollama.status == "available"
+
+
+def test_local_probe_valid_openai_compat(monkeypatch: pytest.MonkeyPatch) -> None:
+    import urllib.request
+
+    class FakeResponse:
+        status = 200
+        def read(self): return json.dumps({"data": [{"id": "m1"}]}).encode()
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda url, timeout=None: FakeResponse())
+    probes = probe_local_providers(timeout_ms=50)
+    lm = [p for p in probes if p.provider == "lm_studio"][0]
+    assert lm.status == "available"
+
+
+def test_policy_json_loading_custom_provider(tmp_path: Path) -> None:
+    from scripts.model_provider_probe import _load_provider_registry
+    policy = tmp_path / "custom.json"
+    policy.write_text(json.dumps({
+        "version": 1,
+        "api_provider_env_registry": {"custom_provider": {"required": ["CUSTOM_KEY"]}},
+        "local_endpoint_registry": {}
+    }), encoding="utf-8")
+    api_reg, local_reg = _load_provider_registry(policy)
+    assert "custom_provider" in api_reg
+
+
+def test_policy_json_fallback_on_missing() -> None:
+    from scripts.model_provider_probe import _load_provider_registry
+    api_reg, local_reg = _load_provider_registry(Path("/nonexistent/path.json"))
+    assert "openai" in api_reg

@@ -19,12 +19,13 @@ from typing import Literal
 ProviderKind = Literal[
     "openai", "anthropic", "google_gemini", "openrouter", "azure_openai",
     "aws_bedrock", "google_vertex", "mistral", "groq", "together",
-    "fireworks", "cohere", "deepseek", "xai", "ollama", "lm_studio",
-    "llama_cpp", "vllm", "openai_compatible", "unknown",
+    "fireworks", "cohere", "deepseek", "xai", "replicate", "perplexity",
+    "huggingface", "cerebras", "nvidia_nim",
+    "ollama", "lm_studio", "llama_cpp", "vllm", "openai_compatible", "unknown",
 ]
 ProviderLocation = Literal["api", "local", "runtime_config", "unknown"]
 ProviderRole = Literal["runtime_llm", "helm_intelligence", "both", "unknown"]
-ProviderStatus = Literal["available", "configured", "unavailable", "unknown"]
+ProviderStatus = Literal["available", "configured", "unavailable", "port_open_unverified", "unknown"]
 
 
 @dataclass(frozen=True)
@@ -42,31 +43,33 @@ class ProviderProbe:
     is_primary_candidate: bool
     is_fallback_candidate: bool
     detail: str | None = None
+    confidence: str = "high"  # "high" or "low"
 
 
 # ---------------------------------------------------------------------------
 # Policy registry (inline to avoid circular deps; mirrors policy JSON)
 # ---------------------------------------------------------------------------
 
-_API_PROVIDER_ENV_REGISTRY: dict[str, list[str]] = {
-    "openai": ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_API_BASE"],
-    "anthropic": ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
-    "google_gemini": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-    "openrouter": ["OPENROUTER_API_KEY"],
-    "azure_openai": ["AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT"],
-    "aws_bedrock": ["AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_REGION"],
-    "google_vertex": [
-        "GOOGLE_APPLICATION_CREDENTIALS",
-        "GOOGLE_CLOUD_PROJECT",
-        "GOOGLE_CLOUD_PROJECT_ID",
-    ],
-    "mistral": ["MISTRAL_API_KEY"],
-    "groq": ["GROQ_API_KEY"],
-    "together": ["TOGETHER_API_KEY"],
-    "fireworks": ["FIREWORKS_API_KEY"],
-    "cohere": ["COHERE_API_KEY"],
-    "deepseek": ["DEEPSEEK_API_KEY"],
-    "xai": ["XAI_API_KEY"],
+_API_PROVIDER_ENV_REGISTRY: dict[str, dict[str, list[str]]] = {
+    "openai": {"required": ["OPENAI_API_KEY"], "optional": ["OPENAI_BASE_URL", "OPENAI_API_BASE"]},
+    "anthropic": {"required": ["ANTHROPIC_API_KEY"], "optional": ["CLAUDE_API_KEY"]},
+    "google_gemini": {"required": ["GEMINI_API_KEY"], "weak": ["GOOGLE_API_KEY"]},
+    "openrouter": {"required": ["OPENROUTER_API_KEY"]},
+    "azure_openai": {"required": ["AZURE_OPENAI_API_KEY"], "optional": ["AZURE_OPENAI_ENDPOINT"]},
+    "aws_bedrock": {"required": ["AWS_ACCESS_KEY_ID"], "optional": ["AWS_REGION", "AWS_DEFAULT_REGION", "AWS_PROFILE"]},
+    "google_vertex": {"required": ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT"], "optional": ["GOOGLE_CLOUD_PROJECT_ID"]},
+    "mistral": {"required": ["MISTRAL_API_KEY"]},
+    "groq": {"required": ["GROQ_API_KEY"]},
+    "together": {"required": ["TOGETHER_API_KEY"]},
+    "fireworks": {"required": ["FIREWORKS_API_KEY"]},
+    "cohere": {"required": ["COHERE_API_KEY"]},
+    "deepseek": {"required": ["DEEPSEEK_API_KEY"]},
+    "xai": {"required": ["XAI_API_KEY"]},
+    "replicate": {"required": ["REPLICATE_API_TOKEN"]},
+    "perplexity": {"required": ["PERPLEXITY_API_KEY"]},
+    "huggingface": {"required": ["HF_TOKEN"], "weak": ["HUGGINGFACE_TOKEN"]},
+    "cerebras": {"required": ["CEREBRAS_API_KEY"]},
+    "nvidia_nim": {"required": ["NGC_API_KEY"], "weak": ["NVIDIA_API_KEY"]},
 }
 
 _LOCAL_PROVIDER_ENDPOINTS: dict[str, str] = {
@@ -78,20 +81,11 @@ _LOCAL_PROVIDER_ENDPOINTS: dict[str, str] = {
 
 # Priority order: lower number = higher priority
 _API_PRIORITY: dict[str, int] = {
-    "anthropic": 1,
-    "openai": 2,
-    "google_gemini": 3,
-    "openrouter": 4,
-    "azure_openai": 5,
-    "aws_bedrock": 6,
-    "google_vertex": 7,
-    "mistral": 8,
-    "groq": 9,
-    "together": 10,
-    "fireworks": 11,
-    "cohere": 12,
-    "deepseek": 13,
-    "xai": 14,
+    "anthropic": 1, "openai": 2, "google_gemini": 3, "openrouter": 4,
+    "azure_openai": 5, "aws_bedrock": 6, "google_vertex": 7, "mistral": 8,
+    "groq": 9, "together": 10, "fireworks": 11, "cohere": 12,
+    "deepseek": 13, "xai": 14, "replicate": 15, "perplexity": 16,
+    "huggingface": 17, "cerebras": 18, "nvidia_nim": 19,
 }
 
 _LOCAL_PRIORITY: dict[str, int] = {
@@ -101,6 +95,22 @@ _LOCAL_PRIORITY: dict[str, int] = {
     "vllm": 4,
 }
 
+_BUILTIN_API_REGISTRY = _API_PROVIDER_ENV_REGISTRY
+_BUILTIN_LOCAL_REGISTRY = _LOCAL_PROVIDER_ENDPOINTS
+
+
+def _load_provider_registry(policy_path: Path | None = None) -> tuple[dict, dict]:
+    if policy_path and policy_path.exists():
+        try:
+            data = json.loads(policy_path.read_text(encoding="utf-8"))
+            api_reg = data.get("api_provider_env_registry", {})
+            local_reg = data.get("local_endpoint_registry", {})
+            if api_reg:
+                return api_reg, local_reg or _BUILTIN_LOCAL_REGISTRY
+        except Exception:
+            pass
+    return _BUILTIN_API_REGISTRY, _BUILTIN_LOCAL_REGISTRY
+
 
 def probe_api_providers_from_env() -> list[ProviderProbe]:
     """Detect API providers by env var PRESENCE only.
@@ -109,35 +119,54 @@ def probe_api_providers_from_env() -> list[ProviderProbe]:
     """
     results: list[ProviderProbe] = []
 
-    for provider, env_keys in _API_PROVIDER_ENV_REGISTRY.items():
-        # Only check presence — never store the value
-        detected_names: list[str] = [k for k in env_keys if os.environ.get(k) is not None]
-        auth_detected = len(detected_names) > 0
+    for provider, key_spec in _API_PROVIDER_ENV_REGISTRY.items():
+        required_keys = key_spec.get("required", [])
+        optional_keys = key_spec.get("optional", [])
+        weak_keys = key_spec.get("weak", [])
 
-        if not auth_detected:
+        required_present = [k for k in required_keys if os.environ.get(k)]  # truthy check
+        optional_present = [k for k in optional_keys if os.environ.get(k)]
+        weak_present = [k for k in weak_keys if os.environ.get(k)]
+
+        all_detected = required_present + optional_present + weak_present
+        all_required_met = len(required_present) == len(required_keys)
+        has_weak_only = not all_required_met and len(weak_present) > 0
+
+        if not all_required_met and not has_weak_only:
             continue
 
+        confidence = "high" if all_required_met else "low"
         priority = _API_PRIORITY.get(provider)
-        results.append(
-            ProviderProbe(
-                provider=provider,
-                kind=provider,  # type: ignore[arg-type]
-                location="api",
-                role="runtime_llm",
-                status="configured",  # Env present but not called → configured, not available
-                source="env",
-                auth_detected=True,
-                endpoint_detected=False,
-                detected_env_names=detected_names,  # VAR NAMES only, never values
-                priority=priority,
-                is_primary_candidate=(priority == 1),
-                is_fallback_candidate=(priority is not None and priority > 1),
-                detail=None,
-            )
-        )
+
+        results.append(ProviderProbe(
+            provider=provider,
+            kind=provider,  # type: ignore[arg-type]
+            location="api",
+            role="runtime_llm",
+            status="configured",
+            source="env",
+            auth_detected=all_required_met,
+            endpoint_detected=False,
+            detected_env_names=all_detected,  # VAR NAMES only, never values
+            priority=priority,
+            is_primary_candidate=(all_required_met and priority == 1),
+            is_fallback_candidate=(all_required_met and priority is not None and priority > 1),
+            detail=None,
+            confidence=confidence,
+        ))
 
     results.sort(key=lambda p: (p.priority or 999))
     return results
+
+
+def _validate_probe_response(provider: str, body: bytes) -> bool:
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return False
+    if provider == "ollama":
+        return isinstance(data.get("models"), list)
+    return isinstance(data.get("data"), list)
 
 
 def probe_local_providers(timeout_ms: int = 200) -> list[ProviderProbe]:
@@ -157,8 +186,14 @@ def probe_local_providers(timeout_ms: int = 200) -> list[ProviderProbe]:
         try:
             with urllib.request.urlopen(endpoint, timeout=timeout_sec) as resp:  # noqa: S310
                 if resp.status < 400:
-                    endpoint_detected = True
-                    status = "available"
+                    body = resp.read()
+                    if _validate_probe_response(provider, body):
+                        endpoint_detected = True
+                        status = "available"
+                    else:
+                        endpoint_detected = True
+                        status = "port_open_unverified"
+                        detail = "port open but response body invalid"
         except urllib.error.URLError as exc:
             detail = str(exc.reason) if exc.reason else str(exc)
         except OSError as exc:
@@ -178,8 +213,8 @@ def probe_local_providers(timeout_ms: int = 200) -> list[ProviderProbe]:
                 endpoint_detected=endpoint_detected,
                 detected_env_names=[],
                 priority=priority,
-                is_primary_candidate=(endpoint_detected and priority == 1),
-                is_fallback_candidate=(endpoint_detected and priority is not None and priority > 1),
+                is_primary_candidate=(status == "available" and priority == 1),
+                is_fallback_candidate=(status == "available" and priority is not None and priority > 1),
                 detail=detail,
             )
         )
