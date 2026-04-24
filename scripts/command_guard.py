@@ -96,6 +96,40 @@ CRON_COMMANDS: frozenset[str] = frozenset(
 )
 
 # ---------------------------------------------------------------------------
+# Flag normalization
+# ---------------------------------------------------------------------------
+
+_LONG_TO_SHORT: dict[str, str] = {
+    "--recursive": "-r",
+    "--force": "-f",
+    "--verbose": "-v",
+    "--all": "-a",
+    "--quiet": "-q",
+}
+
+
+def _normalize_flags(argv: list[str]) -> list[str]:
+    """Normalize long flags to short equivalents, then merge consecutive short flags."""
+    result: list[str] = []
+    for arg in argv:
+        result.append(_LONG_TO_SHORT.get(arg, arg))
+    # Merge consecutive single-char flags: ["-r", "-f"] -> ["-rf"]
+    merged: list[str] = []
+    i = 0
+    while i < len(result):
+        if result[i].startswith("-") and not result[i].startswith("--") and len(result[i]) == 2:
+            combo = result[i]
+            while i + 1 < len(result) and result[i + 1].startswith("-") and not result[i + 1].startswith("--") and len(result[i + 1]) == 2:
+                combo += result[i + 1][1]
+                i += 1
+            merged.append(combo)
+        else:
+            merged.append(result[i])
+        i += 1
+    return merged
+
+
+# ---------------------------------------------------------------------------
 # Built-in policy fallback (mirrors guard_policy.json)
 # ---------------------------------------------------------------------------
 
@@ -202,6 +236,32 @@ def _load_policy(policy_path: Path | None) -> tuple[list[dict], list[dict]]:
 # Classification helpers
 # ---------------------------------------------------------------------------
 
+INTERPRETER_WRAPPERS: frozenset[str] = frozenset({"python3", "python", "perl", "ruby", "node"})
+INTERPRETER_EXEC_FLAGS: frozenset[str] = frozenset({"-c", "-e"})
+
+
+def _extract_interpreter_inner(argv: list[str]) -> str | None:
+    if not argv or argv[0].lower() not in INTERPRETER_WRAPPERS:
+        return None
+    for i, arg in enumerate(argv[1:], start=1):
+        if arg in INTERPRETER_EXEC_FLAGS and i + 1 < len(argv):
+            return argv[i + 1]
+    return None
+
+
+def _extract_commands_from_interpreter(code: str) -> list[str]:
+    """Extract shell command strings from interpreter code."""
+    import re
+    commands: list[str] = []
+    for pattern in [r"system\(['\"]([^'\"]+)['\"]\)",
+                    r"subprocess\.\w+\(\[?['\"]([^'\"]+)['\"]\]?",
+                    r"exec\(['\"]([^'\"]+)['\"]\)",
+                    r"child_process[^'\"]*['\"]([^'\"]+)['\"]"]:
+        for match in re.finditer(pattern, code):
+            commands.append(match.group(1))
+    return commands
+
+
 def _normalize(argv: list[str]) -> str:
     """Join argv into a single string for pattern matching."""
     return " ".join(argv)
@@ -221,6 +281,7 @@ def _extract_shell_inner(argv: list[str]) -> str | None:
 
 def _effective_argv(argv: list[str]) -> tuple[list[str], bool, str | None]:
     """Return (effective_argv, shell_wrapped, inner_command_str)."""
+    # Shell wrappers first
     inner_str = _extract_shell_inner(argv)
     if inner_str is not None:
         try:
@@ -228,6 +289,17 @@ def _effective_argv(argv: list[str]) -> tuple[list[str], bool, str | None]:
         except ValueError:
             inner_argv = inner_str.split()
         return inner_argv, True, inner_str
+    # Interpreter wrappers
+    interp_inner = _extract_interpreter_inner(argv)
+    if interp_inner is not None:
+        extracted = _extract_commands_from_interpreter(interp_inner)
+        if extracted:
+            try:
+                inner_argv = shlex.split(extracted[0])
+            except ValueError:
+                inner_argv = extracted[0].split()
+            return inner_argv, True, extracted[0]
+        return argv, True, interp_inner
     return argv, False, None
 
 
@@ -369,6 +441,28 @@ def _classify_argv(
         if "-r" in effective_argv[1:]:
             destructive_detected = True
 
+    # Heredoc detection
+    if "<<" in effective_argv:
+        shell_wrapped = True
+        if "heredoc_input" not in categories:
+            categories.append("heredoc_input")
+
+    # base64 pipe detection
+    if shell_inner:
+        inner_lower = shell_inner.lower()
+        if "base64" in inner_lower and "|" in inner_lower:
+            pipe_parts = inner_lower.split("|")
+            if len(pipe_parts) >= 2:
+                last_cmd = pipe_parts[-1].strip().split()[0] if pipe_parts[-1].strip() else ""
+                if last_cmd in ("bash", "sh", "zsh"):
+                    if "base64_pipe" not in categories:
+                        categories.append("base64_pipe")
+
+        if "/dev/tcp/" in inner_lower or "/dev/udp/" in inner_lower:
+            if "network_detected" not in categories:
+                categories.append("network_detected")
+            network_detected = True
+
     if not categories:
         categories.append("unknown")
 
@@ -459,9 +553,12 @@ def evaluate_command_guard(
     # Unwrap shell wrappers
     effective_argv, shell_wrapped, shell_inner = _effective_argv(command)
 
+    # Apply flag normalization
+    normalized_argv = _normalize_flags(effective_argv)
+    normalized = _normalize(normalized_argv)
+
     # Build normalized string from effective argv for pattern matching
     # Also include the raw inner command string for pipe-pattern detection
-    normalized = _normalize(effective_argv)
     match_text = normalized
     if shell_inner is not None:
         match_text = shell_inner  # use original inner string to catch pipe patterns
@@ -480,9 +577,9 @@ def evaluate_command_guard(
     if not approval_matches:
         approval_matches = _match_patterns(original_norm, require_approval_rules)
 
-    # Classify using effective argv
+    # Classify using effective argv (normalized flags)
     classification = _classify_argv(
-        effective_argv=effective_argv,
+        effective_argv=normalized_argv,
         normalized=match_text,
         shell_wrapped=shell_wrapped,
         shell_inner=shell_inner,
@@ -609,6 +706,18 @@ def evaluate_command_guard(
         action = "require_approval"
         approval_required = True
         approval_hint = "--approve-risk"
+
+    elif "base64_pipe" in classification.categories:
+        action = "require_approval"
+        approval_required = True
+        approval_hint = "--approve-risk"
+        reasons.append("base64 pipe to shell detected")
+
+    elif "heredoc_input" in classification.categories:
+        action = "require_approval"
+        approval_required = True
+        approval_hint = "--approve-risk"
+        reasons.append("heredoc input detected")
 
     elif approval_matches:
         # A require_approval policy rule matched but no profile rule caught it above.
