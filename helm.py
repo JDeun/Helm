@@ -58,6 +58,7 @@ from commands.status import (
     format_report_markdown,
 )
 from commands.validate import cmd_validate
+from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status
 
 
 # These functions are defined here (not just imported) so tests can patch
@@ -360,6 +361,29 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--limit", type=int, default=20)
     report.add_argument("--format", choices=["text", "json", "markdown"], default="text")
     report.set_defaults(func=cmd_report)
+
+    db = subparsers.add_parser("db", help="Manage the SQLite operations index.")
+    db_subparsers = db.add_subparsers(dest="db_command", required=True)
+
+    db_init = db_subparsers.add_parser("init", help="Initialize the SQLite operations index.")
+    db_init.add_argument("--path", help="Workspace path.")
+    db_init.set_defaults(func=cmd_db_init)
+
+    db_rebuild = db_subparsers.add_parser("rebuild", help="Rebuild index from JSONL source files.")
+    db_rebuild.add_argument("--path", help="Workspace path.")
+    db_rebuild.add_argument("--json", action="store_true")
+    db_rebuild.set_defaults(func=cmd_db_rebuild)
+
+    db_verify = db_subparsers.add_parser("verify", help="Compare JSONL and SQLite counts for drift.")
+    db_verify.add_argument("--path", help="Workspace path.")
+    db_verify.add_argument("--json", action="store_true")
+    db_verify.set_defaults(func=cmd_db_verify)
+
+    db_status = db_subparsers.add_parser("status", help="Show SQLite index status.")
+    db_status.add_argument("--path", help="Workspace path.")
+    db_status.add_argument("--json", action="store_true")
+    db_status.set_defaults(func=cmd_db_status)
+
     return parser
 
 

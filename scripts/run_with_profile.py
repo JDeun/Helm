@@ -118,6 +118,14 @@ def append_ledger(entry: dict) -> None:
     append_jsonl_atomic(TASK_LEDGER, entry)
 
 
+def _best_effort_index(task: dict) -> None:
+    try:
+        from scripts.ops_db import db_path_for_state_root, index_task_entry
+        index_task_entry(state_root=STATE_ROOT, entry=task, source_file="task-ledger.jsonl")
+    except Exception:
+        pass
+
+
 def finalize_task(task: dict) -> None:
     task["memory_capture"] = build_memory_capture_plan(task)
     try:
@@ -125,6 +133,7 @@ def finalize_task(task: dict) -> None:
     except OSError as exc:
         task["state_snapshot_error"] = str(exc)
     append_ledger(task)
+    _best_effort_index(task)
 
 
 def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dict:
@@ -370,6 +379,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     task = task_stub(args.profile, args, command)
     append_ledger(task)
+    _best_effort_index(task)
 
     checkpoint = run_checkpoint(args.profile, args)
     if checkpoint and checkpoint.get("error"):
@@ -444,6 +454,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             task["failure_stage"] = "guard"
             task["failure_reason"] = "guard deny"
             append_ledger(task)
+            _best_effort_index(task)
             print(f"GUARD DENY: {', '.join(guard_decision.reasons)}", file=sys.stderr)
             return EXIT_GUARD_DENY
 
@@ -452,6 +463,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             task["failure_stage"] = "guard"
             task["failure_reason"] = "approval required"
             append_ledger(task)
+            _best_effort_index(task)
             hint = guard_decision.approval_hint or "Use --approve-risk to proceed."
             print(f"GUARD APPROVAL REQUIRED: {', '.join(guard_decision.reasons)}", file=sys.stderr)
             print(f"Hint: {hint}", file=sys.stderr)
@@ -464,6 +476,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     task["status"] = "running"
     task["started_execution_at"] = utc_now_iso()
     append_ledger(task)
+    _best_effort_index(task)
 
     child_env = os.environ.copy()
     child_env["HELM_TASK_ID"] = task["task_id"]
