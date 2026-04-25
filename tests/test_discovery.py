@@ -13,6 +13,15 @@ if str(ROOT) not in sys.path:
 
 from scripts.discovery import discover_environment, snapshot_to_json, _detect_gpu, GpuInfo
 
+import pytest as _pytest
+
+@_pytest.fixture(autouse=True)
+def _clear_gpu_cache():
+    """Clear _detect_gpu lru_cache before every test so patches take effect."""
+    _detect_gpu.cache_clear()
+    yield
+    _detect_gpu.cache_clear()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -271,4 +280,4 @@ def test_no_gpu():
         detected, gpus = _detect_gpu()
 
     assert detected is False
-    assert gpus == []
+    assert gpus == ()

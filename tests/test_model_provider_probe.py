@@ -19,6 +19,15 @@ from scripts.model_provider_probe import (
 )
 from scripts.discovery import _detect_gpu, HardwareProfile
 
+import pytest as _pytest
+
+@_pytest.fixture(autouse=True)
+def _clear_gpu_cache():
+    """Clear _detect_gpu lru_cache before every test so subprocess patches take effect."""
+    _detect_gpu.cache_clear()
+    yield
+    _detect_gpu.cache_clear()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -232,7 +241,7 @@ def test_local_probe_invalid_json_body_is_unverified(monkeypatch: pytest.MonkeyP
 
     class FakeResponse:
         status = 200
-        def read(self): return b"not json"
+        def read(self, size=-1): return b"not json"
         def __enter__(self): return self
         def __exit__(self, *a): pass
 
@@ -247,7 +256,7 @@ def test_local_probe_valid_ollama_response(monkeypatch: pytest.MonkeyPatch) -> N
 
     class FakeResponse:
         status = 200
-        def read(self): return json.dumps({"models": [{"name": "llama3"}]}).encode()
+        def read(self, size=-1): return json.dumps({"models": [{"name": "llama3"}]}).encode()
         def __enter__(self): return self
         def __exit__(self, *a): pass
 
@@ -262,7 +271,7 @@ def test_local_probe_valid_openai_compat(monkeypatch: pytest.MonkeyPatch) -> Non
 
     class FakeResponse:
         status = 200
-        def read(self): return json.dumps({"data": [{"id": "m1"}]}).encode()
+        def read(self, size=-1): return json.dumps({"data": [{"id": "m1"}]}).encode()
         def __enter__(self): return self
         def __exit__(self, *a): pass
 

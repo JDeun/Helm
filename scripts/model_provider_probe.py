@@ -38,7 +38,7 @@ class ProviderProbe:
     source: str
     auth_detected: bool
     endpoint_detected: bool
-    detected_env_names: list[str]
+    detected_env_names: tuple[str, ...]
     priority: int | None
     is_primary_candidate: bool
     is_fallback_candidate: bool
@@ -151,7 +151,7 @@ def probe_api_providers_from_env(
             source="env",
             auth_detected=all_required_met,
             endpoint_detected=False,
-            detected_env_names=all_detected,  # VAR NAMES only, never values
+            detected_env_names=tuple(all_detected),  # VAR NAMES only, never values
             priority=priority,
             is_primary_candidate=(all_required_met and priority == 1),
             is_fallback_candidate=(all_required_met and priority is not None and priority > 1),
@@ -190,7 +190,7 @@ def probe_local_providers(timeout_ms: int = 200) -> list[ProviderProbe]:
         try:
             with urllib.request.urlopen(endpoint, timeout=timeout_sec) as resp:  # noqa: S310
                 if resp.status < 400:
-                    body = resp.read()
+                    body = resp.read(65536)  # cap at 64 KiB to prevent OOM on misbehaving endpoints
                     if _validate_probe_response(provider, body):
                         endpoint_detected = True
                         status = "available"
@@ -215,7 +215,7 @@ def probe_local_providers(timeout_ms: int = 200) -> list[ProviderProbe]:
                 source="endpoint_probe",
                 auth_detected=False,
                 endpoint_detected=endpoint_detected,
-                detected_env_names=[],
+                detected_env_names=(),
                 priority=priority,
                 is_primary_candidate=(status == "available" and priority == 1),
                 is_fallback_candidate=(status == "available" and priority is not None and priority > 1),
@@ -262,7 +262,7 @@ def probe_runtime_config_providers(workspace: Path) -> list[ProviderProbe]:
                 source="runtime_config",
                 auth_detected=False,
                 endpoint_detected=False,
-                detected_env_names=[],
+                detected_env_names=(),
                 priority=None,
                 is_primary_candidate=False,
                 is_fallback_candidate=False,
@@ -276,9 +276,10 @@ def probe_runtime_config_providers(workspace: Path) -> list[ProviderProbe]:
 def probe_all_model_providers(
     workspace: Path,
     timeout_ms: int = 500,
+    policy_path: Path | None = None,
 ) -> list[ProviderProbe]:
     """Merge all probe results."""
-    api_probes = probe_api_providers_from_env()
+    api_probes = probe_api_providers_from_env(policy_path=policy_path)
     local_probes = probe_local_providers(timeout_ms=timeout_ms)
     config_probes = probe_runtime_config_providers(workspace)
     return api_probes + local_probes + config_probes

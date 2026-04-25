@@ -5,12 +5,17 @@ and helm intelligence state. Read-only — never mutates configs.
 """
 from __future__ import annotations
 
+import functools
 import platform
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, NamedTuple
 
+# sys.path bootstrap: all scripts in this project use this pattern so that they
+# can be run directly (e.g. `python scripts/discovery.py`) as well as imported
+# as `scripts.discovery` from the project root.  A package install or editable
+# install would make this unnecessary, but we intentionally avoid requiring one.
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -44,8 +49,8 @@ class RuntimeFingerprint:
     confidence: float
     adapter: str
     root: str
-    markers: list[str]
-    reasons: list[str]
+    markers: tuple[str, ...]
+    reasons: tuple[str, ...]
 
 
 class GpuInfo(NamedTuple):
@@ -75,10 +80,10 @@ class RuntimeModelState:
     runtime_model_detected: bool
     mode: RuntimeModelMode
     priority: str
-    api_candidates: list[dict]
-    local_candidates: list[dict]
+    api_candidates: tuple[dict, ...]
+    local_candidates: tuple[dict, ...]
     primary_candidate: str | None
-    fallback_candidates: list[str]
+    fallback_candidates: tuple[str, ...]
     source: str
     readiness: RuntimeReadiness
     note: str | None = None
@@ -99,7 +104,7 @@ class DiscoverySnapshot:
     runtime_model_state: RuntimeModelState
     helm_intelligence_state: HelmIntelligenceState
     strategy: dict[str, object]
-    warnings: list[str] = field(default_factory=list)
+    warnings: tuple[str, ...] = field(default_factory=tuple)
 
 
 # ---------------------------------------------------------------------------
@@ -128,8 +133,8 @@ def _detect_runtime(workspace: Path) -> RuntimeFingerprint:
     kind: RuntimeKind = layout.kind if layout.kind in _KIND_CONFIDENCE else "unknown"  # type: ignore[assignment]
     confidence = _KIND_CONFIDENCE.get(kind, 0.10)
     adapter = _KIND_ADAPTER.get(kind, "none")
-    markers = list(layout.markers)
-    reasons = [f"marker: {m}" for m in markers] if markers else ["no markers found"]
+    markers = tuple(layout.markers)
+    reasons = tuple(f"marker: {m}" for m in markers) if markers else ("no markers found",)
 
     return RuntimeFingerprint(
         kind=kind,
@@ -211,8 +216,14 @@ def _read_memory_total_gb() -> float | None:
 _LOW_RAM_THRESHOLD_GB = 17.0
 
 
-def _detect_gpu() -> tuple[bool, list[GpuInfo]]:
-    """Detect GPUs. Returns (detected, gpu_list)."""
+@functools.lru_cache(maxsize=1)
+def _detect_gpu() -> tuple[bool, tuple[GpuInfo, ...]]:
+    """Detect GPUs. Returns (detected, gpu_tuple).
+
+    Cached with lru_cache(maxsize=1): hardware does not change during process
+    lifetime, so repeated calls (e.g. from tests or retries) hit the cache.
+    The return value is a tuple so it is fully hashable.
+    """
     import subprocess
 
     gpus: list[GpuInfo] = []
@@ -248,7 +259,7 @@ def _detect_gpu() -> tuple[bool, list[GpuInfo]]:
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         pass
 
-    return (len(gpus) > 0, gpus)
+    return (len(gpus) > 0, tuple(gpus))
 
 
 def _parse_rocm_smi(output: str, gpus: list[GpuInfo]) -> None:
@@ -295,15 +306,15 @@ def _detect_hardware() -> HardwareProfile:
     low_ram = (memory_total_gb is not None and memory_total_gb <= _LOW_RAM_THRESHOLD_GB)
     python_version = platform.python_version()
 
-    gpu_detected, gpu_list = _detect_gpu()
+    gpu_detected, gpu_tuple = _detect_gpu()
 
     # Apple Silicon: unified memory = GPU memory
     if is_apple_silicon and not gpu_detected:
         gpu_detected = True
-        gpu_list = [GpuInfo(name="Apple Silicon", vram_gb=memory_total_gb, vendor="apple")]
+        gpu_tuple = (GpuInfo(name="Apple Silicon", vram_gb=memory_total_gb, vendor="apple"),)
 
-    gpu_name = gpu_list[0].name if gpu_list else None
-    vram_gb = gpu_list[0].vram_gb if gpu_list else None
+    gpu_name = gpu_tuple[0].name if gpu_tuple else None
+    vram_gb = gpu_tuple[0].vram_gb if gpu_tuple else None
 
     return HardwareProfile(
         os_name=os_name,
@@ -317,7 +328,7 @@ def _detect_hardware() -> HardwareProfile:
         gpu_detected=gpu_detected,
         gpu_name=gpu_name,
         vram_gb=vram_gb,
-        gpus=tuple(gpu_list),
+        gpus=gpu_tuple,
     )
 
 
@@ -364,13 +375,13 @@ def _build_runtime_model_state(
 
     all_candidates = api_configured + local_available
     primary: str | None = None
-    fallbacks: list[str] = []
+    fallbacks: tuple[str, ...] = ()
     if all_candidates:
         sorted_candidates = sorted(
             all_candidates, key=lambda p: (p.priority or 999)
         )
         primary = sorted_candidates[0].provider
-        fallbacks = [p.provider for p in sorted_candidates[1:]]
+        fallbacks = tuple(p.provider for p in sorted_candidates[1:])
 
     runtime_model_detected = has_api or has_local
 
@@ -378,8 +389,8 @@ def _build_runtime_model_state(
         runtime_model_detected=runtime_model_detected,
         mode=mode,
         priority="runtime_defined",
-        api_candidates=[_probe_to_dict(p) for p in api_configured],
-        local_candidates=[_probe_to_dict(p) for p in local_available],
+        api_candidates=tuple(_probe_to_dict(p) for p in api_configured),
+        local_candidates=tuple(_probe_to_dict(p) for p in local_available),
         primary_candidate=primary,
         fallback_candidates=fallbacks,
         source="probe",
@@ -463,11 +474,11 @@ def discover_environment(
         "memory_total_gb": hardware.memory_total_gb,
     }
 
-    warnings: list[str] = []
+    _warnings: list[str] = []
     if runtime_model_state.readiness == "degraded":
-        warnings.append("No model providers detected. Helm will run in deterministic-only mode.")
+        _warnings.append("No model providers detected. Helm will run in deterministic-only mode.")
     if hardware.low_ram:
-        warnings.append(
+        _warnings.append(
             f"Low RAM detected ({hardware.memory_total_gb:.1f} GB). "
             "Local model calls disabled."
         )
@@ -478,7 +489,7 @@ def discover_environment(
         runtime_model_state=runtime_model_state,
         helm_intelligence_state=helm_intelligence_state,
         strategy=strategy,
-        warnings=warnings,
+        warnings=tuple(_warnings),
     )
 
 
@@ -505,6 +516,7 @@ def snapshot_to_json(snapshot: DiscoverySnapshot) -> dict:
             "gpu_detected": snapshot.hardware.gpu_detected,
             "gpu_name": snapshot.hardware.gpu_name,
             "vram_gb": snapshot.hardware.vram_gb,
+            "gpus": [{"name": g.name, "vram_gb": g.vram_gb, "vendor": g.vendor} for g in snapshot.hardware.gpus],
         },
         "runtime_model_state": {
             "runtime_model_detected": snapshot.runtime_model_state.runtime_model_detected,
