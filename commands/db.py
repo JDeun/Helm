@@ -53,6 +53,7 @@ def cmd_db_status(args: argparse.Namespace) -> int:
             conn = sqlite3.connect(str(db))
             try:
                 for table in ("task_index", "guard_decision_index", "discovery_snapshot_index"):
+                    # table name is from a hardcoded whitelist above, not user input — safe for f-string
                     count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                     payload[f"{table}_rows"] = count
             finally:
