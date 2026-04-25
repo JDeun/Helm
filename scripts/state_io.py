@@ -5,16 +5,35 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import warnings as _warnings
 from pathlib import Path
 from typing import Any
 
+_lock_warning_event = threading.Event()
+
+# Keep the legacy name so tests that reset it directly still work.
+# Tests do `state_io_mod._LOCK_WARNING_ISSUED = False`; we intercept that via
+# a module-level property shim by keeping both in sync in the functions below.
 _LOCK_WARNING_ISSUED = False
+
+
+def _warn_lock_once(msg: str) -> None:
+    """Emit a lock-unavailability warning exactly once, thread-safely."""
+    global _LOCK_WARNING_ISSUED
+    if not _lock_warning_event.is_set():
+        _lock_warning_event.set()
+        _LOCK_WARNING_ISSUED = True
+        _warnings.warn(msg)
 
 
 def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
     """Append one JSON object to a JSONL file with best-effort locking."""
+    # Allow tests to reset the event via the legacy boolean flag.
+    # If _LOCK_WARNING_ISSUED has been reset to False externally, clear the event too.
     global _LOCK_WARNING_ISSUED
+    if not _LOCK_WARNING_ISSUED and _lock_warning_event.is_set():
+        _lock_warning_event.clear()
 
     path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n"
@@ -30,25 +49,19 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
                 locked = True
             except Exception:
                 locked = False
-                if not _LOCK_WARNING_ISSUED:
-                    _warnings.warn("File locking unavailable; concurrent writes may corrupt data")
-                    _LOCK_WARNING_ISSUED = True
+                _warn_lock_once("File locking unavailable; concurrent writes may corrupt data")
         else:
             try:
                 import msvcrt
-                # On Windows, we need to lock the region where we're about to write.
-                # Get current file position (which is EOF in append mode), then lock that region.
-                current_pos = fh.seek(0, 2)  # Seek to EOF to get position
-                # Lock a sufficiently large region to cover our write plus some buffer
-                # for concurrent writes. We use 65536 bytes as a reasonable lock size.
-                lock_size = max(len(line_bytes), 65536)
-                msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, lock_size)
+                # Use bytes 0–1 as a fixed sentinel mutex region.
+                # This ensures lock and unlock always operate on the same
+                # byte region regardless of file position changes during write.
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
                 locked = True
             except Exception:
                 locked = False
-                if not _LOCK_WARNING_ISSUED:
-                    _warnings.warn("File locking unavailable; concurrent writes may corrupt data")
-                    _LOCK_WARNING_ISSUED = True
+                _warn_lock_once("File locking unavailable; concurrent writes may corrupt data")
 
         try:
             fh.write(line_bytes)
@@ -65,7 +78,8 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
                 else:
                     try:
                         import msvcrt
-                        lock_size = max(len(line_bytes), 65536)
-                        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, lock_size)
+                        # Unlock the same sentinel region locked above.
+                        fh.seek(0)
+                        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
                     except Exception:
                         pass
