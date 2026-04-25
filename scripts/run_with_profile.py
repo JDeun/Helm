@@ -46,6 +46,27 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_MINIMAL_ENV_KEYS = {
+    "PATH", "HOME", "LANG", "LC_ALL", "TERM", "SHELL",
+    "USER", "LOGNAME", "TMPDIR", "TMP", "TEMP",
+    "SYSTEMROOT", "COMSPEC",
+}
+
+_WORKSPACE_ENV_KEYS = {
+    "PWD", "OLDPWD", "VIRTUAL_ENV", "CONDA_DEFAULT_ENV", "CONDA_PREFIX",
+}
+
+
+def _minimal_env(*, extra_keys: set[str] | None = None) -> dict[str, str]:
+    """Return a minimal environment dict with only safe, non-secret variables."""
+    keep = _MINIMAL_ENV_KEYS | (extra_keys or set())
+    env: dict[str, str] = {}
+    for key, value in os.environ.items():
+        if key in keep or key.startswith("HELM_") or key.startswith("OPENCLAW_"):
+            env[key] = value
+    return env
+
+
 def iso_to_compact(value: str | None) -> str | None:
     if not value:
         return None
@@ -512,7 +533,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     append_ledger(task)
     _best_effort_index(task)
 
-    child_env = os.environ.copy()
+    writes_allowed = config.get("writes_allowed", True)
+    network_allowed = config.get("network_allowed", True)
+    if not writes_allowed and not network_allowed:
+        child_env = _minimal_env()
+    elif not network_allowed:
+        child_env = _minimal_env(extra_keys=_WORKSPACE_ENV_KEYS)
+    else:
+        child_env = os.environ.copy()
     child_env["HELM_TASK_ID"] = task["task_id"]
     child_env["HELM_TASK_PROFILE"] = str(task["profile"])
     child_env["OPENCLAW_TASK_ID"] = task["task_id"]

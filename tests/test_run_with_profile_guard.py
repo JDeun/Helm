@@ -241,23 +241,8 @@ def test_helm_guard_mode_off_via_env_warns(monkeypatch, capsys, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# C3: subprocess timeout
+# Shared helpers
 # ---------------------------------------------------------------------------
-
-_FAKE_PROFILES_WRITE = {
-    "workspace_edit": {
-        "description": "Workspace edits.",
-        "backend": "local",
-        "runtime_backend": "local-shell",
-        "runtime_target_kind": "workspace",
-        "isolation": "shared-session",
-        "handoff_required": False,
-        "writes_allowed": True,
-        "network_allowed": False,
-        "checkpoint": "never",
-    }
-}
-
 
 def _make_args_with_timeout(timeout: int = 1800, profile: str = "inspect_local"):
     from unittest.mock import MagicMock
@@ -310,6 +295,10 @@ def _make_allow_decision(profile: str = "inspect_local"):
         approval_hint=None,
     )
 
+
+# ---------------------------------------------------------------------------
+# C3: subprocess timeout
+# ---------------------------------------------------------------------------
 
 def test_timeout_expired_records_timeout_status(capsys):
     """When subprocess.TimeoutExpired is raised, task status must be 'timeout' and exit code 1."""
@@ -406,3 +395,120 @@ def test_checkpoint_timeout_returns_error_dict():
     assert result is not None
     assert "error" in result
     assert "timed out" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# H4: minimal environment for restricted profiles
+# ---------------------------------------------------------------------------
+
+def test_minimal_env_excludes_secrets(monkeypatch):
+    """_minimal_env() must not expose secret-like vars that are not in the allow-list."""
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "supersecret")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("PATH", "/usr/bin")
+
+    from scripts.run_with_profile import _minimal_env
+    env = _minimal_env()
+
+    assert "AWS_SECRET_ACCESS_KEY" not in env, "AWS_SECRET_ACCESS_KEY must not appear in minimal env"
+    assert "OPENAI_API_KEY" not in env, "OPENAI_API_KEY must not appear in minimal env"
+    assert "PATH" in env, "PATH must be present in minimal env"
+
+
+def test_minimal_env_includes_helm_vars(monkeypatch):
+    """_minimal_env() must pass through any HELM_* and OPENCLAW_* vars."""
+    monkeypatch.setenv("HELM_MY_CUSTOM_VAR", "value1")
+    monkeypatch.setenv("OPENCLAW_MY_VAR", "value2")
+
+    from scripts.run_with_profile import _minimal_env
+    env = _minimal_env()
+
+    assert env.get("HELM_MY_CUSTOM_VAR") == "value1"
+    assert env.get("OPENCLAW_MY_VAR") == "value2"
+
+
+def test_inspect_local_uses_minimal_env(monkeypatch, capsys):
+    """inspect_local (writes=False, network=False) must use _minimal_env, not full os.environ."""
+    from unittest.mock import patch
+    import subprocess as _sp
+    from scripts.run_with_profile import cmd_run
+
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "supersecret")
+
+    captured_envs = []
+
+    def fake_subprocess_run(*a, **kw):
+        captured_envs.append(kw.get("env", {}))
+        return _sp.CompletedProcess(args=[], returncode=0)
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("scripts.run_with_profile.finalize_task"), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
+
+        mock_guard.return_value = _make_allow_decision()
+
+        args = _make_args_with_timeout(timeout=1800, profile="inspect_local")
+        args.command = ["echo", "hello"]
+        cmd_run(args)
+
+    assert captured_envs, "subprocess.run must have been called"
+    child_env = captured_envs[0]
+    assert "AWS_SECRET_ACCESS_KEY" not in child_env, \
+        "inspect_local must not receive AWS_SECRET_ACCESS_KEY"
+    assert "HELM_TASK_ID" in child_env, "HELM_TASK_ID must always be injected"
+
+
+def test_network_allowed_profile_uses_full_env(monkeypatch):
+    """A profile with network_allowed=True should receive the full environment."""
+    import subprocess as _sp
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+
+    monkeypatch.setenv("MY_CUSTOM_VAR", "myvalue")
+
+    network_profile = {
+        "service_ops": {
+            "description": "Service operations with network.",
+            "backend": "local",
+            "runtime_backend": "local-shell",
+            "runtime_target_kind": "workspace",
+            "isolation": "shared-session",
+            "handoff_required": False,
+            "writes_allowed": True,
+            "network_allowed": True,
+            "checkpoint": "never",
+        }
+    }
+
+    captured_envs = []
+
+    def fake_subprocess_run(*a, **kw):
+        captured_envs.append(kw.get("env", {}))
+        return _sp.CompletedProcess(args=[], returncode=0)
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=network_profile), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("scripts.run_with_profile.finalize_task"), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
+
+        mock_guard.return_value = _make_allow_decision(profile="service_ops")
+
+        args = _make_args_with_timeout(timeout=1800, profile="service_ops")
+        args.command = ["echo", "hello"]
+        cmd_run(args)
+
+    assert captured_envs, "subprocess.run must have been called"
+    child_env = captured_envs[0]
+    assert "MY_CUSTOM_VAR" in child_env, \
+        "network_allowed profile should receive full env including MY_CUSTOM_VAR"
