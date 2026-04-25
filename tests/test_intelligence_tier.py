@@ -32,7 +32,7 @@ def test_no_snapshot_local_disabled() -> None:
 
 def test_no_snapshot_available_tiers_baseline_only() -> None:
     tier = IntelligenceTier(discovery_snapshot={})
-    assert tier.available_tiers() == ["L0_static_safety", "L1_deterministic_scoring"]
+    assert tier.available_tiers() == ("L0_static_safety", "L1_deterministic_scoring")
 
 
 # ---------------------------------------------------------------------------

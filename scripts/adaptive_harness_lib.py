@@ -25,6 +25,9 @@ from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill
 from scripts.state_io import append_jsonl_atomic
 
 
+# Module-level workspace paths: resolved once at import time.  Tests that need
+# a different workspace must monkeypatch these constants before calling any
+# function in this module.
 WORKSPACE = get_workspace_layout().root
 PROFILE_FILE = WORKSPACE / "references" / "execution_profiles.json"
 POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"

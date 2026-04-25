@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.6.0</strong></p>
+<p align="center"><strong>Current release: v0.6.1</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -426,7 +426,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.6.0.md`](docs/releases/0.6.0.md)
+- [`docs/releases/0.6.1.md`](docs/releases/0.6.1.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -451,7 +451,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.6.0 adds a deterministic command guard, provider-agnostic LLM discovery, a SQLite query index, and cross-platform atomic writes, backed by 180 tests.
+Helm v0.6.1 hardens every module with full immutability enforcement, structured type safety, thread-safe operations, and subprocess timeout control, backed by 298 tests.
 
 ### Core
 
@@ -464,22 +464,29 @@ Helm v0.6.0 adds a deterministic command guard, provider-agnostic LLM discovery,
 ### Security
 
 - Deterministic command guard with risk scoring and approval workflow
+- `SemanticResult` structured return type for bypass-resistant semantic analysis
+- Recursive shell unwrapping (max depth 5) and interpreter detection
 - Heredoc, base64, and `/dev/tcp` bypass detection
-- Fail-closed guard policy on exceptions
+- Fail-closed guard policy on exceptions (tuple-based, immutable)
 - Guard evaluation before manual-remote handoff
+- `--guard-json` flag for machine-readable guard decisions
+- Minimal environment isolation for restricted profiles
 
 ### Reliability
 
 - Provider discovery: 19 API providers, 4 local providers (no API calls, no secrets stored)
-- GPU/VRAM detection: NVIDIA, Apple Silicon, AMD (ROCm), multi-GPU
+- GPU/VRAM detection: NVIDIA, Apple Silicon, AMD (ROCm), multi-GPU with `lru_cache`
 - Custom provider registry via policy JSON
-- SQLite query index over JSONL (init, rebuild, verify, query)
-- Atomic JSONL append with cross-platform file locking
+- SQLite query index over JSONL (init, rebuild, verify, query) with thread-safe caching
+- Atomic JSONL append with cross-platform sentinel-region file locking
+- Schema versioning and streaming JSONL reads (no OOM on large files)
+- Subprocess timeout control (`--timeout`, default 1800s)
 - Extended `helm doctor` with discovery, hardware, and guard sections
 
 ### Governance
 
 - Manifest-based adaptive harness with skill-owned policy
+- Deep merge for skill contract resolution
 - Manifest auditing and quality auditing for skill contracts
 - `SKILL.md` quality guidance and contract-driven drafting templates
 - Checkpoint, report, and skill review flows
@@ -490,7 +497,8 @@ Helm v0.6.0 adds a deterministic command guard, provider-agnostic LLM discovery,
 - `helm db init/rebuild/verify/status/query`
 - `helm doctor --skip-discovery`
 - State-snapshot inspection and handoff artifacts
-- 180 tests (pytest, cross-platform)
+- Snapshot-driven intelligence tier resolution (L0-L4)
+- 298 tests (pytest, cross-platform)
 
 Not included:
 

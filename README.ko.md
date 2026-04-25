@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.6.0</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.6.1</strong></p>
 
 <p align="center">
   <a href="README.md">English README</a>
@@ -419,7 +419,7 @@ python3 -m pip install --user --no-build-isolation .
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.6.0.md`](docs/releases/0.6.0.md)
+- [`docs/releases/0.6.1.md`](docs/releases/0.6.1.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -444,7 +444,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## 현재 상태
 
-Helm v0.6.0은 결정론적 명령 가드, provider-agnostic LLM 탐지, SQLite 쿼리 인덱스, 크로스 플랫폼 atomic 쓰기를 추가한 릴리즈입니다. 180개 테스트로 검증됩니다.
+Helm v0.6.1은 전 모듈에 걸쳐 완전한 불변성 강제, 구조적 타입 안전, 스레드 안전 연산, 서브프로세스 타임아웃 제어를 적용한 hardening 릴리즈입니다. 298개 테스트로 검증됩니다.
 
 ### 코어
 
@@ -457,22 +457,29 @@ Helm v0.6.0은 결정론적 명령 가드, provider-agnostic LLM 탐지, SQLite 
 ### 보안
 
 - 위험 점수와 승인 워크플로우를 갖춘 결정론적 명령 가드
+- `SemanticResult` 구조적 반환 타입으로 우회 방지 semantic 분석
+- 재귀적 셸 언래핑 (최대 깊이 5) 및 인터프리터 감지
 - heredoc, base64, `/dev/tcp` 우회 패턴 감지
-- 가드 예외 시 fail-closed 정책
+- 가드 예외 시 fail-closed 정책 (tuple 기반, 불변)
 - manual-remote 핸드오프 전 가드 평가
+- `--guard-json` 플래그로 머신 리더블 가드 결정 출력
+- 제한된 프로필을 위한 최소 환경 격리
 
 ### 신뢰성
 
 - 프로바이더 탐지: API 19개, 로컬 4개 (API 호출 없음, 시크릿 미저장)
-- GPU/VRAM 감지: NVIDIA, Apple Silicon, AMD (ROCm), 멀티 GPU
+- GPU/VRAM 감지: NVIDIA, Apple Silicon, AMD (ROCm), 멀티 GPU (`lru_cache` 적용)
 - policy JSON을 통한 커스텀 프로바이더 레지스트리
-- JSONL 위의 SQLite 쿼리 인덱스 (init, rebuild, verify, query)
-- 크로스 플랫폼 파일 잠금 기반 atomic JSONL append
+- JSONL 위의 SQLite 쿼리 인덱스 (init, rebuild, verify, query), 스레드 안전 캐싱
+- 크로스 플랫폼 sentinel-region 파일 잠금 기반 atomic JSONL append
+- 스키마 버전 관리 및 스트리밍 JSONL 읽기 (대용량 파일 OOM 방지)
+- 서브프로세스 타임아웃 제어 (`--timeout`, 기본 1800초)
 - discovery, hardware, guard 섹션이 포함된 확장 `helm doctor`
 
 ### 거버넌스
 
 - 스킬 소유 정책 기반 manifest adaptive harness
+- 스킬 contract 해석을 위한 deep merge
 - 스킬 contract의 manifest 감사 및 품질 감사
 - `SKILL.md` 품질 기준과 계약형 draft 템플릿
 - checkpoint, report, skill review 흐름
@@ -483,7 +490,8 @@ Helm v0.6.0은 결정론적 명령 가드, provider-agnostic LLM 탐지, SQLite 
 - `helm db init/rebuild/verify/status/query`
 - `helm doctor --skip-discovery`
 - state-snapshot 조회 및 handoff artifact
-- 180개 테스트 (pytest, 크로스 플랫폼)
+- 스냅샷 기반 intelligence tier 해석 (L0-L4)
+- 298개 테스트 (pytest, 크로스 플랫폼)
 
 의도적으로 빠진 것:
 

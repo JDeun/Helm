@@ -150,7 +150,7 @@ _SYSTEM_DIRECTORIES: frozenset[str] = frozenset({
 })
 
 
-def _semantic_deny_check(argv: list[str]) -> str | None:
+def _semantic_deny_check(argv: list[str]) -> SemanticResult | None:
     """Semantic analysis of argv to catch deny-worthy commands that bypass substring matching.
 
     Returns a SemanticResult with action and reason if a semantic rule matched,

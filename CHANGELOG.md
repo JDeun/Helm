@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+## [0.6.1] — 2026-04-25
+
+### Hardening
+
+- **command_guard**: `SemanticResult` NamedTuple replaces stringly-typed `"approve."/"deny."` prefix convention
+- **command_guard**: Correct return type annotation (`SemanticResult | None`)
+- **command_guard**: `dd` read vs write distinction (if= → require_approval, of= → deny)
+- **command_guard**: `shred`/`wipefs`/`blkdiscard` semantic deny rules
+- **command_guard**: Explicit parentheses on `/dev/zero` check
+- **command_guard**: Recursive shell unwrapping (max depth 5)
+- **command_guard**: Pipe pattern detection via `left in before_words`
+- **command_guard**: All `list[str]` → `tuple[str, ...]` in frozen dataclasses
+- **run_with_profile**: `--timeout` CLI arg (default 1800s) with `TimeoutExpired` handling
+- **run_with_profile**: `_minimal_env()` for restricted profiles (inspect_local/workspace_edit)
+- **run_with_profile**: Lazy profile loading (no `load_profiles()` at parser build time)
+- **run_with_profile**: Fail-closed fallback uses `tuple()` not list literals
+- **run_with_profile**: Negative timeout clamped to 0
+- **run_with_profile**: `--guard-json` test coverage
+- **discovery**: `StrategyConfig` frozen dataclass replaces mutable `dict[str, object]`
+- **discovery**: All mutable fields in frozen dataclasses → tuple
+- **discovery**: `gpus` field serialized in `snapshot_to_json`
+- **discovery**: `@functools.lru_cache(maxsize=1)` on `_detect_gpu()`
+- **model_provider_probe**: `ProviderProbe.detected_env_names` → `tuple[str, ...]`
+- **model_provider_probe**: `policy_path` forwarded in `probe_all_model_providers`
+- **model_provider_probe**: Response body 64KB limit
+- **ops_db**: `_INITIALIZED_DBS` protected by `threading.Lock`
+- **ops_db**: `verify_index` streaming (line-by-line instead of `read_text()`)
+- **ops_db**: `_check_schema_version(conn)` from `_connect()`
+- **state_io**: Windows sentinel-region lock (bytes 0–1) instead of past-EOF lock
+- **state_io**: `threading.Event` for thread-safe lock warning
+- **state_io**: Documented `"ab"` mode seek behavior
+- **adaptive_harness**: `python3` → `sys.executable` for Windows compatibility
+- **adaptive_harness_lib**: `_deep_merge(base, overlay)` for skill contract resolution
+- **adaptive_harness_lib**: JSONL functions consolidated from `state_io`/`commands`
+- **intelligence_tier**: Complete rewrite from stub to snapshot-driven provider resolution (L0-L4)
+- **intelligence_tier**: `available_tiers()` returns `tuple[str, ...]`
+- **reply_gate**: `TASK_LEDGER` → `_get_task_ledger()` lazy initialization
+- **reply_gate**: `load_entries(path=None)` injectable for testing
+- **memory_capture**: `_recent_final_tasks(task, state_root=None)` parameter injection
+- **helm.py**: Duplicate `build_status_payload`/`build_state_snapshot_payload` removed
+- **commands/__init__.py**: `run_script` consolidated, `read_jsonl` streaming
+- **commands/checkpoint.py**: `_parse_timestamp` handles both ISO-8601 and compact formats
+
+### Tests
+
+- 118 new tests (298 total, was 180)
+
 ## [0.6.0] — 2026-04-24
 
 ### Added — Runtime Guard & Provider-Agnostic Memory Index

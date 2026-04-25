@@ -99,11 +99,11 @@ class IntelligenceTier:
         """Return True if the snapshot shows at least one local inference provider."""
         return _has_local(self.discovery_snapshot)
 
-    def available_tiers(self) -> list[str]:
-        """Return the list of active intelligence tiers based on the snapshot."""
+    def available_tiers(self) -> tuple[str, ...]:
+        """Return the tuple of active intelligence tiers based on the snapshot."""
         tiers = ["L0_static_safety", "L1_deterministic_scoring"]
         if _has_local(self.discovery_snapshot):
             tiers.append("L3_local_model")
         if _has_cloud(self.discovery_snapshot):
             tiers.append("L4_cloud_provider")
-        return tiers
+        return tuple(tiers)
