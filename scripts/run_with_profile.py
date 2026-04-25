@@ -454,15 +454,15 @@ def cmd_run(args: argparse.Namespace) -> int:
                 score_breakdown={"guard_error": 0.5},
                 selected_profile=args.profile,
                 recommended_profile=None,
-                reasons=[f"guard evaluation error: {exc}"],
-                matched_rules=[],
+                reasons=tuple([f"guard evaluation error: {exc}"]),
+                matched_rules=tuple(),
                 classification=CommandClassification(
                     normalized_command=" ".join(command),
-                    argv=command,
+                    argv=tuple(command),
                     shell_wrapped=False,
                     shell_inner_command=None,
-                    categories=["unknown"],
-                    matched_rules=[],
+                    categories=tuple(["unknown"]),
+                    matched_rules=tuple(),
                     writes_detected=False,
                     network_detected=False,
                     destructive_detected=False,
@@ -565,7 +565,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         child_env["OPENCLAW_TASK_NAME"] = str(task["task_name"])
     child_env["OPENCLAW_TASK_PROFILE"] = str(task["profile"])
 
-    timeout_seconds = getattr(args, "timeout", 1800) or None  # 0 → None (no limit)
+    raw_timeout = getattr(args, "timeout", 1800)
+    if raw_timeout is not None and raw_timeout < 0:
+        raw_timeout = 0
+    timeout_seconds = raw_timeout or None  # 0 → None (no limit)
     try:
         result = subprocess.run(command, cwd=str(WORKSPACE), env=child_env, timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
