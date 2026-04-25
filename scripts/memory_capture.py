@@ -127,8 +127,9 @@ def _normalized_task_name(task: dict) -> str:
     return " ".join(str(task.get("task_name") or "").casefold().split())
 
 
-def _recent_final_tasks(task: dict) -> list[dict]:
-    state_root = get_workspace_layout().state_root
+def _recent_final_tasks(task: dict, state_root: Path | None = None) -> list[dict]:
+    if state_root is None:
+        state_root = get_workspace_layout().state_root
     ledger = _read_jsonl(state_root / "task-ledger.jsonl")
     by_task: dict[str, dict] = {}
     for entry in ledger:
