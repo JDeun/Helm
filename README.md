@@ -285,6 +285,7 @@ Guard modes: `enforce` (default), `audit` (record only), `off` (disabled but rec
 Helm now ships a separate model-health layer for one specific job: remember which candidate model was healthy recently, probe it again when needed, and pick a fallback from files instead of from chat memory.
 
 The default template lives in `references/model_recovery_policy.json`. You can keep it empty and rely on discovery-only fallback selection, or define explicit models and probe kinds when you want active health checks.
+The bundled template now starts with a practical local-first chain: `ollama/llama3.2:latest`, then `openai/gpt-4.1-mini`, then `google_gemini/gemini-2.5-flash`.
 
 Typical flow:
 

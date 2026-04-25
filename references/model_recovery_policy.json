@@ -3,5 +3,36 @@
   "state_path": ".helm/model-health-state.json",
   "fresh_after_seconds": 300,
   "fallback_stale_after_seconds": 1800,
-  "models": []
+  "models": [
+    {
+      "ref": "ollama/llama3.2:latest",
+      "provider": "ollama",
+      "priority": 10,
+      "probe": {
+        "kind": "ollama_generate",
+        "model": "llama3.2:latest",
+        "timeout_seconds": 20
+      }
+    },
+    {
+      "ref": "openai/gpt-4.1-mini",
+      "provider": "openai",
+      "priority": 20,
+      "probe": {
+        "kind": "openai_chat_completion",
+        "model": "gpt-4.1-mini",
+        "timeout_seconds": 45
+      }
+    },
+    {
+      "ref": "google_gemini/gemini-2.5-flash",
+      "provider": "google_gemini",
+      "priority": 30,
+      "probe": {
+        "kind": "google_generate_content",
+        "model": "gemini-2.5-flash",
+        "timeout_seconds": 45
+      }
+    }
+  ]
 }

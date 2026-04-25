@@ -285,6 +285,7 @@ helm profile run workspace_edit --guard-json -- rm -rf build
 Helm은 이제 별도 model-health 계층을 가집니다. 목적은 단순합니다. 어떤 모델이 최근 healthy였는지 파일에 남기고, 필요할 때 다시 probe하고, 다음 턴에서 쓸 fallback 후보를 채팅이 아니라 상태 파일 기준으로 고르는 것입니다.
 
 기본 템플릿은 `references/model_recovery_policy.json`에 있습니다. 비워 둔 채 discovery 기반 선택만 써도 되고, 실제로 probe할 모델과 probe kind를 명시해서 적극적인 health check를 돌릴 수도 있습니다.
+기본 템플릿에는 실전적인 local-first 체인을 넣어 두었습니다: `ollama/llama3.2:latest` 다음 `openai/gpt-4.1-mini`, 그 다음 `google_gemini/gemini-2.5-flash` 순서입니다.
 
 전형적인 흐름:
 
