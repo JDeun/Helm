@@ -238,3 +238,171 @@ def test_helm_guard_mode_off_via_env_warns(monkeypatch, capsys, tmp_path):
     captured = capsys.readouterr()
     assert "WARNING" in captured.err or "warning" in captured.err.lower(), \
         "Expected warning about HELM_GUARD_MODE=off in stderr"
+
+
+# ---------------------------------------------------------------------------
+# C3: subprocess timeout
+# ---------------------------------------------------------------------------
+
+_FAKE_PROFILES_WRITE = {
+    "workspace_edit": {
+        "description": "Workspace edits.",
+        "backend": "local",
+        "runtime_backend": "local-shell",
+        "runtime_target_kind": "workspace",
+        "isolation": "shared-session",
+        "handoff_required": False,
+        "writes_allowed": True,
+        "network_allowed": False,
+        "checkpoint": "never",
+    }
+}
+
+
+def _make_args_with_timeout(timeout: int = 1800, profile: str = "inspect_local"):
+    from unittest.mock import MagicMock
+    args = MagicMock()
+    args.profile = profile
+    args.guard_mode = "off"
+    args.guard_json = False
+    args.approve_risk = False
+    args.command = ["sleep", "999"]
+    args.runtime_target = None
+    args.task_name = "test-timeout"
+    args.task_goal = None
+    args.checkpoint = None
+    args.skill = None
+    args.backend = None
+    args.meta_json = None
+    args.task_id = None
+    args.label = None
+    args.path = None
+    args.runtime_note = None
+    args.delivery_mode = "inline"
+    args.timeout = timeout
+    return args
+
+
+def _make_allow_decision(profile: str = "inspect_local"):
+    from scripts.command_guard import GuardDecision, CommandClassification
+    return GuardDecision(
+        action="allow",
+        risk_score=0.0,
+        score_breakdown={},
+        selected_profile=profile,
+        recommended_profile=None,
+        reasons=["test allow"],
+        matched_rules=[],
+        classification=CommandClassification(
+            normalized_command="echo hello",
+            argv=["echo", "hello"],
+            shell_wrapped=False,
+            shell_inner_command=None,
+            categories=["read"],
+            matched_rules=[],
+            writes_detected=False,
+            network_detected=False,
+            destructive_detected=False,
+            privilege_detected=False,
+            remote_detected=False,
+        ),
+        approval_required=False,
+        approval_hint=None,
+    )
+
+
+def test_timeout_expired_records_timeout_status(capsys):
+    """When subprocess.TimeoutExpired is raised, task status must be 'timeout' and exit code 1."""
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+
+    captured_tasks = []
+
+    def capture_finalize(task):
+        captured_tasks.append(dict(task))
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run",
+               side_effect=__import__("subprocess").TimeoutExpired(cmd=["sleep", "999"], timeout=5)):
+
+        mock_guard.return_value = _make_allow_decision()
+
+        args = _make_args_with_timeout(timeout=5)
+        rc = cmd_run(args)
+
+    assert rc == 1, "timeout should exit with code 1"
+    assert captured_tasks, "finalize_task must have been called"
+    task = captured_tasks[0]
+    assert task["status"] == "timeout", f"expected status='timeout', got {task['status']!r}"
+    assert task["failure_stage"] == "execution"
+    assert "timed out" in task["failure_reason"]
+
+    out = capsys.readouterr()
+    assert "TIMEOUT" in out.err, "Expected TIMEOUT message in stderr"
+
+
+def test_timeout_zero_disables_limit():
+    """timeout=0 should translate to no limit (None passed to subprocess.run)."""
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+    import subprocess as _sp
+
+    captured_calls = []
+
+    def fake_subprocess_run(*a, **kw):
+        captured_calls.append(kw)
+        return _sp.CompletedProcess(args=a[0] if a else [], returncode=0)
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("scripts.run_with_profile.finalize_task"), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
+
+        mock_guard.return_value = _make_allow_decision()
+
+        args = _make_args_with_timeout(timeout=0)
+        args.command = ["echo", "hello"]
+        cmd_run(args)
+
+    assert captured_calls, "subprocess.run must have been called"
+    assert captured_calls[0].get("timeout") is None, \
+        "timeout=0 must be converted to None (no limit)"
+
+
+def test_checkpoint_timeout_returns_error_dict():
+    """run_checkpoint must return an error dict when the checkpoint process times out."""
+    import subprocess as _sp
+    from unittest.mock import patch, MagicMock
+    from scripts.run_with_profile import run_checkpoint
+
+    profiles = {
+        "risky_edit": {
+            "checkpoint": "required",
+            "writes_allowed": True,
+            "network_allowed": False,
+        }
+    }
+    args = MagicMock()
+    args.label = "test-label"
+    args.path = None
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=profiles), \
+         patch("scripts.run_with_profile.subprocess.run",
+               side_effect=_sp.TimeoutExpired(cmd=["python3"], timeout=60)):
+        result = run_checkpoint("risky_edit", args)
+
+    assert result is not None
+    assert "error" in result
+    assert "timed out" in result["error"]

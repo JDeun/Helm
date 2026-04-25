@@ -203,7 +203,12 @@ def run_checkpoint(profile: str, args: argparse.Namespace) -> dict | None:
     checkpoint_cmd = ["python3", str(CHECKPOINT_SCRIPT), "create", "--label", label]
     for path in paths:
         checkpoint_cmd.extend(["--path", path])
-    result = subprocess.run(checkpoint_cmd, cwd=str(WORKSPACE), capture_output=True, text=True)
+    try:
+        result = subprocess.run(
+            checkpoint_cmd, cwd=str(WORKSPACE), capture_output=True, text=True, timeout=60
+        )
+    except subprocess.TimeoutExpired:
+        return {"error": "checkpoint timed out after 60 seconds"}
     if result.returncode != 0:
         return {"error": result.stderr.strip() or result.stdout.strip() or "checkpoint creation failed"}
     try:
@@ -524,7 +529,20 @@ def cmd_run(args: argparse.Namespace) -> int:
         child_env["OPENCLAW_TASK_NAME"] = str(task["task_name"])
     child_env["OPENCLAW_TASK_PROFILE"] = str(task["profile"])
 
-    result = subprocess.run(command, cwd=str(WORKSPACE), env=child_env)
+    timeout_seconds = getattr(args, "timeout", 1800) or None  # 0 → None (no limit)
+    try:
+        result = subprocess.run(command, cwd=str(WORKSPACE), env=child_env, timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        task["finished_at"] = utc_now_iso()
+        task["status"] = "timeout"
+        task["failure_stage"] = "execution"
+        task["failure_reason"] = f"command timed out after {timeout_seconds}s"
+        finalize_task(task)
+        print(
+            f"TIMEOUT: command exceeded {timeout_seconds}s limit: {shlex.join(command)}",
+            file=sys.stderr,
+        )
+        return 1
 
     task["finished_at"] = utc_now_iso()
     task["exit_code"] = result.returncode
@@ -600,6 +618,12 @@ def parse_run_args() -> argparse.Namespace:
         "--guard-json",
         action="store_true",
         help="Print guard decision as JSON and exit without running the command.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=1800,
+        help="Subprocess timeout in seconds (default: 1800 / 30 minutes). 0 disables the timeout.",
     )
     args, remainder = parser.parse_known_args()
     if remainder and remainder[0] == "--":
