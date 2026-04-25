@@ -36,7 +36,12 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
         else:
             try:
                 import msvcrt
-                lock_size = max(len(line_bytes), 1)
+                # On Windows, we need to lock the region where we're about to write.
+                # Get current file position (which is EOF in append mode), then lock that region.
+                current_pos = fh.seek(0, 2)  # Seek to EOF to get position
+                # Lock a sufficiently large region to cover our write plus some buffer
+                # for concurrent writes. We use 65536 bytes as a reasonable lock size.
+                lock_size = max(len(line_bytes), 65536)
                 msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, lock_size)
                 locked = True
             except Exception:
@@ -60,7 +65,7 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
                 else:
                     try:
                         import msvcrt
-                        lock_size = max(len(line_bytes), 1)
+                        lock_size = max(len(line_bytes), 65536)
                         msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, lock_size)
                     except Exception:
                         pass

@@ -97,3 +97,34 @@ def test_windows_lock_size_matches_write(tmp_path: Path) -> None:
     line = target.read_text(encoding="utf-8").strip()
     parsed = json.loads(line)
     assert parsed["key"] == "x" * 1000
+
+
+def test_concurrent_append_no_data_loss(tmp_path: Path) -> None:
+    """Multiple threads appending simultaneously should not lose data."""
+    import scripts.state_io as state_io_mod
+    from concurrent.futures import ThreadPoolExecutor
+
+    state_io_mod._LOCK_WARNING_ISSUED = False
+    target = tmp_path / "concurrent.jsonl"
+    n_threads = 10
+    n_writes_per_thread = 20
+
+    def writer(thread_id: int) -> None:
+        for i in range(n_writes_per_thread):
+            append_jsonl_atomic(target, {"thread": thread_id, "seq": i})
+
+    with ThreadPoolExecutor(max_workers=n_threads) as pool:
+        futures = [pool.submit(writer, t) for t in range(n_threads)]
+        for f in futures:
+            f.result()
+
+    lines = target.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == n_threads * n_writes_per_thread
+
+    # Verify every entry is valid JSON
+    for line in lines:
+        entry = json.loads(line)
+        assert "thread" in entry
+        assert "seq" in entry
+
+    state_io_mod._LOCK_WARNING_ISSUED = False
