@@ -5,7 +5,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -14,14 +13,16 @@ if str(ROOT) not in sys.path:
 from helm_workspace import get_workspace_layout
 
 
-TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
+def _get_task_ledger() -> Path:
+    return get_workspace_layout().state_root / "task-ledger.jsonl"
 
 
-def load_entries() -> list[dict]:
-    if not TASK_LEDGER.exists():
+def load_entries(path: Path | None = None) -> list[dict]:
+    ledger = path if path is not None else _get_task_ledger()
+    if not ledger.exists():
         return []
     rows: list[dict] = []
-    for lineno, line in enumerate(TASK_LEDGER.read_text(encoding="utf-8").splitlines(), start=1):
+    for lineno, line in enumerate(ledger.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
         try:
