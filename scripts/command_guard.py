@@ -200,24 +200,43 @@ def _semantic_deny_check(argv: list[str]) -> str | None:
 
     # --- dd targeting device files ---
     if cmd == "dd":
+        of_device = False
+        if_device = False
+        if_arg = None
         for arg in effective[1:]:
             arg_lower = arg.lower()
             for prefix in ("if=", "of="):
                 if arg_lower.startswith(prefix):
                     target = arg_lower[len(prefix):]
-                    if (target.startswith("/dev/sd")
-                            or target.startswith("/dev/nvme")
-                            or target.startswith("/dev/disk")
-                            or target.startswith("/dev/hd")
-                            or target == "/dev/zero" and prefix == "of="
-                            or target.startswith("/dev/mapper")):
-                        return f"deny.semantic_dd: dd targeting device '{arg}'"
+                    is_device = (
+                        target.startswith("/dev/sd")
+                        or target.startswith("/dev/nvme")
+                        or target.startswith("/dev/disk")
+                        or target.startswith("/dev/hd")
+                        or (target == "/dev/zero" and prefix == "of=")
+                        or target.startswith("/dev/mapper")
+                    )
+                    if is_device and prefix == "of=":
+                        of_device = True
+                    elif is_device and prefix == "if=":
+                        if_device = True
+                        if_arg = arg
+        if of_device:
+            return f"deny.semantic_dd: dd writing to device"
+        if if_device and not of_device:
+            return f"approve.semantic_dd: dd reading from device '{if_arg}'"
 
     # --- mkfs targeting any device ---
     if cmd.startswith("mkfs"):
         for arg in effective[1:]:
             if arg.startswith("/dev/"):
                 return f"deny.semantic_mkfs: mkfs targeting device '{arg}'"
+
+    # --- shred / wipefs / blkdiscard targeting device files ---
+    if cmd in ("shred", "wipefs", "blkdiscard"):
+        for arg in effective[1:]:
+            if arg.startswith("/dev/"):
+                return f"deny.semantic_{cmd}: {cmd} targeting device '{arg}'"
 
     # --- Fork bomb patterns ---
     full_str = " ".join(argv)
@@ -235,11 +254,11 @@ _BUILTIN_ABSOLUTE_DENY: list[dict[str, Any]] = [
     {"id": "deny.rm_root", "patterns": ["rm -rf /", "rm -rf /*", "sudo rm -rf /", "sudo rm -rf /*"]},
     {"id": "deny.rm_home", "patterns": ["rm -rf ~", "rm -rf $HOME", 'rm -rf "$HOME"', "sudo rm -rf ~"]},
     {"id": "deny.rm_parent_escape", "patterns": ["rm -rf ../..", "rm -rf ../../.."]},
-    {"id": "deny.dd_device", "patterns": ["dd if=", "sudo dd if="]},
+    {"id": "deny.dd_device", "patterns": ["dd of=/dev/", "sudo dd of=/dev/"]},
     {"id": "deny.mkfs", "patterns": ["mkfs", "diskutil eraseDisk", "sudo mkfs"]},
     {"id": "deny.fork_bomb", "patterns": [":(){ :|:& };:", ":(){ :|:& };"]},
     {"id": "deny.chmod_root", "patterns": ["chmod -R 777 /", "sudo chmod -R 777 /"]},
-    {"id": "deny.sudo_destructive", "patterns": ["sudo rm -rf", "sudo dd", "sudo mkfs"]},
+    {"id": "deny.sudo_destructive", "patterns": ["sudo rm -rf", "sudo dd of=/dev/", "sudo mkfs"]},
     {"id": "deny.format_disk_win", "patterns": ["format C:", "format D:", "diskpart"]},
     {"id": "deny.del_system_win", "patterns": [
         "del /s /q C:\\Windows", "rmdir /s /q C:\\Windows", "del /s /q C:\\",
@@ -715,7 +734,11 @@ def evaluate_command_guard(
 
     # Semantic deny check: bypass-resistant second layer
     semantic_reason = _semantic_deny_check(effective_argv)
-    if semantic_reason is not None and not deny_matches:
+    semantic_approval_reason: str | None = None
+    if semantic_reason is not None and semantic_reason.startswith("approve."):
+        # Non-deny semantic match (e.g. dd reading from device) → require_approval
+        semantic_approval_reason = semantic_reason
+    elif semantic_reason is not None and not deny_matches:
         deny_matches = [(semantic_reason, None)]
     elif semantic_reason is not None:
         deny_matches.append((semantic_reason, None))
@@ -726,6 +749,9 @@ def evaluate_command_guard(
     approval_matches = _match_patterns(match_text, require_approval_rules)
     if not approval_matches:
         approval_matches = _match_patterns(original_norm, require_approval_rules)
+
+    if semantic_approval_reason is not None:
+        approval_matches.append((semantic_approval_reason, None))
 
     # Classify using effective argv (normalized flags)
     classification = _classify_argv(

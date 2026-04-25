@@ -6,11 +6,11 @@
     {"id": "deny.rm_root", "description": "Block recursive deletion of filesystem root", "patterns": ["rm -rf /", "rm -rf /*", "sudo rm -rf /", "sudo rm -rf /*"]},
     {"id": "deny.rm_home", "description": "Block recursive deletion of home directory", "patterns": ["rm -rf ~", "rm -rf $HOME", "rm -rf \"$HOME\"", "sudo rm -rf ~"]},
     {"id": "deny.rm_parent_escape", "description": "Block recursive deletion escaping parent directories", "patterns": ["rm -rf ../..", "rm -rf ../../.."]},
-    {"id": "deny.dd_device", "description": "Block raw device writes via dd", "patterns": ["dd if=", "sudo dd if="]},
+    {"id": "deny.dd_device", "description": "Block raw device writes via dd", "patterns": ["dd of=/dev/", "sudo dd of=/dev/"]},
     {"id": "deny.mkfs", "description": "Block filesystem format commands", "patterns": ["mkfs", "diskutil eraseDisk", "sudo mkfs"]},
     {"id": "deny.fork_bomb", "description": "Block fork bomb patterns", "patterns": [":(){ :|:& };:", ":(){ :|:& };"]},
     {"id": "deny.chmod_root", "description": "Block recursive permission change on root", "patterns": ["chmod -R 777 /", "sudo chmod -R 777 /"]},
-    {"id": "deny.sudo_destructive", "description": "Block sudo combined with destructive operations", "patterns": ["sudo rm -rf", "sudo dd", "sudo mkfs"]},
+    {"id": "deny.sudo_destructive", "description": "Block sudo combined with destructive operations", "patterns": ["sudo rm -rf", "sudo dd of=/dev/", "sudo mkfs"]},
     {"id": "deny.format_disk_win", "description": "Block Windows disk format commands", "patterns": ["format C:", "format D:", "diskpart"]},
     {"id": "deny.del_system_win", "description": "Block Windows system directory deletion", "patterns": ["del /s /q C:\\Windows", "rmdir /s /q C:\\Windows", "del /s /q C:\\"]},
     {"id": "deny.crontab_delete_all", "description": "Block crontab full deletion", "patterns": ["crontab -r"]}
