@@ -345,7 +345,7 @@ def _pipe_pattern_matches(text_lower: str, pattern_lower: str) -> bool:
         # left command must appear at start of the before-pipe segment (as first word)
         before_words = before.split()
         after_words = after.split()
-        if before_words and before_words[0] == left and after_words and after_words[0] == right:
+        if before_words and left in before_words and after_words and after_words[0] == right:
             return True
     return False
 
