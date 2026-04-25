@@ -59,7 +59,7 @@
 - Discovery failure diagnostics in doctor output
 
 ### Tests
-- 58 new tests (173 total, was 115)
+- 65 new tests (180 total, was 115)
 
 ### Changed
 
