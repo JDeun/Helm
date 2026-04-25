@@ -58,13 +58,12 @@ It gives you:
 
 In the current release, that means:
 
-- skills own their execution contract through `skills/<skill>/contract.json`
-- smaller or weaker local models can be forced through narrower runners and stricter defaults
-- operators can audit not only whether manifests exist, but whether they are still too generic to be trusted
-- knowledge policy can be described independently from the runtime so memory, artifact, supersession, and review decisions stay inspectable
-- typed memory operations and crystallized sessions can be recorded explicitly instead of living only in task prose
-- review backlog can be inspected directly through `helm memory review-queue`
-- status and reporting now follow the active workspace layout so OpenClaw-shaped workspaces do not silently hide Helm memory state
+- skill execution contracts via `skills/<skill>/contract.json`
+- narrower runners and stricter defaults for weaker local models
+- manifest quality auditing beyond existence checks
+- runtime-neutral memory policy with typed operations and crystallized sessions
+- review-queue visibility for unresolved memory follow-ups
+- workspace-aware status and reporting for OpenClaw-shaped layouts
 
 Helm is especially useful if you already have:
 
@@ -104,6 +103,9 @@ Typical flow:
 - runtime-neutral memory policy for confidence, recency, supersession, crystallization, and audit-first maintenance
 - gated skill drafting, review, approval, and rejection
 - high-level status and reporting views
+- deterministic command guard with risk scoring and approval workflow
+- provider-agnostic LLM discovery (API and local, no secrets stored)
+- SQLite query index over operational JSONL
 
 ## Quick Start
 
@@ -257,12 +259,16 @@ helm profile run workspace_edit --guard-json -- rm -rf build
 
 Guard modes: `enforce` (default), `audit` (record only), `off` (disabled but recorded).
 
+The guard also detects shell-level bypass patterns including heredoc injection, base64-piped execution, and `/dev/tcp` network access. Guard exceptions are fail-closed (default to `require_approval`), and guard evaluation runs before manual-remote handoff to prevent bypass.
+
 ## Provider Discovery
 
 Helm detects available LLM providers without calling any API:
 
-- **API providers**: Detected by environment variable presence (Anthropic, OpenAI, Gemini, OpenRouter, Azure, Bedrock, Vertex, and more)
-- **Local providers**: Detected by short-timeout endpoint probe (Ollama, LM Studio, llama.cpp, vLLM)
+- **API providers**: 19 providers detected by environment variable presence (Anthropic, OpenAI, Gemini, OpenRouter, Azure, Bedrock, Vertex, Mistral, Groq, Together, Fireworks, Cohere, DeepSeek, xAI, Replicate, Perplexity, HuggingFace, Cerebras, NVIDIA NIM)
+- **Local providers**: 4 providers detected by endpoint probe (Ollama, LM Studio, llama.cpp, vLLM)
+- **GPU detection**: NVIDIA, Apple Silicon, and AMD (ROCm) with multi-GPU support
+- **Custom registry**: User-defined providers via `model_provider_policy.json`
 - **No API calls**: Provider detection never sends requests to cloud APIs
 - **No secrets stored**: API key values are never logged or persisted
 
@@ -277,6 +283,13 @@ helm db init              # Create the SQLite index
 helm db rebuild           # Rebuild from JSONL source files
 helm db verify            # Check for JSONL/SQLite drift
 helm db status            # Show index statistics
+```
+
+Query the index:
+
+```bash
+helm db query --status completed --limit 10
+helm db query --guard-action deny --json
 ```
 
 JSONL remains the append-only source of truth. SQLite failures never block command execution.
@@ -299,24 +312,32 @@ helm harness --path examples/demo-workspace preflight \
   -- python3 -c 'print("ok")'
 ```
 
-The key design change in the current release is that harness policy is now skill-owned:
+### Skill-Owned Policy
 
-- each skill can declare `allowed_profiles` and `default_profile` in `skills/<skill>/contract.json`
-- strict runner requirements can be declared in the manifest instead of central code
-- browser-heavy workflows can require structured `browser_evidence` in task metadata before the work is treated as complete
-- blocked retrieval workflows can require structured `retrieval_evidence` so escalation exits stay inspectable instead of living only in prose
-- file-oriented workflows can require structured `file_intake_evidence` so parser routing and mismatch handling stay auditable
-- when explicit evidence is missing, the harness can infer minimal browser, retrieval, or file-intake evidence from the task ledger and still force operators to make the escalation path inspectable
-- planning, design, comparison, and drafting requests are tagged with `interaction_workflow` so operators can separate divergence from execution
-- selected skills are scored with `skill_relevance`; block and warning thresholds are tunable in `references/adaptive_harness_policy.json`
-- `python3 scripts/adaptive_harness.py backfill-evidence` can append inferred evidence to prior runs without rewriting the original ledger history
-- `python3 scripts/run_with_profile.py validate-manifests --json` audits missing or malformed manifests before release
-- `python3 scripts/run_with_profile.py audit-manifest-quality --json` flags contracts that are still too broad, too generic, or missing approval boundaries
+- Each skill declares `allowed_profiles` and `default_profile` in `contract.json`
+- Strict runner requirements live in the manifest, not central code
+- Selected skills are scored with `skill_relevance`; thresholds are tunable in `references/adaptive_harness_policy.json`
+- Planning, design, and drafting requests are tagged with `interaction_workflow`
+
+### Evidence Requirements
+
+- Browser-heavy workflows can require `browser_evidence` before completion
+- Blocked retrieval workflows require `retrieval_evidence` for inspectable escalation
+- File-oriented workflows require `file_intake_evidence` for auditable parser routing
+- Missing evidence can be inferred from the task ledger as a fallback
+
+### Operator Tooling
+
+- `python3 scripts/adaptive_harness.py backfill-evidence` — append inferred evidence to prior runs
+- `python3 scripts/run_with_profile.py validate-manifests --json` — audit missing or malformed manifests
+- `python3 scripts/run_with_profile.py audit-manifest-quality --json` — flag weak or overly broad contracts
 
 ## Skill Quality And Policy
 
 If you are improving a Helm workspace over time, the main policy goal is not to accumulate more skills or more rules.
 It is to make any skill easier to govern.
+
+### Governance Questions
 
 Helm should be able to take a new or changing skill and still answer these questions:
 
@@ -329,6 +350,8 @@ Helm should be able to take a new or changing skill and still answer these quest
 That is why a strong Helm skill is not just a good description plus a manifest.
 It is a skill whose `SKILL.md` exposes real operating contracts and whose `contract.json` keeps execution narrow and inspectable.
 
+### Good Defaults
+
 Good defaults:
 
 - start new skills at `inspect_local`
@@ -338,6 +361,8 @@ Good defaults:
 - run `validate-manifests` and `audit-manifest-quality` before release or after policy-heavy skill changes
 - keep durable memory, workflow artifacts, and promoted skill rules as separate layers
 
+### SKILL.md Defaults
+
 Good `SKILL.md` defaults:
 
 - make `Input contract`, `Decision contract`, `Output contract`, and `Failure contract` explicit
@@ -346,6 +371,8 @@ Good `SKILL.md` defaults:
 - state what the skill must not claim, finish, or imply on its own
 
 See [docs/skill-quality-and-policy.md](docs/skill-quality-and-policy.md) for the review checklist and [docs/knowledge-contract.md](docs/knowledge-contract.md) for the memory and promotion boundary.
+
+### Visibility Helpers
 
 Operator visibility helpers:
 
@@ -399,7 +426,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.5.12.md`](docs/releases/0.5.12.md)
+- [`docs/releases/0.6.0.md`](docs/releases/0.6.0.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
@@ -424,26 +451,46 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.5.12 makes skill relevance guardrails policy-tunable and enriches state snapshots with harness evidence for better resume quality.
+Helm v0.6.0 adds a deterministic command guard, provider-agnostic LLM discovery, a SQLite query index, and cross-platform atomic writes, backed by 180 tests.
 
-Included:
+### Core
 
 - Helm-native CLI packaging
-- separate workspace model with read-only adoption
-- file-native context hydration
-- task finalization with durable capture planning
-- operator-facing finalization inspection commands
-- typed memory operations and crystallized session artifacts
-- review-queue visibility for unresolved capture, supersession, and confidence issues
-- manifest-based adaptive harness governance
-- adaptive harness contract surfaces for route decisions, result consistency, and downgrade behavior
-- manifest auditing for missing or malformed skill contracts
-- manifest quality auditing for generic or weak skill contracts
+- Separate workspace model with read-only adoption
+- File-native context hydration
+- Task finalization with durable capture planning
+- Typed memory operations and crystallized session artifacts
+
+### Security
+
+- Deterministic command guard with risk scoring and approval workflow
+- Heredoc, base64, and `/dev/tcp` bypass detection
+- Fail-closed guard policy on exceptions
+- Guard evaluation before manual-remote handoff
+
+### Reliability
+
+- Provider discovery: 19 API providers, 4 local providers (no API calls, no secrets stored)
+- GPU/VRAM detection: NVIDIA, Apple Silicon, AMD (ROCm), multi-GPU
+- Custom provider registry via policy JSON
+- SQLite query index over JSONL (init, rebuild, verify, query)
+- Atomic JSONL append with cross-platform file locking
+- Extended `helm doctor` with discovery, hardware, and guard sections
+
+### Governance
+
+- Manifest-based adaptive harness with skill-owned policy
+- Manifest auditing and quality auditing for skill contracts
 - `SKILL.md` quality guidance and contract-driven drafting templates
-- `SKILL.md` structure and manifest-to-document consistency checks in quality audit paths
-- generalized demo-only skill contracts instead of repository-root personal skill assets
-- checkpoint, report, and skill review flows
-- example workspace and release-oriented docs
+- Checkpoint, report, and skill review flows
+- Review-queue visibility for unresolved memory issues
+
+### CLI
+
+- `helm db init/rebuild/verify/status/query`
+- `helm doctor --skip-discovery`
+- State-snapshot inspection and handoff artifacts
+- 180 tests (pytest, cross-platform)
 
 Not included:
 
