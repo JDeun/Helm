@@ -112,14 +112,18 @@ def _load_provider_registry(policy_path: Path | None = None) -> tuple[dict, dict
     return _BUILTIN_API_REGISTRY, _BUILTIN_LOCAL_REGISTRY
 
 
-def probe_api_providers_from_env() -> list[ProviderProbe]:
+def probe_api_providers_from_env(
+    policy_path: Path | None = None,
+) -> list[ProviderProbe]:
     """Detect API providers by env var PRESENCE only.
 
     Never reads secret values. Never calls APIs.
+    If policy_path is given, load custom registry from it.
     """
+    api_registry, _ = _load_provider_registry(policy_path)
     results: list[ProviderProbe] = []
 
-    for provider, key_spec in _API_PROVIDER_ENV_REGISTRY.items():
+    for provider, key_spec in api_registry.items():
         required_keys = key_spec.get("required", [])
         optional_keys = key_spec.get("optional", [])
         weak_keys = key_spec.get("weak", [])

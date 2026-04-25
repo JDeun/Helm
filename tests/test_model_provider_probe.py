@@ -322,3 +322,30 @@ def test_skip_discovery_flag_skips_probe(monkeypatch: pytest.MonkeyPatch) -> Non
     parser = helm.build_parser()
     args = parser.parse_args(["doctor", "--skip-discovery"])
     assert args.skip_discovery is True
+
+
+def test_custom_registry_detects_custom_provider(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Custom policy JSON should allow detecting a non-builtin provider."""
+    policy = {
+        "api_provider_env_registry": {
+            "my_custom_llm": {"required": ["MY_CUSTOM_KEY"]}
+        }
+    }
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(json.dumps(policy), encoding="utf-8")
+
+    monkeypatch.setenv("MY_CUSTOM_KEY", "present")
+    results = probe_api_providers_from_env(policy_path=policy_path)
+    providers = [r.provider for r in results]
+    assert "my_custom_llm" in providers
+
+
+def test_custom_registry_fallback_on_bad_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Invalid policy JSON should fallback to builtin registry."""
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text("not valid json", encoding="utf-8")
+
+    monkeypatch.setenv("OPENAI_API_KEY", "present")
+    results = probe_api_providers_from_env(policy_path=policy_path)
+    providers = [r.provider for r in results]
+    assert "openai" in providers
