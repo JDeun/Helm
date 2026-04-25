@@ -301,27 +301,47 @@ def _extract_shell_inner(argv: list[str]) -> str | None:
 
 
 def _effective_argv(argv: list[str]) -> tuple[list[str], bool, str | None]:
-    """Return (effective_argv, shell_wrapped, inner_command_str)."""
-    # Shell wrappers first
-    inner_str = _extract_shell_inner(argv)
-    if inner_str is not None:
-        try:
-            inner_argv = shlex.split(inner_str)
-        except ValueError:
-            inner_argv = inner_str.split()
-        return inner_argv, True, inner_str
-    # Interpreter wrappers
-    interp_inner = _extract_interpreter_inner(argv)
-    if interp_inner is not None:
-        extracted = _extract_commands_from_interpreter(interp_inner)
-        if extracted:
+    """Return (effective_argv, shell_wrapped, inner_command_str).
+
+    Recursively unwraps nested shell/interpreter wrappers up to a max
+    depth of 5 to handle cases like ``bash -c "bash -c 'rm -rf /'"``
+    where the inner command is itself a shell wrapper invocation.
+    """
+    _MAX_UNWRAP_DEPTH = 5
+    current_argv = argv
+    shell_wrapped = False
+    last_inner_str: str | None = None
+
+    for _ in range(_MAX_UNWRAP_DEPTH):
+        # Shell wrappers first
+        inner_str = _extract_shell_inner(current_argv)
+        if inner_str is not None:
+            shell_wrapped = True
+            last_inner_str = inner_str
             try:
-                inner_argv = shlex.split(extracted[0])
+                current_argv = shlex.split(inner_str)
             except ValueError:
-                inner_argv = extracted[0].split()
-            return inner_argv, True, extracted[0]
-        return argv, True, interp_inner
-    return argv, False, None
+                current_argv = inner_str.split()
+            continue  # try unwrapping again
+
+        # Interpreter wrappers
+        interp_inner = _extract_interpreter_inner(current_argv)
+        if interp_inner is not None:
+            shell_wrapped = True
+            extracted = _extract_commands_from_interpreter(interp_inner)
+            if extracted:
+                last_inner_str = extracted[0]
+                try:
+                    current_argv = shlex.split(extracted[0])
+                except ValueError:
+                    current_argv = extracted[0].split()
+                continue  # try unwrapping again
+            last_inner_str = interp_inner
+            break  # interpreter code with no extractable command
+
+        break  # no more wrappers found
+
+    return current_argv, shell_wrapped, last_inner_str
 
 
 def _pipe_pattern_matches(text_lower: str, pattern_lower: str) -> bool:
