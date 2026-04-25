@@ -21,6 +21,7 @@ from scripts.route_contract_lib import (
 )
 from scripts.retrieval_policy_lib import build_retrieval_plan
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies as load_manifest_policies
+from scripts.state_io import append_jsonl_atomic
 
 
 WORKSPACE = get_workspace_layout().root
@@ -137,6 +138,23 @@ def max_enforcement(policy: dict, *levels: str) -> str:
     return max(filtered, key=lambda level: enforcement_rank(policy, level))
 
 
+def _deep_merge(base: dict, overlay: dict) -> dict:
+    """Recursively merge overlay into base, returning a new dict.
+
+    Nested dicts are merged recursively so that overlay values override
+    individual keys within a sub-dict rather than replacing the whole sub-dict.
+    All other value types (lists, scalars) are taken from overlay directly.
+    """
+    result = dict(base)
+    for key, overlay_value in overlay.items():
+        base_value = result.get(key)
+        if isinstance(base_value, dict) and isinstance(overlay_value, dict):
+            result[key] = _deep_merge(base_value, overlay_value)
+        else:
+            result[key] = overlay_value
+    return result
+
+
 def resolve_skill_contract(skill: str | None) -> dict:
     if not skill:
         return {}
@@ -144,7 +162,7 @@ def resolve_skill_contract(skill: str | None) -> dict:
     contract = contracts.get(skill)
     if contract:
         resolved = base_skill_contract(skill)
-        resolved.update(contract)
+        resolved = _deep_merge(resolved, contract)
         return resolved
     return base_skill_contract(skill)
 
@@ -170,7 +188,7 @@ def build_hydration_commands(contract: dict) -> list[list[str]]:
     include = [str(item) for item in context.get("include", []) if str(item)]
     commands: list[list[str]] = [
         [
-            "python3",
+            sys.executable,
             str(WORKSPACE / "scripts" / "ops_memory_query.py"),
             str(context.get("query") or ""),
         ]
@@ -185,7 +203,7 @@ def build_hydration_commands(contract: dict) -> list[list[str]]:
             return commands
         commands.append(
             [
-                "python3",
+                sys.executable,
                 str(WORKSPACE / "scripts" / "ops_memory_query.py"),
                 "--failed-only",
                 "--limit",
@@ -600,12 +618,6 @@ def load_jsonl(path: Path) -> list[dict]:
     return rows
 
 
-def append_jsonl(path: Path, row: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-
-
 def postflight_payload(task_id: str, contract: dict, enforcement_level: str) -> dict:
     harness_policy = load_harness_policy()
     checks: list[dict] = []
@@ -734,7 +746,7 @@ def record_task_evidence(
         harness["file_intake_evidence"] = file_intake_evidence
     meta["harness"] = harness
     entry["meta"] = meta
-    append_jsonl(TASK_LEDGER, entry)
+    append_jsonl_atomic(TASK_LEDGER, entry)
     return entry
 
 

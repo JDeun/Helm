@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 
 from adaptive_harness_lib import (
     WORKSPACE,
@@ -99,7 +100,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         }
     }
     run_cmd = [
-        "python3",
+        sys.executable,
         str(RUN_WITH_PROFILE),
         "run",
         args.profile,
