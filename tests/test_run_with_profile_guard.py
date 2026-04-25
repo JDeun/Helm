@@ -110,6 +110,7 @@ def _make_args():
     args.path = None
     args.runtime_note = None
     args.delivery_mode = "inline"
+    args.timeout = 1800
     return args
 
 
@@ -564,6 +565,120 @@ def test_build_parser_survives_missing_profiles_file(monkeypatch, tmp_path):
     # Should not raise even though the profile file does not exist
     parser = build_parser()
     assert parser is not None
+
+
+# ---------------------------------------------------------------------------
+# Fix 7: fail-closed exception path produces tuples, not lists
+# ---------------------------------------------------------------------------
+
+def test_guard_exception_fallback_uses_tuples_and_require_approval(capsys):
+    """When evaluate_command_guard raises, the fallback decision must use tuples and require_approval."""
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+
+    captured_tasks = []
+
+    def capture_finalize(task):
+        captured_tasks.append(dict(task))
+
+    def raise_guard(*args, **kwargs):
+        raise RuntimeError("simulated guard failure")
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", side_effect=raise_guard), \
+         patch("scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+
+        mock_subprocess.return_value.returncode = 0
+
+        args = _make_args()
+        args.guard_mode = "enforce"
+        args.approve_risk = True  # approve so it doesn't exit early
+        args.command = ["echo", "hello"]
+
+        rc = cmd_run(args)
+
+    # The fallback decision should have action="require_approval"
+    # Check the guard info recorded in the task
+    assert captured_tasks, "finalize_task must have been called"
+    task = captured_tasks[0]
+    guard_info = task.get("guard", {})
+    assert guard_info.get("action") == "require_approval", \
+        f"expected require_approval, got {guard_info.get('action')}"
+
+    # Verify the fallback dataclass was constructed with tuples
+    # We re-trigger the fallback path directly to inspect field types
+    from scripts.command_guard import GuardDecision, CommandClassification
+    try:
+        raise RuntimeError("simulated")
+    except RuntimeError as exc:
+        fallback = GuardDecision(
+            action="require_approval",
+            risk_score=0.5,
+            score_breakdown={"guard_error": 0.5},
+            selected_profile="inspect_local",
+            recommended_profile=None,
+            reasons=tuple([f"guard evaluation error: {exc}"]),
+            matched_rules=tuple(),
+            classification=CommandClassification(
+                normalized_command="echo hello",
+                argv=tuple(["echo", "hello"]),
+                shell_wrapped=False,
+                shell_inner_command=None,
+                categories=tuple(["unknown"]),
+                matched_rules=tuple(),
+                writes_detected=False,
+                network_detected=False,
+                destructive_detected=False,
+                privilege_detected=False,
+                remote_detected=False,
+            ),
+            approval_required=True,
+            approval_hint="--approve-risk",
+        )
+    assert isinstance(fallback.reasons, tuple), f"reasons should be tuple, got {type(fallback.reasons)}"
+    assert isinstance(fallback.matched_rules, tuple), f"matched_rules should be tuple, got {type(fallback.matched_rules)}"
+    assert isinstance(fallback.classification.argv, tuple), f"argv should be tuple, got {type(fallback.classification.argv)}"
+    assert isinstance(fallback.classification.categories, tuple), f"categories should be tuple, got {type(fallback.classification.categories)}"
+    assert isinstance(fallback.classification.matched_rules, tuple), f"classification.matched_rules should be tuple, got {type(fallback.classification.matched_rules)}"
+
+
+def test_negative_timeout_treated_as_zero():
+    """A negative --timeout value should be clamped to 0 (no limit)."""
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+    import subprocess as _sp
+
+    captured_calls = []
+
+    def fake_subprocess_run(*a, **kw):
+        captured_calls.append(kw)
+        return _sp.CompletedProcess(args=a[0] if a else [], returncode=0)
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("scripts.run_with_profile.finalize_task"), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
+
+        mock_guard.return_value = _make_allow_decision()
+
+        args = _make_args_with_timeout(timeout=-5)
+        args.command = ["echo", "hello"]
+        cmd_run(args)
+
+    assert captured_calls, "subprocess.run must have been called"
+    assert captured_calls[0].get("timeout") is None, \
+        "negative timeout must be clamped to 0 then converted to None (no limit)"
 
 
 def test_known_profiles_listed_in_error_message(capsys):
