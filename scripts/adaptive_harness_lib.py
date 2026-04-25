@@ -21,6 +21,7 @@ from scripts.route_contract_lib import (
 )
 from scripts.retrieval_policy_lib import build_retrieval_plan
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies as load_manifest_policies
+from scripts.state_io import append_jsonl_atomic
 
 
 WORKSPACE = get_workspace_layout().root
@@ -617,12 +618,6 @@ def load_jsonl(path: Path) -> list[dict]:
     return rows
 
 
-def append_jsonl(path: Path, row: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-
-
 def postflight_payload(task_id: str, contract: dict, enforcement_level: str) -> dict:
     harness_policy = load_harness_policy()
     checks: list[dict] = []
@@ -751,7 +746,7 @@ def record_task_evidence(
         harness["file_intake_evidence"] = file_intake_evidence
     meta["harness"] = harness
     entry["meta"] = meta
-    append_jsonl(TASK_LEDGER, entry)
+    append_jsonl_atomic(TASK_LEDGER, entry)
     return entry
 
 

@@ -229,3 +229,38 @@ def test_resolve_skill_contract_preserves_base_required_fields_on_partial_overri
     # The base provides ["reason", "evidence", "api_reusable", "next_action"]
     assert "reason" in contract["browser_work"]["required_fields"]
     assert "evidence" in contract["browser_work"]["required_fields"]
+
+
+# ---------------------------------------------------------------------------
+# H12: append_jsonl_atomic used for evidence recording
+# ---------------------------------------------------------------------------
+
+def test_record_task_evidence_calls_append_jsonl_atomic() -> None:
+    """record_task_evidence must delegate writes to append_jsonl_atomic."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ledger = Path(tmpdir) / "task-ledger.jsonl"
+        entry = {"task_id": "task-abc", "status": "completed", "meta": {}}
+        ledger.write_text(json.dumps(entry) + "\n", encoding="utf-8")
+
+        calls: list[tuple] = []
+
+        def fake_atomic(path: Path, row: dict) -> None:
+            calls.append((path, row))
+
+        with (
+            patch.object(adaptive_harness_lib, "TASK_LEDGER", ledger),
+            patch.object(adaptive_harness_lib, "append_jsonl_atomic", fake_atomic),
+        ):
+            adaptive_harness_lib.record_task_evidence(
+                "task-abc",
+                browser_evidence={"reason": "test", "evidence": "e", "api_reusable": False, "next_action": "stop"},
+                retrieval_evidence=None,
+                file_intake_evidence=None,
+            )
+
+        assert len(calls) == 1
+        written_path, written_row = calls[0]
+        assert written_path == ledger
+        assert written_row["task_id"] == "task-abc"
+        harness = (written_row.get("meta") or {}).get("harness") or {}
+        assert harness.get("browser_evidence") is not None
