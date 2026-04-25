@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import subprocess
 import sys
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 from commands import (
-    SCRIPT_ROOT,
     discover_workspace,
     read_json,
+    read_jsonl,
+    run_script,
     state_root_for,
     target_root,
 )
@@ -18,18 +19,27 @@ from commands.context import (
     build_recent_state_payload,
     build_state_snapshot_payload,
     latest_tasks,
-    read_jsonl,
     task_finalization_status,
 )
 
 
-def run_script(script_name: str, script_args: list[str], workspace: Path | None = None) -> int:
-    script_path = SCRIPT_ROOT / script_name
-    env = os.environ.copy()
-    if workspace is not None:
-        env["HELM_WORKSPACE"] = str(workspace)
-    result = subprocess.run([sys.executable, str(script_path), *script_args], env=env)
-    return result.returncode
+def _parse_timestamp(ts: str) -> datetime | None:
+    """Parse an ISO-8601 or compact (20260413T090959Z) timestamp into a UTC-aware datetime."""
+    if not ts:
+        return None
+    # Compact format: YYYYMMDDTHHMMSSz
+    if len(ts) == 16 and ts[8] == "T" and ts.endswith("Z") and ts[:8].isdigit():
+        try:
+            return datetime.strptime(ts, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
 
 
 def recommend_checkpoint(root: Path, task_id: str | None = None) -> dict:
@@ -52,7 +62,15 @@ def recommend_checkpoint(root: Path, task_id: str | None = None) -> dict:
         checkpoint = next((item for item in checkpoints if item.get("checkpoint_id") == explicit), None)
     if checkpoint is None and checkpoints:
         started_at = target.get("started_at", "")
-        older = [item for item in checkpoints if item.get("created_at", "") <= started_at.replace("-", "").replace(":", "").replace("+00:00", "Z")]
+        task_start_dt = _parse_timestamp(started_at)
+        if task_start_dt is not None:
+            older = []
+            for item in checkpoints:
+                cp_dt = _parse_timestamp(item.get("created_at", ""))
+                if cp_dt is not None and cp_dt <= task_start_dt:
+                    older.append(item)
+        else:
+            older = []
         checkpoint = older[-1] if older else checkpoints[-1]
     return {"task": target, "checkpoint": checkpoint}
 
@@ -86,7 +104,6 @@ def build_capture_state_payload(root: Path, limit: int) -> dict:
     state_root = state_root_for(root)
     tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
     recent_tasks = tasks[-limit:]
-    from collections import Counter
     finalization_counts = Counter(task_finalization_status(task) for task in recent_tasks)
     pending_tasks = [
         {
