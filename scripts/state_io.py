@@ -20,7 +20,7 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
     line = json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n"
     line_bytes = line.encode("utf-8")
 
-    with path.open("a", encoding="utf-8") as fh:
+    with path.open("ab") as fh:
         locked = False
 
         if sys.platform != "win32":
@@ -46,7 +46,7 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
                     _LOCK_WARNING_ISSUED = True
 
         try:
-            fh.write(line)
+            fh.write(line_bytes)
             fh.flush()
             os.fsync(fh.fileno())
         finally:
