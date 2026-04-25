@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.discovery import discover_environment, snapshot_to_json
+from scripts.discovery import discover_environment, snapshot_to_json, _detect_gpu, GpuInfo
 
 
 # ---------------------------------------------------------------------------
@@ -211,3 +211,64 @@ def test_snapshot_to_json_serializable(tmp_path: Path) -> None:
     serialized = json.dumps(result)
     assert isinstance(serialized, str)
     assert len(serialized) > 0
+
+
+# ---------------------------------------------------------------------------
+# GPU detection tests
+# ---------------------------------------------------------------------------
+
+def _mock_run(stdout: str, returncode: int = 0):
+    result = MagicMock()
+    result.returncode = returncode
+    result.stdout = stdout
+    return result
+
+
+def test_nvidia_multi_gpu():
+    """Multiple NVIDIA GPUs should all be detected."""
+    nvidia_output = "NVIDIA RTX 4090, 24564\nNVIDIA RTX 3090, 24576\n"
+
+    def side_effect(cmd, **kwargs):
+        if "nvidia-smi" in cmd:
+            return _mock_run(nvidia_output)
+        raise FileNotFoundError()
+
+    with patch("subprocess.run", side_effect=side_effect):
+        detected, gpus = _detect_gpu()
+
+    assert detected is True
+    assert len(gpus) == 2
+    assert gpus[0].vendor == "nvidia"
+    assert gpus[1].name == "NVIDIA RTX 3090"
+
+
+def test_amd_single_gpu():
+    """Single AMD GPU via rocm-smi should be detected."""
+    rocm_output = "GPU[0]\t\t: Card Series:\t\tAMD Radeon RX 7900 XTX\nGPU[0]\t\t: VRAM Total Memory (B):\t\t25769803776\n"
+
+    def side_effect(cmd, **kwargs):
+        if "nvidia-smi" in cmd:
+            raise FileNotFoundError()
+        if "rocm-smi" in cmd:
+            return _mock_run(rocm_output)
+        raise FileNotFoundError()
+
+    with patch("subprocess.run", side_effect=side_effect):
+        detected, gpus = _detect_gpu()
+
+    assert detected is True
+    assert len(gpus) >= 1
+    assert gpus[0].vendor == "amd"
+    assert "7900" in gpus[0].name
+
+
+def test_no_gpu():
+    """When no GPU tools are available, return empty."""
+    def side_effect(cmd, **kwargs):
+        raise FileNotFoundError()
+
+    with patch("subprocess.run", side_effect=side_effect):
+        detected, gpus = _detect_gpu()
+
+    assert detected is False
+    assert gpus == []

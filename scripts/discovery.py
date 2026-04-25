@@ -9,7 +9,7 @@ import platform
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -48,6 +48,12 @@ class RuntimeFingerprint:
     reasons: list[str]
 
 
+class GpuInfo(NamedTuple):
+    name: str
+    vram_gb: float | None
+    vendor: str  # "nvidia", "amd", "apple"
+
+
 @dataclass(frozen=True)
 class HardwareProfile:
     os_name: str
@@ -61,6 +67,7 @@ class HardwareProfile:
     gpu_detected: bool = False
     gpu_name: str | None = None
     vram_gb: float | None = None
+    gpus: tuple[GpuInfo, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -204,31 +211,78 @@ def _read_memory_total_gb() -> float | None:
 _LOW_RAM_THRESHOLD_GB = 17.0
 
 
-def _detect_gpu() -> tuple[bool, str | None, float | None]:
-    """Detect GPU presence. Returns (detected, name, vram_gb)."""
+def _detect_gpu() -> tuple[bool, list[GpuInfo]]:
+    """Detect GPUs. Returns (detected, gpu_list)."""
     import subprocess
 
-    # Try NVIDIA
+    gpus: list[GpuInfo] = []
+
+    # --- NVIDIA via nvidia-smi ---
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=1,
+            capture_output=True, text=True, timeout=3,
         )
         if result.returncode == 0 and result.stdout.strip():
-            line = result.stdout.strip().splitlines()[0]
-            parts = [p.strip() for p in line.split(",")]
-            name = parts[0] if parts else "NVIDIA GPU"
-            vram: float | None = None
-            if len(parts) > 1:
-                try:
-                    vram = float(parts[1]) / 1024.0  # MiB to GiB
-                except (ValueError, IndexError):
-                    pass
-            return True, name, vram
+            for line in result.stdout.strip().splitlines():
+                parts = [p.strip() for p in line.split(",")]
+                name = parts[0] if parts else "NVIDIA GPU"
+                vram: float | None = None
+                if len(parts) > 1:
+                    try:
+                        vram = float(parts[1]) / 1024.0  # MiB to GiB
+                    except (ValueError, IndexError):
+                        pass
+                gpus.append(GpuInfo(name=name, vram_gb=vram, vendor="nvidia"))
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         pass
 
-    return False, None, None
+    # --- AMD via rocm-smi ---
+    try:
+        result = subprocess.run(
+            ["rocm-smi", "--showproductname", "--showmeminfo", "vram"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            _parse_rocm_smi(result.stdout, gpus)
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        pass
+
+    return (len(gpus) > 0, gpus)
+
+
+def _parse_rocm_smi(output: str, gpus: list[GpuInfo]) -> None:
+    """Parse rocm-smi output for GPU names and VRAM."""
+    gpu_names: dict[int, str] = {}
+    gpu_vram: dict[int, float | None] = {}
+
+    for line in output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Pattern: "GPU[N]\t\t: Card Series:\t\tName"
+        if "Card Series:" in line or "Card series:" in line:
+            try:
+                idx = int(line.split("GPU[")[1].split("]")[0])
+                name = line.split(":")[-1].strip()
+                gpu_names[idx] = name
+            except (IndexError, ValueError):
+                pass
+        # Pattern: "GPU[N]\t\t: VRAM Total Memory (B):\t\tBytes"
+        if "VRAM Total Memory" in line or "vram total" in line.lower():
+            try:
+                idx = int(line.split("GPU[")[1].split("]")[0])
+                val = line.split(":")[-1].strip()
+                gpu_vram[idx] = float(val) / (1024 ** 3)  # bytes to GiB
+            except (IndexError, ValueError):
+                pass
+
+    for idx in sorted(gpu_names.keys()):
+        gpus.append(GpuInfo(
+            name=gpu_names[idx],
+            vram_gb=gpu_vram.get(idx),
+            vendor="amd",
+        ))
 
 
 def _detect_hardware() -> HardwareProfile:
@@ -241,13 +295,15 @@ def _detect_hardware() -> HardwareProfile:
     low_ram = (memory_total_gb is not None and memory_total_gb <= _LOW_RAM_THRESHOLD_GB)
     python_version = platform.python_version()
 
-    gpu_detected, gpu_name, vram_gb = _detect_gpu()
+    gpu_detected, gpu_list = _detect_gpu()
 
     # Apple Silicon: unified memory = GPU memory
     if is_apple_silicon and not gpu_detected:
         gpu_detected = True
-        gpu_name = "Apple Silicon"
-        vram_gb = memory_total_gb
+        gpu_list = [GpuInfo(name="Apple Silicon", vram_gb=memory_total_gb, vendor="apple")]
+
+    gpu_name = gpu_list[0].name if gpu_list else None
+    vram_gb = gpu_list[0].vram_gb if gpu_list else None
 
     return HardwareProfile(
         os_name=os_name,
@@ -261,6 +317,7 @@ def _detect_hardware() -> HardwareProfile:
         gpu_detected=gpu_detected,
         gpu_name=gpu_name,
         vram_gb=vram_gb,
+        gpus=tuple(gpu_list),
     )
 
 

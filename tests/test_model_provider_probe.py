@@ -298,8 +298,9 @@ def test_gpu_detection_nvidia_mock(monkeypatch: pytest.MonkeyPatch) -> None:
         stdout = "GPU 0: NVIDIA RTX 4090 (UUID: ...)\n"
 
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: FakeResult())
-    detected, name, vram = _detect_gpu()
+    detected, gpus = _detect_gpu()
     assert detected is True
+    name = gpus[0].name if gpus else None
     assert "NVIDIA" in (name or "")
 
 
@@ -310,7 +311,7 @@ def test_gpu_detection_no_nvidia_smi(monkeypatch: pytest.MonkeyPatch) -> None:
         raise FileNotFoundError("nvidia-smi not found")
 
     monkeypatch.setattr(subprocess, "run", _fail)
-    detected, name, vram = _detect_gpu()
+    detected, gpus = _detect_gpu()
     # On non-Apple-Silicon, should be False
     if not (sys.platform == "darwin"):
         assert detected is False
