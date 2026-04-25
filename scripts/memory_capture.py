@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 
+from commands import read_jsonl
 from helm_workspace import get_workspace_layout
 
 
@@ -100,29 +101,6 @@ def _task_timestamp(task: dict) -> str:
     return str(task.get("finished_at") or task.get("started_at") or task.get("created_at") or datetime.now(timezone.utc).isoformat())
 
 
-def _warn_parse_failure(path: Path, detail: str) -> None:
-    print(f"warning: ignoring malformed state file {path}: {detail}", file=sys.stderr)
-
-
-def _read_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    rows: list[dict] = []
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            _warn_parse_failure(path, f"line {lineno}: {exc}")
-            continue
-        if not isinstance(payload, dict):
-            _warn_parse_failure(path, f"line {lineno}: expected JSON object")
-            continue
-        rows.append(payload)
-    return rows
-
-
 def _normalized_task_name(task: dict) -> str:
     return " ".join(str(task.get("task_name") or "").casefold().split())
 
@@ -130,7 +108,7 @@ def _normalized_task_name(task: dict) -> str:
 def _recent_final_tasks(task: dict, state_root: Path | None = None) -> list[dict]:
     if state_root is None:
         state_root = get_workspace_layout().state_root
-    ledger = _read_jsonl(state_root / "task-ledger.jsonl")
+    ledger = read_jsonl(state_root / "task-ledger.jsonl")
     by_task: dict[str, dict] = {}
     for entry in ledger:
         task_id = entry.get("task_id")

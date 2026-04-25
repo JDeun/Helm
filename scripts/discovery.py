@@ -98,12 +98,22 @@ class HelmIntelligenceState:
 
 
 @dataclass(frozen=True)
+class StrategyConfig:
+    """Immutable strategy configuration derived from discovery."""
+    provider_priority_policy: str
+    cloud_calls_enabled: bool
+    local_model_calls_enabled: bool
+    low_ram: bool
+    memory_total_gb: float | None
+
+
+@dataclass(frozen=True)
 class DiscoverySnapshot:
     runtime: RuntimeFingerprint
     hardware: HardwareProfile
     runtime_model_state: RuntimeModelState
     helm_intelligence_state: HelmIntelligenceState
-    strategy: dict[str, object]
+    strategy: StrategyConfig
     warnings: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -466,13 +476,13 @@ def discover_environment(
         api_probes, local_probes, hardware
     )
 
-    strategy: dict[str, object] = {
-        "provider_priority_policy": "runtime_defined",
-        "cloud_calls_enabled": helm_intelligence_state.cloud_calls_enabled,
-        "local_model_calls_enabled": helm_intelligence_state.local_model_calls_enabled,
-        "low_ram": hardware.low_ram,
-        "memory_total_gb": hardware.memory_total_gb,
-    }
+    strategy = StrategyConfig(
+        provider_priority_policy="runtime_defined",
+        cloud_calls_enabled=helm_intelligence_state.cloud_calls_enabled,
+        local_model_calls_enabled=helm_intelligence_state.local_model_calls_enabled,
+        low_ram=hardware.low_ram,
+        memory_total_gb=hardware.memory_total_gb,
+    )
 
     _warnings: list[str] = []
     if runtime_model_state.readiness == "degraded":
@@ -536,6 +546,12 @@ def snapshot_to_json(snapshot: DiscoverySnapshot) -> dict:
             "local_model_calls_enabled": snapshot.helm_intelligence_state.local_model_calls_enabled,
             "reason": snapshot.helm_intelligence_state.reason,
         },
-        "strategy": snapshot.strategy,
+        "strategy": {
+            "provider_priority_policy": snapshot.strategy.provider_priority_policy,
+            "cloud_calls_enabled": snapshot.strategy.cloud_calls_enabled,
+            "local_model_calls_enabled": snapshot.strategy.local_model_calls_enabled,
+            "low_ram": snapshot.strategy.low_ram,
+            "memory_total_gb": snapshot.strategy.memory_total_gb,
+        },
         "warnings": snapshot.warnings,
     }

@@ -39,6 +39,9 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
     line = json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n"
     line_bytes = line.encode("utf-8")
 
+    # "ab" (binary append) mode: writes always go to end-of-file regardless
+    # of seek position, so the sentinel-region seek(0) for locking does not
+    # affect where data is written.
     with path.open("ab") as fh:
         locked = False
 

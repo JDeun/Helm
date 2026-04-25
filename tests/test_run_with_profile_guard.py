@@ -703,3 +703,39 @@ def test_known_profiles_listed_in_error_message(capsys):
     out = capsys.readouterr()
     assert "inspect_local" in out.err or "workspace_edit" in out.err, \
         "Error message should list known profiles"
+
+
+# ---------------------------------------------------------------------------
+# --guard-json flag
+# ---------------------------------------------------------------------------
+
+def test_guard_json_prints_decision_and_exits(capsys):
+    """--guard-json should print guard decision as JSON and return 0 without executing."""
+    import json as _json
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("scripts.run_with_profile.finalize_task"), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+
+        mock_guard.return_value = _make_allow_decision()
+
+        args = _make_args()
+        args.guard_json = True  # enable --guard-json
+
+        rc = cmd_run(args)
+
+    assert rc == 0, "--guard-json should return 0"
+    mock_subprocess.assert_not_called(), "--guard-json must not execute the command"
+
+    out = capsys.readouterr()
+    parsed = _json.loads(out.out)
+    assert "action" in parsed, "JSON output must contain 'action' field"
+    assert parsed["action"] == "allow"

@@ -4,21 +4,10 @@ import argparse
 import json
 import os
 import sys
-from collections import Counter
 from pathlib import Path
 
-from helm_context import configured_context_sources
 from helm_workspace import DEFAULT_WORKSPACE
 
-from commands import (
-    read_json,
-    read_jsonl,
-    relative_or_absolute,
-    state_root_for,
-    memory_review_queue_count_for,
-    latest_snapshot_path,
-    _warn_parse_failure,
-)
 from commands.checkpoint import (
     cmd_checkpoint,
     cmd_checkpoint_create,
@@ -30,17 +19,11 @@ from commands.checkpoint import (
     cmd_checkpoint_show,
 )
 from commands.context import (
-    build_capability_diff_payload,
-    build_onboarding_payload,
-    build_run_contract_payload,
-    build_session_card_payload,
+    build_state_snapshot_payload,
     cmd_adopt,
     cmd_context,
     cmd_onboard,
     cmd_sources,
-    latest_tasks,
-    load_draft_assessments,
-    task_finalization_status,
 )
 from commands.doctor import cmd_doctor, cmd_survey
 from commands.harness import cmd_harness
@@ -49,6 +32,7 @@ from commands.ops import cmd_ops
 from commands.profile import cmd_profile
 from commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_skill_reject, cmd_skill_review
 from commands.status import (
+    build_status_payload,
     cmd_capability_diff,
     cmd_detect,
     cmd_init,
@@ -60,75 +44,6 @@ from commands.status import (
 from commands.validate import cmd_validate
 from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status, cmd_db_query
 
-
-# These functions are defined here (not just imported) so tests can patch
-# helm.configured_context_sources and helm.build_status_payload directly.
-
-def build_status_payload(root: Path) -> dict:
-    from commands import detect_layout
-    layout = detect_layout(root)
-    state_root = state_root_for(root)
-    context_sources = configured_context_sources(root)
-    task_entries = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
-    command_entries = read_jsonl(state_root / "command-log.jsonl")
-    checkpoints = read_json(state_root / "checkpoints" / "index.json", [])
-    draft_assessments = load_draft_assessments(root)
-    recent_tasks = task_entries[-10:]
-    failed_commands = [entry for entry in command_entries[-100:] if entry.get("exit_code") not in (0, None)]
-    finalization_counts = Counter(
-        (entry.get("memory_capture") or {}).get("finalization_status", "unknown")
-        for entry in recent_tasks
-    )
-    memory_operations = read_jsonl(state_root / "memory-operations.jsonl")
-    crystallized_sessions = read_jsonl(state_root / "crystallized-sessions.jsonl")
-    return {
-        "workspace": str(root),
-        "layout": layout.kind,
-        "state_dir": relative_or_absolute(state_root, root),
-        "context_sources": [
-            {"name": source.name, "kind": source.kind, "root": str(source.root), "mode": source.mode}
-            for source in context_sources
-        ],
-        "task_status_counts": dict(Counter(entry.get("status", "unknown") for entry in recent_tasks)),
-        "finalization_counts": dict(finalization_counts),
-        "recent_tasks": recent_tasks[-5:],
-        "recent_failed_commands": failed_commands[-5:],
-        "recent_checkpoints": checkpoints[-5:],
-        "draft_assessments": draft_assessments[-5:],
-        "recent_memory_operations": memory_operations[-5:],
-        "recent_crystallized_sessions": crystallized_sessions[-5:],
-        "memory_review_queue_count": memory_review_queue_count_for(root),
-        "session_card": build_session_card_payload(root),
-    }
-
-
-def build_state_snapshot_payload(root: Path, task_id: str | None = None) -> dict:
-    state_root = state_root_for(root)
-    tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
-    target = None
-    if task_id:
-        target = next((task for task in tasks if task.get("task_id") == task_id), None)
-    elif tasks:
-        target = next((task for task in reversed(tasks) if task.get("state_snapshot")), None)
-    snapshot_meta = (target or {}).get("state_snapshot") or {}
-    snapshot_path = None
-    if snapshot_meta.get("path"):
-        snapshot_path = root / snapshot_meta["path"]
-    elif not task_id:
-        snapshot_path = latest_snapshot_path(state_root)
-    content = None
-    if snapshot_path and snapshot_path.exists():
-        try:
-            content = snapshot_path.read_text(encoding="utf-8")
-        except OSError as exc:
-            _warn_parse_failure(snapshot_path, str(exc))
-    return {
-        "workspace": str(root),
-        "task": target,
-        "snapshot": snapshot_meta or None,
-        "snapshot_path": str(snapshot_path) if snapshot_path else None,
-        "content": content,
-    }
 
 ASCII_BANNER = r"""
 ██╗  ██╗███████╗██╗     ███╗   ███╗

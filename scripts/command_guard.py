@@ -10,7 +10,7 @@ import json
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 # ---------------------------------------------------------------------------
 # Public type aliases
@@ -39,6 +39,13 @@ RiskCategory = Literal[
     "network_detected",
     "dev_tcp_bypass",
 ]
+
+
+class SemanticResult(NamedTuple):
+    """Structured return from _semantic_deny_check."""
+    action: Literal["deny", "require_approval"]
+    reason: str
+
 
 # ---------------------------------------------------------------------------
 # Detection sets
@@ -146,9 +153,9 @@ _SYSTEM_DIRECTORIES: frozenset[str] = frozenset({
 def _semantic_deny_check(argv: list[str]) -> str | None:
     """Semantic analysis of argv to catch deny-worthy commands that bypass substring matching.
 
-    Returns a deny reason string if the command should be denied, or None if no
-    semantic deny rule matched.  This handles flag reordering, extra whitespace,
-    and inserted arguments that simple substring matching misses.
+    Returns a SemanticResult with action and reason if a semantic rule matched,
+    or None if no semantic rule applies.  This handles flag reordering, extra
+    whitespace, and inserted arguments that simple substring matching misses.
     """
     if not argv:
         return None
@@ -191,12 +198,12 @@ def _semantic_deny_check(argv: list[str]) -> str | None:
                 # Normalize trailing slashes for comparison
                 norm_p = p.rstrip("/") or "/"
                 if norm_p in _SYSTEM_DIRECTORIES or p in ("/*", "/.*"):
-                    return f"deny.semantic_rm: rm with -r and -f targeting '{p}'"
+                    return SemanticResult("deny", f"rm with -r and -f targeting '{p}'")
                 if p.startswith("/") and p.count("/") == 1:
                     # Top-level like /tmp, /home  -- caught by _SYSTEM_DIRECTORIES
                     pass
             if has_no_preserve:
-                return "deny.semantic_rm: rm with --no-preserve-root"
+                return SemanticResult("deny", "rm with --no-preserve-root")
 
     # --- dd targeting device files ---
     if cmd == "dd":
@@ -222,26 +229,26 @@ def _semantic_deny_check(argv: list[str]) -> str | None:
                         if_device = True
                         if_arg = arg
         if of_device:
-            return f"deny.semantic_dd: dd writing to device"
+            return SemanticResult("deny", "dd writing to device")
         if if_device and not of_device:
-            return f"approve.semantic_dd: dd reading from device '{if_arg}'"
+            return SemanticResult("require_approval", f"dd reading from device '{if_arg}'")
 
     # --- mkfs targeting any device ---
     if cmd.startswith("mkfs"):
         for arg in effective[1:]:
             if arg.startswith("/dev/"):
-                return f"deny.semantic_mkfs: mkfs targeting device '{arg}'"
+                return SemanticResult("deny", f"mkfs targeting device '{arg}'")
 
     # --- shred / wipefs / blkdiscard targeting device files ---
     if cmd in ("shred", "wipefs", "blkdiscard"):
         for arg in effective[1:]:
             if arg.startswith("/dev/"):
-                return f"deny.semantic_{cmd}: {cmd} targeting device '{arg}'"
+                return SemanticResult("deny", f"{cmd} targeting device '{arg}'")
 
     # --- Fork bomb patterns ---
     full_str = " ".join(argv)
     if ":()" in full_str and ":|:" in full_str:
-        return "deny.semantic_fork_bomb: fork bomb pattern detected"
+        return SemanticResult("deny", "fork bomb pattern detected")
 
     return None
 
@@ -733,15 +740,15 @@ def evaluate_command_guard(
         deny_matches = _match_patterns(original_norm, absolute_deny_rules)
 
     # Semantic deny check: bypass-resistant second layer
-    semantic_reason = _semantic_deny_check(effective_argv)
+    semantic_result = _semantic_deny_check(effective_argv)
     semantic_approval_reason: str | None = None
-    if semantic_reason is not None and semantic_reason.startswith("approve."):
+    if semantic_result is not None and semantic_result.action == "require_approval":
         # Non-deny semantic match (e.g. dd reading from device) → require_approval
-        semantic_approval_reason = semantic_reason
-    elif semantic_reason is not None and not deny_matches:
-        deny_matches = [(semantic_reason, None)]
-    elif semantic_reason is not None:
-        deny_matches.append((semantic_reason, None))
+        semantic_approval_reason = semantic_result.reason
+    elif semantic_result is not None and not deny_matches:
+        deny_matches = [(semantic_result.reason, None)]
+    elif semantic_result is not None:
+        deny_matches.append((semantic_result.reason, None))
 
     is_absolute_deny = len(deny_matches) > 0
 

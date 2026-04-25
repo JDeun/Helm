@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import warnings as _warnings
 from pathlib import Path
 
@@ -10,6 +11,7 @@ _SCHEMA_VERSION = "1"
 _INDEX_FAILURE_WARNED = False
 
 _INITIALIZED_DBS: set[str] = set()
+_INITIALIZED_DBS_LOCK = threading.Lock()
 
 _DDL = """
 PRAGMA journal_mode=WAL;
@@ -336,9 +338,10 @@ def index_task_entry(
     global _INDEX_FAILURE_WARNED
     try:
         db_path = db_path_for_state_root(state_root)
-        if str(db_path) not in _INITIALIZED_DBS:
-            init_db(db_path)
-            _INITIALIZED_DBS.add(str(db_path))
+        with _INITIALIZED_DBS_LOCK:
+            if str(db_path) not in _INITIALIZED_DBS:
+                init_db(db_path)
+                _INITIALIZED_DBS.add(str(db_path))
         conn = _connect(db_path)
         try:
             _insert_task(conn, entry, source_file, source_line if source_line is not None else 0)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -39,22 +41,23 @@ def read_jsonl(path: Path) -> list[dict]:
         return []
     rows: list[dict] = []
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        f = open(path, "r", encoding="utf-8")
     except OSError as exc:
         _warn_parse_failure(path, str(exc))
         return rows
-    for lineno, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            _warn_parse_failure(path, f"line {lineno}: {exc}")
-            continue
-        if not isinstance(payload, dict):
-            _warn_parse_failure(path, f"line {lineno}: expected JSON object")
-            continue
-        rows.append(payload)
+    with f:
+        for lineno, line in enumerate(f, start=1):
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                _warn_parse_failure(path, f"line {lineno}: {exc}")
+                continue
+            if not isinstance(payload, dict):
+                _warn_parse_failure(path, f"line {lineno}: expected JSON object")
+                continue
+            rows.append(payload)
     return rows
 
 
@@ -91,6 +94,15 @@ def target_root(path: str | None, *, create: bool = False) -> Path:
     return resolved
 
 
+def run_script(script_name: str, script_args: list[str], workspace: Path | None = None) -> int:
+    script_path = SCRIPT_ROOT / script_name
+    env = os.environ.copy()
+    if workspace is not None:
+        env["HELM_WORKSPACE"] = str(workspace)
+    result = subprocess.run([sys.executable, str(script_path), *script_args], env=env)
+    return result.returncode
+
+
 __all__ = [
     "ROOT",
     "REFERENCES_ROOT",
@@ -103,6 +115,7 @@ __all__ = [
     "memory_review_queue_count_for",
     "relative_or_absolute",
     "target_root",
+    "run_script",
     "adopt_context_source",
     "configured_context_sources",
     "load_context_sources",

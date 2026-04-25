@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from commands import read_jsonl
 from helm_workspace import get_workspace_layout
 from scripts.file_intake_lib import probe_file_intake
 from scripts.route_contract_lib import (
@@ -592,30 +593,11 @@ def preflight_payload(
 
 
 def latest_task_entry(task_id: str) -> dict | None:
-    entries = load_jsonl(TASK_LEDGER)
+    entries = read_jsonl(TASK_LEDGER)
     for entry in reversed(entries):
         if entry.get("task_id") == task_id:
             return entry
     return None
-
-
-def load_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    rows: list[dict] = []
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            print(f"warning: ignoring malformed JSONL line {lineno} in {path}: {exc}", file=sys.stderr)
-            continue
-        if not isinstance(payload, dict):
-            print(f"warning: ignoring non-object JSONL line {lineno} in {path}", file=sys.stderr)
-            continue
-        rows.append(payload)
-    return rows
 
 
 def postflight_payload(task_id: str, contract: dict, enforcement_level: str) -> dict:
@@ -772,7 +754,7 @@ def backfill_task_evidence(
     limit: int | None = None,
     latest_only: bool = True,
 ) -> dict:
-    entries = load_jsonl(TASK_LEDGER)
+    entries = read_jsonl(TASK_LEDGER)
     if latest_only:
         latest_map: dict[str, dict] = {}
         for entry in entries:

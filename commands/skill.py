@@ -3,15 +3,13 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
-import os
-import subprocess
 import sys
 from pathlib import Path
 
 from commands import (
-    SCRIPT_ROOT,
     discover_workspace,
     relative_or_absolute,
+    run_script,
     target_root,
 )
 
@@ -19,15 +17,6 @@ from commands import (
 def write_json_file(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-
-def run_script(script_name: str, script_args: list[str], workspace: Path | None = None) -> int:
-    script_path = SCRIPT_ROOT / script_name
-    env = os.environ.copy()
-    if workspace is not None:
-        env["HELM_WORKSPACE"] = str(workspace)
-    result = subprocess.run([sys.executable, str(script_path), *script_args], env=env)
-    return result.returncode
 
 
 def cmd_skill(args: argparse.Namespace) -> int:

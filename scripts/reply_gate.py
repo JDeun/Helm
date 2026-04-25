@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from commands import read_jsonl
 from helm_workspace import get_workspace_layout
 
 
@@ -18,23 +19,11 @@ def _get_task_ledger() -> Path:
 
 
 def load_entries(path: Path | None = None) -> list[dict]:
-    ledger = path if path is not None else _get_task_ledger()
-    if not ledger.exists():
+    if path is None:
+        path = _get_task_ledger()
+    if not path.exists():
         return []
-    rows: list[dict] = []
-    for lineno, line in enumerate(ledger.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            print(f"warning: ignoring malformed task ledger line {lineno}: {exc}", file=sys.stderr)
-            continue
-        if not isinstance(payload, dict):
-            print(f"warning: ignoring non-object task ledger line {lineno}", file=sys.stderr)
-            continue
-        rows.append(payload)
-    return rows
+    return read_jsonl(path)
 
 
 def latest_entries(entries: list[dict]) -> list[dict]:
