@@ -431,6 +431,33 @@ class TestSemanticDenyBypass:
         decision = _guard(["bash", "-c", ":(){ :|:& };:"], "risky_edit")
         assert decision.action == "deny"
 
+    def test_dd_if_dev_sda_of_file_not_denied(self):
+        """dd if=/dev/sda of=backup.img (read from device) should NOT be denied."""
+        decision = _guard(["dd", "if=/dev/sda", "of=backup.img"], "risky_edit")
+        assert decision.action != "deny", (
+            f"dd reading from device should not be denied, got action={decision.action}"
+        )
+
+    def test_dd_of_dev_sda_if_dev_zero_denied(self):
+        """dd of=/dev/sda if=/dev/zero (writing TO device) should be denied."""
+        decision = _guard(["dd", "of=/dev/sda", "if=/dev/zero"], "risky_edit")
+        assert decision.action == "deny"
+
+    def test_shred_dev_sda_denied(self):
+        """shred /dev/sda should be denied."""
+        decision = _guard(["shred", "/dev/sda"], "risky_edit")
+        assert decision.action == "deny"
+
+    def test_wipefs_dev_sda_denied(self):
+        """wipefs /dev/sda should be denied."""
+        decision = _guard(["wipefs", "/dev/sda"], "risky_edit")
+        assert decision.action == "deny"
+
+    def test_blkdiscard_dev_sda_denied(self):
+        """blkdiscard /dev/sda should be denied."""
+        decision = _guard(["blkdiscard", "/dev/sda"], "risky_edit")
+        assert decision.action == "deny"
+
     def test_rm_rf_workspace_dir_not_denied(self):
         """rm -rf ./build should NOT be absolute-denied (it's a workspace dir)."""
         decision = _guard(["rm", "-rf", "./build"], "risky_edit")
