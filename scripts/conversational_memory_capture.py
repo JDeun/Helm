@@ -105,9 +105,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     task = build_task(args)
+    task["status"] = args.status
     payload = build_memory_capture_plan(task, touched_paths=args.path)
     final_task = dict(task)
-    final_task["status"] = args.status
     final_task["memory_capture"] = payload
     for entry in build_ledger_entries(final_task, args.status):
         append_jsonl_atomic(TASK_LEDGER, entry)
