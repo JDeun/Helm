@@ -27,6 +27,7 @@ from commands.context import (
 )
 from commands.doctor import cmd_doctor, cmd_survey
 from commands.harness import cmd_harness
+from commands.health import cmd_health
 from commands.memory import cmd_memory
 from commands.ops import cmd_ops
 from commands.profile import cmd_profile
@@ -267,6 +268,11 @@ def build_parser() -> argparse.ArgumentParser:
     memory.add_argument("args", nargs=argparse.REMAINDER)
     memory.set_defaults(func=cmd_memory)
 
+    health = subparsers.add_parser("health", help="Probe runtime model health and choose fallback candidates.")
+    health.add_argument("--path", help="Workspace path to target.")
+    health.add_argument("args", nargs=argparse.REMAINDER)
+    health.set_defaults(func=cmd_health)
+
     harness = subparsers.add_parser("harness", help="Run adaptive harness preflight and guarded execution flows.")
     harness.add_argument("--path", help="Workspace path to target.")
     harness.add_argument("args", nargs=argparse.REMAINDER)
@@ -323,6 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         "skill": cmd_skill,
         "ops": cmd_ops,
         "memory": cmd_memory,
+        "health": cmd_health,
         "harness": cmd_harness,
     }
     if argv and argv[0] in passthrough:
@@ -330,12 +337,14 @@ def main(argv: list[str] | None = None) -> int:
         workspace: str | None = None
         forwarded: list[str] = []
         idx = 1
+        consumed_workspace = False
         while idx < len(argv):
             token = argv[idx]
-            if token == "--path":
+            if token == "--path" and not consumed_workspace and not forwarded:
                 if idx + 1 >= len(argv):
                     raise SystemExit("--path requires a value")
                 workspace = argv[idx + 1]
+                consumed_workspace = True
                 idx += 2
                 continue
             forwarded.append(token)

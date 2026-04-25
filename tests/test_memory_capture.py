@@ -253,6 +253,7 @@ def test_review_flags_high_risk_score_task() -> None:
 
 def test_review_flags_contradiction_keywords_trigger_review() -> None:
     task = _make_task(task_name="rewrite authentication flow", status="completed")
+    task["touched_paths"] = ["README.md"]
     claim_state = {"confidence_hint": "medium"}
 
     with patch("scripts.memory_capture._supersession", return_value={"supersedes_task_ids": []}):

@@ -36,6 +36,10 @@ def create_minimal_workspace(root: Path) -> None:
         json.dumps({"profiles": {"inspect_local": {}, "workspace_edit": {}}}),
         encoding="utf-8",
     )
+    (root / "references" / "model_recovery_policy.json").write_text(
+        json.dumps({"version": 1, "state_path": ".helm/model-health-state.json", "models": []}),
+        encoding="utf-8",
+    )
     (root / "references" / "skill_profile_policies.json").write_text(
         json.dumps({"skills": {}}),
         encoding="utf-8",
@@ -456,6 +460,77 @@ def test_doctor_reports_healthy_for_minimal_workspace() -> None:
         assert result.returncode == 0
         assert "healthy=yes" in result.stdout
         assert "references/skill-contract-template.json: present" in result.stdout
+        assert "model-health:" in result.stdout
+
+
+def test_health_select_uses_fresh_state() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        (root / "references" / "model_recovery_policy.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "state_path": ".helm/model-health-state.json",
+                    "fresh_after_seconds": 300,
+                    "models": [
+                        {"ref": "openai/gpt-4.1-mini", "provider": "openai", "priority": 10, "probe": {"kind": "openai_chat_completion", "model": "gpt-4.1-mini"}}
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / ".helm" / "model-health-state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "models": {
+                        "openai/gpt-4.1-mini": {
+                            "status": "healthy",
+                            "checked_at": "2099-01-01T00:00:00+00:00",
+                            "last_ok_at": "2099-01-01T00:00:00+00:00",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_cli("health", "--path", str(root), "select", "--json")
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["model"] == "openai/gpt-4.1-mini"
+        assert payload["source"] == "model-health-state"
+
+
+def test_memory_capture_chat_writes_ledger_entries() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+
+        result = run_cli(
+            "memory",
+            "--path",
+            str(root),
+            "capture-chat",
+            "--task-name",
+            "document release state",
+            "--path",
+            "README.md",
+            "--path",
+            "CHANGELOG.md",
+            "--json",
+        )
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["memory_capture"]["touched_paths"] == ["README.md", "CHANGELOG.md"]
+        lines = (root / ".helm" / "task-ledger.jsonl").read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 3
+        final = json.loads(lines[-1])
+        assert final["status"] == "completed"
+        assert final["memory_capture"]["finalization_status"] == "capture_planned"
 
 
 def test_run_contract_and_capability_diff_report_recent_task_state() -> None:

@@ -18,7 +18,7 @@ def cmd_memory(args: argparse.Namespace) -> int:
     help_parser.add_argument(
         "subcommand",
         nargs="?",
-        help="Supported: pending-captures, review-queue, audit-coherence, history, crystallize, op",
+        help="Supported: pending-captures, review-queue, audit-coherence, history, crystallize, op, capture-chat",
     )
     if not args.args:
         help_parser.print_help()
@@ -47,6 +47,8 @@ def cmd_memory(args: argparse.Namespace) -> int:
                 f"name={item['task_name']}"
             )
         return 0
+    if subcommand == "capture-chat":
+        return run_script("conversational_memory_capture.py", remainder, root)
     if subcommand in {"history", "crystallize", "op", "review-queue", "audit-coherence"}:
         return run_script("memory_ops.py", [subcommand, *remainder], root)
     print(f"Unknown memory subcommand: {subcommand}", file=sys.stderr)

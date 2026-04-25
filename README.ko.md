@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.6.1</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.6.2</strong></p>
 
 <p align="center">
   <a href="README.md">English README</a>
@@ -27,6 +27,7 @@
   <a href="#온보딩과-workspace-모델">온보딩</a> ·
   <a href="#핵심-명령">핵심 명령</a> ·
   <a href="#명령-가드">명령 가드</a> ·
+  <a href="#모델-헬스">모델 헬스</a> ·
   <a href="#프로바이더-탐지">프로바이더 탐지</a> ·
   <a href="#운영-데이터베이스">운영 데이터베이스</a> ·
   <a href="#adaptive-harness">Adaptive Harness</a> ·
@@ -63,6 +64,7 @@ Helm은 바로 이 두 번째 층의 문제를 다룹니다.
 - manifest 존재 여부뿐 아니라 품질까지 감사 가능
 - typed memory operation과 crystallized session을 명시적으로 기록
 - `helm memory review-queue`로 unresolved follow-up 즉시 확인
+- 최근 건강 상태를 기준으로 모델 fallback을 고르는 model-health 계층
 - status/report가 workspace layout을 따르므로 OpenClaw형에서도 state를 놓치지 않음
 
 특히 아래 같은 환경에 잘 맞습니다.
@@ -103,6 +105,8 @@ Helm이 있으면 explicit files, execution profiles, checkpoints, audit traces,
 - draft skill 생성, review, approve, reject
 - status / report / validate 중심의 운영 가시성
 - runtime-neutral memory policy (confidence, recency, supersession, crystallization, audit-first)
+- policy-driven model health probing과 fallback selection
+- profiled shell run 없이도 durable capture를 남기는 conversational capture
 - 결정론적 명령 가드와 위험 점수/승인 워크플로우
 - provider-agnostic LLM 탐지 (API/로컬, 시크릿 미저장)
 - JSONL 위의 SQLite 쿼리 인덱스
@@ -233,6 +237,23 @@ helm status --path ~/.helm/workspace --verbose
 helm report --path ~/.helm/workspace --format markdown
 ```
 
+모델 헬스 상태 확인과 fallback 선택:
+
+```bash
+helm health --path ~/.helm/workspace state --json
+helm health --path ~/.helm/workspace select --json
+```
+
+채팅 기반 변경을 task ledger와 memory plan에 바로 기록:
+
+```bash
+helm memory --path ~/.helm/workspace capture-chat \
+  --task-name "release state 문서화" \
+  --path README.md \
+  --path CHANGELOG.md \
+  --json
+```
+
 ## 명령 가드
 
 Helm은 모든 명령 실행 전에 결정론적 명령 가드를 평가합니다:
@@ -258,6 +279,27 @@ helm profile run workspace_edit --guard-json -- rm -rf build
 ```
 
 가드 모드: `enforce` (기본값), `audit` (기록만), `off` (비활성화하되 기록).
+
+## 모델 헬스
+
+Helm은 이제 별도 model-health 계층을 가집니다. 목적은 단순합니다. 어떤 모델이 최근 healthy였는지 파일에 남기고, 필요할 때 다시 probe하고, 다음 턴에서 쓸 fallback 후보를 채팅이 아니라 상태 파일 기준으로 고르는 것입니다.
+
+기본 템플릿은 `references/model_recovery_policy.json`에 있습니다. 비워 둔 채 discovery 기반 선택만 써도 되고, 실제로 probe할 모델과 probe kind를 명시해서 적극적인 health check를 돌릴 수도 있습니다.
+
+전형적인 흐름:
+
+```bash
+# 저장된 상태 확인
+helm health --path ~/.helm/workspace state --json
+
+# 정의된 후보 probe
+helm health --path ~/.helm/workspace probe --json
+
+# 다음 턴에 쓸 가장 적절한 healthy 후보 선택
+helm health --path ~/.helm/workspace select --json
+```
+
+`helm doctor`도 이제 model-health policy 경로, state 경로, 현재 선택된 후보를 같이 보여주므로 runtime handoff를 더 명시적으로 확인할 수 있습니다.
 
 가드는 heredoc 주입, base64 파이프 실행, `/dev/tcp` 네트워크 접근 같은 셸 우회 패턴도 감지합니다. 가드 예외는 fail-closed(기본 `require_approval`)이며, manual-remote 핸드오프 전에도 가드 평가가 실행되어 우회를 방지합니다.
 
@@ -419,6 +461,7 @@ python3 -m pip install --user --no-build-isolation .
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
+- [`docs/releases/0.6.2.md`](docs/releases/0.6.2.md)
 - [`docs/releases/0.6.1.md`](docs/releases/0.6.1.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
@@ -438,13 +481,15 @@ helm context --path examples/demo-workspace recent-state --limit 5
 helm memory --path examples/demo-workspace pending-captures --limit 5
 helm memory --path examples/demo-workspace review-queue --limit 5
 helm memory --path examples/demo-workspace audit-coherence --json
+helm memory --path examples/demo-workspace capture-chat --task-name "demo memory capture" --path README.md
+helm health --path examples/demo-workspace state --json
 helm ops --path examples/demo-workspace capture-state --limit 10
 helm report --path examples/demo-workspace --format markdown
 ```
 
 ## 현재 상태
 
-Helm v0.6.1은 전 모듈에 걸쳐 완전한 불변성 강제, 구조적 타입 안전, 스레드 안전 연산, 서브프로세스 타임아웃 제어를 적용한 hardening 릴리즈입니다. 298개 테스트로 검증됩니다.
+Helm v0.6.2는 v0.6.1의 hardening 기반 위에 file-driven model health 계층, conversational durable capture, 더 얇아진 memory-capture core 분리를 추가한 릴리즈입니다.
 
 ### 코어
 
@@ -453,6 +498,8 @@ Helm v0.6.1은 전 모듈에 걸쳐 완전한 불변성 강제, 구조적 타입
 - file-native context hydration
 - durable capture planning 포함 task finalization
 - typed memory operation과 crystallized session artifact
+- policy-driven model health probing과 fallback selection
+- profiled shell run 없이도 남길 수 있는 conversational memory capture
 
 ### 보안
 
@@ -468,6 +515,7 @@ Helm v0.6.1은 전 모듈에 걸쳐 완전한 불변성 강제, 구조적 타입
 ### 신뢰성
 
 - 프로바이더 탐지: API 19개, 로컬 4개 (API 호출 없음, 시크릿 미저장)
+- `.helm/model-health-state.json` 기반 모델 헬스 상태 저장과 fallback 선택
 - GPU/VRAM 감지: NVIDIA, Apple Silicon, AMD (ROCm), 멀티 GPU (`lru_cache` 적용)
 - policy JSON을 통한 커스텀 프로바이더 레지스트리
 - JSONL 위의 SQLite 쿼리 인덱스 (init, rebuild, verify, query), 스레드 안전 캐싱

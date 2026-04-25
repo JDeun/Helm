@@ -17,6 +17,7 @@ REFERENCES_ROOT = ROOT / "references"
 SCRIPT_ROOT = ROOT / "scripts"
 REQUIRED_REFERENCE_FILES = (
     "execution_profiles.json",
+    "model_recovery_policy.json",
     "skill-capture-template.md",
     "skill-contract-template.json",
 )

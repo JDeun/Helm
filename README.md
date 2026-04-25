@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.6.1</strong></p>
+<p align="center"><strong>Current release: v0.6.2</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -27,6 +27,7 @@
   <a href="#onboarding-and-workspace-model">Onboarding</a> ·
   <a href="#core-commands">Core Commands</a> ·
   <a href="#command-guard">Command Guard</a> ·
+  <a href="#model-health">Model Health</a> ·
   <a href="#provider-discovery">Provider Discovery</a> ·
   <a href="#operations-database">Operations Database</a> ·
   <a href="#adaptive-harness">Adaptive Harness</a> ·
@@ -63,6 +64,7 @@ In the current release, that means:
 - manifest quality auditing beyond existence checks
 - runtime-neutral memory policy with typed operations and crystallized sessions
 - review-queue visibility for unresolved memory follow-ups
+- model-health probing and fallback selection that can stay file-driven between runs
 - workspace-aware status and reporting for OpenClaw-shaped layouts
 
 Helm is especially useful if you already have:
@@ -103,6 +105,8 @@ Typical flow:
 - runtime-neutral memory policy for confidence, recency, supersession, crystallization, and audit-first maintenance
 - gated skill drafting, review, approval, and rejection
 - high-level status and reporting views
+- policy-driven model health probing and fallback selection
+- conversational durable capture without a profiled shell command
 - deterministic command guard with risk scoring and approval workflow
 - provider-agnostic LLM discovery (API and local, no secrets stored)
 - SQLite query index over operational JSONL
@@ -233,6 +237,23 @@ helm status --path ~/.helm/workspace --verbose
 helm report --path ~/.helm/workspace --format markdown
 ```
 
+Probe model health or pick a recovered fallback:
+
+```bash
+helm health --path ~/.helm/workspace state --json
+helm health --path ~/.helm/workspace select --json
+```
+
+Capture a chat-only change into the task ledger and memory plan:
+
+```bash
+helm memory --path ~/.helm/workspace capture-chat \
+  --task-name "document release state" \
+  --path README.md \
+  --path CHANGELOG.md \
+  --json
+```
+
 ## Command Guard
 
 Helm includes a deterministic command guard that evaluates every command before execution:
@@ -258,6 +279,27 @@ helm profile run workspace_edit --guard-json -- rm -rf build
 ```
 
 Guard modes: `enforce` (default), `audit` (record only), `off` (disabled but recorded).
+
+## Model Health
+
+Helm now ships a separate model-health layer for one specific job: remember which candidate model was healthy recently, probe it again when needed, and pick a fallback from files instead of from chat memory.
+
+The default template lives in `references/model_recovery_policy.json`. You can keep it empty and rely on discovery-only fallback selection, or define explicit models and probe kinds when you want active health checks.
+
+Typical flow:
+
+```bash
+# inspect persisted state
+helm health --path ~/.helm/workspace state --json
+
+# actively probe configured candidates
+helm health --path ~/.helm/workspace probe --json
+
+# select the best fresh healthy model for the next turn
+helm health --path ~/.helm/workspace select --json
+```
+
+`helm doctor` now includes the model-health policy path, state path, and the currently selected candidate so the runtime handoff stays inspectable.
 
 The guard also detects shell-level bypass patterns including heredoc injection, base64-piped execution, and `/dev/tcp` network access. Guard exceptions are fail-closed (default to `require_approval`), and guard evaluation runs before manual-remote handoff to prevent bypass.
 
@@ -426,6 +468,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
+- [`docs/releases/0.6.2.md`](docs/releases/0.6.2.md)
 - [`docs/releases/0.6.1.md`](docs/releases/0.6.1.md)
 - [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
@@ -445,13 +488,15 @@ helm context --path examples/demo-workspace recent-state --limit 5
 helm memory --path examples/demo-workspace pending-captures --limit 5
 helm memory --path examples/demo-workspace review-queue --limit 5
 helm memory --path examples/demo-workspace audit-coherence --json
+helm memory --path examples/demo-workspace capture-chat --task-name "demo memory capture" --path README.md
+helm health --path examples/demo-workspace state --json
 helm ops --path examples/demo-workspace capture-state --limit 10
 helm report --path examples/demo-workspace --format markdown
 ```
 
 ## Current Status
 
-Helm v0.6.1 hardens every module with full immutability enforcement, structured type safety, thread-safe operations, and subprocess timeout control, backed by 298 tests.
+Helm v0.6.2 adds a file-driven model-health subsystem, conversational durable capture, and a cleaner memory-capture core split, while preserving the v0.6.1 hardening baseline.
 
 ### Core
 
@@ -460,6 +505,8 @@ Helm v0.6.1 hardens every module with full immutability enforcement, structured 
 - File-native context hydration
 - Task finalization with durable capture planning
 - Typed memory operations and crystallized session artifacts
+- Policy-driven model health selection and probing
+- Conversational memory capture without a profiled shell run
 
 ### Security
 
@@ -475,6 +522,7 @@ Helm v0.6.1 hardens every module with full immutability enforcement, structured 
 ### Reliability
 
 - Provider discovery: 19 API providers, 4 local providers (no API calls, no secrets stored)
+- Model health state persisted under `.helm/model-health-state.json` with policy-driven fallback selection
 - GPU/VRAM detection: NVIDIA, Apple Silicon, AMD (ROCm), multi-GPU with `lru_cache`
 - Custom provider registry via policy JSON
 - SQLite query index over JSONL (init, rebuild, verify, query) with thread-safe caching

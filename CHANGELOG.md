@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## [0.6.2] — 2026-04-25
+
+### Added
+
+- **model health**: added policy-driven runtime health probing and fallback selection via `scripts/model_health_lib.py` and `scripts/model_health_probe.py`
+- **CLI**: added `helm health {probe,watch,select,state,launch}` passthrough for model-health operations
+- **memory**: added `helm memory capture-chat` for durable memory capture without a profiled shell run
+- **references**: added `references/model_recovery_policy.json` and bundled it into `helm init`
+
+### Changed
+
+- **doctor**: now surfaces model-health policy/state paths and the currently selected fallback candidate
+- **memory_capture**: extracted planning logic into `scripts/task_capture_core.py` and kept `scripts/memory_capture.py` as a thinner compatibility layer
+- **helm.py**: passthrough `--path` parsing now preserves nested subcommand `--path` flags instead of swallowing them
+- **release smoke**: now exercises `helm health state` and `helm memory capture-chat`
+
+### Docs
+
+- updated `README.md` and `README.ko.md` for the new health and conversational capture workflows
+- refreshed demo workspace references to include the model recovery policy template
+
 ## [0.6.1] — 2026-04-25
 
 ### Hardening

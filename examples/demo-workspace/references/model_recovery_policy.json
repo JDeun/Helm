@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "state_path": ".helm/model-health-state.json",
+  "fresh_after_seconds": 300,
+  "fallback_stale_after_seconds": 1800,
+  "models": []
+}

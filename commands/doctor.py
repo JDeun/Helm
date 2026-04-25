@@ -17,6 +17,7 @@ from commands import (
 )
 from commands.context import build_onboarding_payload, format_onboarding_text
 from scripts.discovery import discover_environment, snapshot_to_json
+from scripts.model_health_lib import load_policy as load_model_health_policy, load_state as load_model_health_state, select_model as select_healthy_model, state_path as model_health_state_path
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -166,6 +167,31 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "status": "present" if ops_db_path.exists() else "missing",
         }
 
+    model_health_policy = load_model_health_policy(root / "references" / "model_recovery_policy.json")
+    model_health_state = load_model_health_state(model_health_policy, workspace=root)
+    model_health_choice = select_healthy_model(model_health_policy, model_health_state, workspace=root)
+    model_health_payload = {
+        "policy_path": str(root / "references" / "model_recovery_policy.json"),
+        "state_path": str(model_health_state_path(model_health_policy, workspace=root)),
+        "configured_models": [str(item.get("ref")) for item in model_health_policy.get("models", []) if isinstance(item, dict) and item.get("ref")],
+        "selected_model": {
+            "model": model_health_choice.model,
+            "reason": model_health_choice.reason,
+            "source": model_health_choice.source,
+        },
+        "last_selection": model_health_state.get("selected_model"),
+    }
+    checks.append(
+        {
+            "name": "model-health",
+            "ok": True,
+            "detail": (
+                f"selected={model_health_choice.model or '-'} source={model_health_choice.source} "
+                f"state={model_health_payload['state_path']}"
+            ),
+        }
+    )
+
     healthy = all(item["ok"] for item in checks)
     payload = {
         "workspace": str(root),
@@ -183,6 +209,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "unknown_command_action": "require_approval",
             "policy_file": str(root / "references" / "guard_policy.json"),
         }
+    payload["model_health"] = model_health_payload
 
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -249,6 +276,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print("Ops DB:")
         print(f"  path: {ops_db_path}")
         print(f"  status: {'present' if ops_db_path.exists() else 'missing'}")
+        print()
+        print("Model health:")
+        print(f"  policy_file: {model_health_payload['policy_path']}")
+        print(f"  state_file: {model_health_payload['state_path']}")
+        print(f"  selected_model: {model_health_choice.model}")
+        print(f"  selection_source: {model_health_choice.source}")
 
     return 0 if healthy else 1
 
