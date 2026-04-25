@@ -134,6 +134,100 @@ def _normalize_flags(argv: list[str]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Semantic deny analysis (bypass-resistant second layer)
+# ---------------------------------------------------------------------------
+
+_SYSTEM_DIRECTORIES: frozenset[str] = frozenset({
+    "/", "/*", "/bin", "/sbin", "/usr", "/etc", "/var", "/boot",
+    "/lib", "/lib64", "/opt", "/root", "/sys", "/proc", "/dev",
+})
+
+
+def _semantic_deny_check(argv: list[str]) -> str | None:
+    """Semantic analysis of argv to catch deny-worthy commands that bypass substring matching.
+
+    Returns a deny reason string if the command should be denied, or None if no
+    semantic deny rule matched.  This handles flag reordering, extra whitespace,
+    and inserted arguments that simple substring matching misses.
+    """
+    if not argv:
+        return None
+
+    # Strip leading "sudo" / "doas" to get the real command
+    effective = list(argv)
+    while effective and effective[0].lower() in ("sudo", "doas", "su"):
+        effective = effective[1:]
+    if not effective:
+        return None
+
+    cmd = effective[0].lower()
+
+    # --- rm with recursive+force targeting system dirs ---
+    if cmd == "rm":
+        flags: set[str] = set()
+        positional: list[str] = []
+        for arg in effective[1:]:
+            if arg == "--":
+                # Everything after -- is positional
+                positional.extend(effective[effective.index(arg) + 1:])
+                break
+            if arg.startswith("--"):
+                # Long flags: --recursive, --force, --no-preserve-root
+                flag_name = arg.lstrip("-").split("=")[0]
+                flags.add(flag_name)
+            elif arg.startswith("-") and not arg.startswith("--"):
+                # Short flags: -r, -f, -rf, -Rf etc.
+                for ch in arg[1:]:
+                    flags.add(ch)
+            else:
+                positional.append(arg)
+
+        has_recursive = "r" in flags or "R" in flags or "recursive" in flags
+        has_force = "f" in flags or "force" in flags
+        has_no_preserve = "no-preserve-root" in flags
+
+        if has_recursive and has_force:
+            for p in positional:
+                # Normalize trailing slashes for comparison
+                norm_p = p.rstrip("/") or "/"
+                if norm_p in _SYSTEM_DIRECTORIES or p in ("/*", "/.*"):
+                    return f"deny.semantic_rm: rm with -r and -f targeting '{p}'"
+                if p.startswith("/") and p.count("/") == 1:
+                    # Top-level like /tmp, /home  -- caught by _SYSTEM_DIRECTORIES
+                    pass
+            if has_no_preserve:
+                return "deny.semantic_rm: rm with --no-preserve-root"
+
+    # --- dd targeting device files ---
+    if cmd == "dd":
+        for arg in effective[1:]:
+            arg_lower = arg.lower()
+            for prefix in ("if=", "of="):
+                if arg_lower.startswith(prefix):
+                    target = arg_lower[len(prefix):]
+                    if (target.startswith("/dev/sd")
+                            or target.startswith("/dev/nvme")
+                            or target.startswith("/dev/disk")
+                            or target.startswith("/dev/hd")
+                            or target == "/dev/zero" and prefix == "of="
+                            or target.startswith("/dev/mapper")):
+                        return f"deny.semantic_dd: dd targeting device '{arg}'"
+
+    # --- mkfs targeting any device ---
+    if cmd.startswith("mkfs"):
+        for arg in effective[1:]:
+            if arg.startswith("/dev/"):
+                return f"deny.semantic_mkfs: mkfs targeting device '{arg}'"
+
+    # --- Fork bomb patterns ---
+    full_str = " ".join(argv)
+    if ":()" in full_str and ":|:" in full_str:
+        return "deny.semantic_fork_bomb: fork bomb pattern detected"
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Built-in policy fallback (mirrors guard_policy.json)
 # ---------------------------------------------------------------------------
 
@@ -618,6 +712,13 @@ def evaluate_command_guard(
     original_norm = _normalize(command)
     if not deny_matches:
         deny_matches = _match_patterns(original_norm, absolute_deny_rules)
+
+    # Semantic deny check: bypass-resistant second layer
+    semantic_reason = _semantic_deny_check(effective_argv)
+    if semantic_reason is not None and not deny_matches:
+        deny_matches = [(semantic_reason, None)]
+    elif semantic_reason is not None:
+        deny_matches.append((semantic_reason, None))
 
     is_absolute_deny = len(deny_matches) > 0
 
