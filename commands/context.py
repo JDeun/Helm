@@ -367,10 +367,7 @@ def cmd_sources(args: argparse.Namespace) -> int:
 
 
 def cmd_context(args: argparse.Namespace) -> int:
-    import os
-    import subprocess
-    import sys as _sys
-    from commands import SCRIPT_ROOT, discover_workspace
+    from commands import discover_workspace, run_script
     root = target_root(args.path) if args.path else discover_workspace().root
     if args.args:
         subcommand, *remainder = args.args
@@ -407,11 +404,7 @@ def cmd_context(args: argparse.Namespace) -> int:
                 return 0
             print(payload["content"], end="" if payload["content"].endswith("\n") else "\n")
             return 0
-    script_path = SCRIPT_ROOT / "ops_memory_query.py"
-    env = os.environ.copy()
-    env["HELM_WORKSPACE"] = str(root)
-    result = subprocess.run([_sys.executable, str(script_path), *args.args], env=env)
-    return result.returncode
+    return run_script("ops_memory_query.py", args.args, root)
 
 
 def cmd_adopt(args: argparse.Namespace) -> int:
