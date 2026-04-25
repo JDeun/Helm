@@ -137,6 +137,23 @@ def max_enforcement(policy: dict, *levels: str) -> str:
     return max(filtered, key=lambda level: enforcement_rank(policy, level))
 
 
+def _deep_merge(base: dict, overlay: dict) -> dict:
+    """Recursively merge overlay into base, returning a new dict.
+
+    Nested dicts are merged recursively so that overlay values override
+    individual keys within a sub-dict rather than replacing the whole sub-dict.
+    All other value types (lists, scalars) are taken from overlay directly.
+    """
+    result = dict(base)
+    for key, overlay_value in overlay.items():
+        base_value = result.get(key)
+        if isinstance(base_value, dict) and isinstance(overlay_value, dict):
+            result[key] = _deep_merge(base_value, overlay_value)
+        else:
+            result[key] = overlay_value
+    return result
+
+
 def resolve_skill_contract(skill: str | None) -> dict:
     if not skill:
         return {}
@@ -144,7 +161,7 @@ def resolve_skill_contract(skill: str | None) -> dict:
     contract = contracts.get(skill)
     if contract:
         resolved = base_skill_contract(skill)
-        resolved.update(contract)
+        resolved = _deep_merge(resolved, contract)
         return resolved
     return base_skill_contract(skill)
 
