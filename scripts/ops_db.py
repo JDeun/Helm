@@ -97,7 +97,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 def init_db(db_path: Path) -> None:
     """Create schema if missing. Sets WAL mode, busy_timeout=5000, foreign_keys=ON."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = _connect(db_path)
     try:
         conn.executescript(_DDL)
         conn.execute(
