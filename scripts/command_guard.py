@@ -34,6 +34,10 @@ RiskCategory = Literal[
     "process",
     "firewall",
     "cron",
+    "heredoc_input",
+    "base64_pipe",
+    "network_detected",
+    "dev_tcp_bypass",
 ]
 
 # ---------------------------------------------------------------------------
@@ -486,8 +490,8 @@ def _classify_argv(
                         categories.append("base64_pipe")
 
         if "/dev/tcp/" in inner_lower or "/dev/udp/" in inner_lower:
-            if "network_detected" not in categories:
-                categories.append("network_detected")
+            if "dev_tcp_bypass" not in categories:
+                categories.append("dev_tcp_bypass")
             network_detected = True
 
     if not categories:
