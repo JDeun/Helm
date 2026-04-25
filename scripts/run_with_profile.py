@@ -288,6 +288,10 @@ def cmd_list(_: argparse.Namespace) -> int:
 
 def cmd_show(args: argparse.Namespace) -> int:
     profiles = load_profiles()
+    if args.profile not in profiles:
+        known = ", ".join(sorted(profiles.keys()))
+        print(f"Unknown profile: {args.profile!r}. Known profiles: {known}", file=sys.stderr)
+        return 2
     config = profiles[args.profile]
     print(json.dumps(config, indent=2))
     return 0
@@ -396,6 +400,10 @@ def cmd_rollback(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     profiles = load_profiles()
+    if args.profile not in profiles:
+        known = ", ".join(sorted(profiles.keys()))
+        print(f"Unknown profile: {args.profile!r}. Known profiles: {known}", file=sys.stderr)
+        return 2
     config = profiles[args.profile]
     command = args.command
     if not command:
@@ -587,7 +595,7 @@ def build_parser() -> argparse.ArgumentParser:
     listing.set_defaults(func=cmd_list)
 
     show = subparsers.add_parser("show", help="Show one execution profile.")
-    show.add_argument("profile", choices=sorted(load_profiles().keys()))
+    show.add_argument("profile", type=str)
     show.set_defaults(func=cmd_show)
 
     policy = subparsers.add_parser("policy", help="Show skill-to-profile policy mappings.")
@@ -616,7 +624,7 @@ def build_parser() -> argparse.ArgumentParser:
 def parse_run_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a command with a declared execution profile.")
     parser.add_argument("command_name")
-    parser.add_argument("profile", choices=sorted(load_profiles().keys()))
+    parser.add_argument("profile", type=str)
     parser.add_argument("--task-name", help="Human-readable task name, recommended for service_ops.")
     parser.add_argument("--task-id", help="Explicit task id override for harness-controlled runs.")
     parser.add_argument("--skill", help="Owning skill slug for policy enforcement.")

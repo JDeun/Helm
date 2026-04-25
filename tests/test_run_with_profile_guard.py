@@ -512,3 +512,79 @@ def test_network_allowed_profile_uses_full_env(monkeypatch):
     child_env = captured_envs[0]
     assert "MY_CUSTOM_VAR" in child_env, \
         "network_allowed profile should receive full env including MY_CUSTOM_VAR"
+
+
+# ---------------------------------------------------------------------------
+# H5: lazy profile loading / invalid profile validation
+# ---------------------------------------------------------------------------
+
+def test_cmd_run_unknown_profile_returns_2(capsys):
+    """cmd_run with an unrecognised profile name must return exit code 2 with a clear message."""
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+    from unittest.mock import MagicMock
+
+    args = MagicMock()
+    args.profile = "nonexistent_profile"
+    args.command = ["echo", "hello"]
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES):
+        rc = cmd_run(args)
+
+    assert rc == 2, f"expected return code 2, got {rc}"
+    out = capsys.readouterr()
+    assert "nonexistent_profile" in out.err or "Unknown profile" in out.err, \
+        "Expected error message mentioning the bad profile name in stderr"
+
+
+def test_cmd_show_unknown_profile_returns_2(capsys):
+    """cmd_show with an unrecognised profile name must return exit code 2 with a clear message."""
+    from unittest.mock import patch, MagicMock
+    from scripts.run_with_profile import cmd_show
+
+    args = MagicMock()
+    args.profile = "does_not_exist"
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES):
+        rc = cmd_show(args)
+
+    assert rc == 2, f"expected return code 2, got {rc}"
+    out = capsys.readouterr()
+    assert "does_not_exist" in out.err or "Unknown profile" in out.err, \
+        "Expected error message mentioning the bad profile name in stderr"
+
+
+def test_build_parser_survives_missing_profiles_file(monkeypatch, tmp_path):
+    """build_parser must not crash even if the profiles file is absent (lazy loading)."""
+    monkeypatch.setattr(
+        "scripts.run_with_profile.PROFILE_FILE",
+        tmp_path / "nonexistent_profiles.json",
+    )
+    from scripts.run_with_profile import build_parser
+    # Should not raise even though the profile file does not exist
+    parser = build_parser()
+    assert parser is not None
+
+
+def test_known_profiles_listed_in_error_message(capsys):
+    """The error message for an unknown profile must list the known profiles."""
+    from unittest.mock import patch, MagicMock
+    from scripts.run_with_profile import cmd_show
+
+    profiles = {
+        "inspect_local": {"description": "...", "backend": "local", "checkpoint": "never",
+                          "writes_allowed": False, "network_allowed": False},
+        "workspace_edit": {"description": "...", "backend": "local", "checkpoint": "never",
+                           "writes_allowed": True, "network_allowed": False},
+    }
+
+    args = MagicMock()
+    args.profile = "bogus_profile"
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=profiles):
+        rc = cmd_show(args)
+
+    assert rc == 2
+    out = capsys.readouterr()
+    assert "inspect_local" in out.err or "workspace_edit" in out.err, \
+        "Error message should list known profiles"
