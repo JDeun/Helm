@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## [0.6.3] — 2026-04-25
+
+### Fixed
+
+- **memory capture**: `helm memory capture-chat` now sets task `status` before planning durable capture, so completed chat-driven work correctly yields `capture_planned` instead of `no_capture_needed`
+
+### Validation
+
+- full local pytest suite passed after the fix: 304 passed
+  warnings remained unchanged and were limited to existing guard/SQLite warning-path coverage
+
 ## [0.6.2] — 2026-04-25
 
 ### Added
