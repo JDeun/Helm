@@ -183,17 +183,17 @@ _FAIL_CLOSED_POLICY: tuple[list[dict], list[dict]] = (
 @dataclass(frozen=True)
 class CommandClassification:
     normalized_command: str
-    argv: list[str]
+    argv: tuple[str, ...]
     shell_wrapped: bool
     shell_inner_command: str | None
-    categories: list[RiskCategory]
-    matched_rules: list[str]
+    categories: tuple[RiskCategory, ...]
+    matched_rules: tuple[str, ...]
     writes_detected: bool
     network_detected: bool
     destructive_detected: bool
     privilege_detected: bool
     remote_detected: bool
-    target_paths: list[str] = field(default_factory=list)
+    target_paths: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -202,8 +202,8 @@ class GuardDecision:
     risk_score: float
     selected_profile: str
     recommended_profile: str | None
-    reasons: list[str]
-    matched_rules: list[str]
+    reasons: tuple[str, ...]
+    matched_rules: tuple[str, ...]
     classification: CommandClassification
     approval_required: bool
     approval_hint: str | None = None
@@ -406,7 +406,7 @@ def _classify_argv(
         writes_detected = any(wc in full_norm.split() for wc in WRITE_COMMANDS)
 
     # Extract target paths: everything in argv that looks like a path (heuristic)
-    target_paths: list[str] = [
+    target_paths_list: list[str] = [
         arg for arg in effective_argv[1:]
         if not arg.startswith("-") and ("/" in arg or "\\" in arg or arg in ("~", "..", "."))
     ]
@@ -499,17 +499,17 @@ def _classify_argv(
 
     return CommandClassification(
         normalized_command=normalized,
-        argv=original_argv,
+        argv=tuple(original_argv),
         shell_wrapped=shell_wrapped,
         shell_inner_command=shell_inner,
-        categories=categories,
-        matched_rules=[],  # filled in by caller
+        categories=tuple(categories),
+        matched_rules=(),  # filled in by caller
         writes_detected=writes_detected,
         network_detected=network_detected,
         destructive_detected=destructive_detected,
         privilege_detected=privilege_detected,
         remote_detected=remote_detected,
-        target_paths=target_paths,
+        target_paths=tuple(target_paths_list),
     )
 
 
@@ -634,8 +634,10 @@ def evaluate_command_guard(
     )
 
     # Collect all matched rule ids
-    all_matched_rules: list[str] = (
-        [r[0] for r in deny_matches] + [r[0] for r in approval_matches]
+    all_matched_rules: tuple[str, ...] = tuple(
+        r[0] for r in deny_matches
+    ) + tuple(
+        r[0] for r in approval_matches
     )
 
     # Determine recommended profile from first approval match
@@ -646,7 +648,7 @@ def evaluate_command_guard(
             break
 
     # Build reasons
-    reasons: list[str] = []
+    reasons: list[str] = []  # built as list, converted to tuple at GuardDecision construction
     if is_absolute_deny:
         reasons.append(f"absolute_deny matched: {[r[0] for r in deny_matches]}")
     if classification.writes_detected and not writes_allowed:
@@ -792,7 +794,7 @@ def evaluate_command_guard(
         risk_score=risk_score,
         selected_profile=selected_profile,
         recommended_profile=recommended_profile,
-        reasons=reasons,
+        reasons=tuple(reasons),
         matched_rules=all_matched_rules,
         classification=classification,
         approval_required=approval_required,
@@ -815,8 +817,8 @@ def decision_to_json(decision: GuardDecision) -> dict[str, Any]:
         "score_breakdown": decision.score_breakdown,
         "selected_profile": decision.selected_profile,
         "recommended_profile": decision.recommended_profile,
-        "reasons": decision.reasons,
-        "matched_rules": decision.matched_rules,
+        "reasons": list(decision.reasons),
+        "matched_rules": list(decision.matched_rules),
         "approval_required": decision.approval_required,
         "approval_hint": decision.approval_hint,
         "evaluated_at": decision.evaluated_at,
@@ -826,16 +828,16 @@ def decision_to_json(decision: GuardDecision) -> dict[str, Any]:
         "task_goal": decision.task_goal,
         "classification": {
             "normalized_command": c.normalized_command,
-            "argv": c.argv,
+            "argv": list(c.argv),
             "shell_wrapped": c.shell_wrapped,
             "shell_inner_command": c.shell_inner_command,
-            "categories": c.categories,
-            "matched_rules": c.matched_rules,
+            "categories": list(c.categories),
+            "matched_rules": list(c.matched_rules),
             "writes_detected": c.writes_detected,
             "network_detected": c.network_detected,
             "destructive_detected": c.destructive_detected,
             "privilege_detected": c.privilege_detected,
             "remote_detected": c.remote_detected,
-            "target_paths": c.target_paths,
+            "target_paths": list(c.target_paths),
         },
     }
