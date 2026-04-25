@@ -9,6 +9,8 @@ _SCHEMA_VERSION = "1"
 
 _INDEX_FAILURE_WARNED = False
 
+_INITIALIZED_DBS: set[str] = set()
+
 _DDL = """
 PRAGMA journal_mode=WAL;
 PRAGMA busy_timeout=5000;
@@ -85,12 +87,23 @@ def db_path_for_state_root(state_root: Path) -> Path:
     return state_root / "ops-index.sqlite3"
 
 
+def _check_schema_version(conn: sqlite3.Connection) -> None:
+    try:
+        row = conn.execute("SELECT value FROM schema_info WHERE key='schema_version'").fetchone()
+        if row and row[0] != _SCHEMA_VERSION:
+            import warnings
+            warnings.warn(f"Database schema version {row[0]} != expected {_SCHEMA_VERSION}, consider rebuild")
+    except sqlite3.OperationalError:
+        pass  # schema_info table may not exist yet
+
+
 def _connect(db_path: Path) -> sqlite3.Connection:
     """Open SQLite connection with standard pragmas."""
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    _check_schema_version(conn)
     return conn
 
 
@@ -323,7 +336,9 @@ def index_task_entry(
     global _INDEX_FAILURE_WARNED
     try:
         db_path = db_path_for_state_root(state_root)
-        init_db(db_path)
+        if str(db_path) not in _INITIALIZED_DBS:
+            init_db(db_path)
+            _INITIALIZED_DBS.add(str(db_path))
         conn = _connect(db_path)
         try:
             _insert_task(conn, entry, source_file, source_line if source_line is not None else 0)
@@ -349,8 +364,8 @@ def verify_index(*, state_root: Path) -> dict:
     jsonl_task_lines = 0
     if ledger_path.exists():
         try:
-            lines = ledger_path.read_text(encoding="utf-8").splitlines()
-            jsonl_task_lines = sum(1 for line in lines if line.strip())
+            with open(ledger_path, encoding="utf-8") as fh:
+                jsonl_task_lines = sum(1 for line in fh if line.strip())
         except OSError:
             pass
 
