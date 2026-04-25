@@ -2,32 +2,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import subprocess
 import sys
-from pathlib import Path
 
 from commands import (
-    SCRIPT_ROOT,
     discover_workspace,
+    run_script,
     target_root,
 )
 from commands.checkpoint import build_capture_state_payload
 
 
-def run_script(script_name: str, script_args: list[str], workspace: Path | None = None) -> int:
-    script_path = SCRIPT_ROOT / script_name
-    env = os.environ.copy()
-    if workspace is not None:
-        env["HELM_WORKSPACE"] = str(workspace)
-    result = subprocess.run([sys.executable, str(script_path), *script_args], env=env)
-    return result.returncode
-
-
 def cmd_ops(args: argparse.Namespace) -> int:
     root = target_root(args.path) if args.path else discover_workspace().root
     if not args.args:
-        print("Use `helm ops daily|tasks|commands ...`", file=sys.stderr)
+        print("Use `helm ops daily|tasks|commands|capture-state ...`", file=sys.stderr)
         return 2
     subcommand, *remainder = args.args
     if subcommand == "capture-state":
