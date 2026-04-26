@@ -2,11 +2,22 @@
 
 ## Unreleased
 
+## [0.6.5] — 2026-04-26
+
 ### Added
 
 - **docs**: added first-run, demo, integration, comparison, and profile-template guidance for external adopters
 - **examples**: added integration wrapper scripts for Codex-style preflight and risky refactor verification flows
 - **status/report**: added `helm status --brief`, `helm dashboard`, and `helm report --format html` for faster operational visibility
+
+### Changed
+
+- **README**: replaced the overlapping first-run/quick-start copy with a shorter Quickstart and moved install/adoption details into a separate onboarding section
+
+### Validation
+
+- full local pytest suite passed after the fix: 309 passed
+- compileall and whitespace diff checks passed
 
 ## [0.6.4] — 2026-04-26
 

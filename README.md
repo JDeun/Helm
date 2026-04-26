@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.6.4</strong></p>
+<p align="center"><strong>Current release: v0.6.5</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -23,7 +23,7 @@
 
 <p align="center">
   <a href="#why-helm">Why Helm</a> ·
-  <a href="#quick-start">Quick Start</a> ·
+  <a href="#quickstart">Quickstart</a> ·
   <a href="#onboarding-and-workspace-model">Onboarding</a> ·
   <a href="#core-commands">Core Commands</a> ·
   <a href="#command-guard">Command Guard</a> ·
@@ -43,6 +43,20 @@ Use Helm if you already run Codex, Claude Code, OpenClaw, OpenHands-style runtim
 
 If you only need a one-off chatbot demo, Helm is probably unnecessary.
 
+## Quickstart
+
+Run one safe command through Helm and inspect the state it records:
+
+```bash
+helm init --path ~/.helm/workspace
+helm doctor --path ~/.helm/workspace
+helm profile --path ~/.helm/workspace run inspect_local --task-name "first Helm inspection" -- git status --short
+helm status --path ~/.helm/workspace --brief
+helm dashboard --path ~/.helm/workspace
+```
+
+This creates a workspace, checks it, runs one read-only profiled command, and shows the audit state Helm captured. For the longer walkthrough, see [`docs/first-run.md`](docs/first-run.md).
+
 ## Who it is for
 
 - Developers running local or self-hosted agents against real projects
@@ -51,18 +65,6 @@ If you only need a one-off chatbot demo, Helm is probably unnecessary.
 - Builders who want memory and policy as files rather than prompt folklore
 
 If you use Codex, Claude Code, OpenClaw, or OpenHands-style runtimes, Helm gives you the operations layer those runtimes usually leave to convention.
-
-## 5-minute first run
-
-```bash
-helm init --path ~/.helm/workspace
-helm doctor --path ~/.helm/workspace
-helm profile --path ~/.helm/workspace run inspect_local --task-name "first Helm inspection" -- git status --short
-helm status --path ~/.helm/workspace --brief
-helm report --path ~/.helm/workspace --format markdown
-```
-
-This creates a workspace, checks it, runs one read-only profiled command, and shows the audit state Helm captured. For the longer version, see [`docs/first-run.md`](docs/first-run.md).
 
 ## Helm is not
 
@@ -150,7 +152,7 @@ Typical flow:
 - provider-agnostic LLM discovery (API and local, no secrets stored)
 - SQLite query index over operational JSONL
 
-## Quick Start
+## Install And Onboard
 
 Install Helm:
 
@@ -522,6 +524,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
 - [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
+- [`docs/releases/0.6.5.md`](docs/releases/0.6.5.md)
 - [`docs/releases/0.6.4.md`](docs/releases/0.6.4.md)
 - [`docs/releases/0.6.3.md`](docs/releases/0.6.3.md)
 - [`docs/releases/0.6.2.md`](docs/releases/0.6.2.md)
@@ -553,7 +556,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.6.4 keeps the v0.6.3 conversational capture hotfix and adds verified guard hardening for shell write redirection plus `--guard-json` audit trail recording.
+Helm v0.6.5 keeps the v0.6.4 guard hardening and improves adoption docs, runtime integration examples, and local operational visibility with `status --brief`, `dashboard`, and HTML reports.
 
 ### Core
 
