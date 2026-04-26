@@ -63,6 +63,14 @@ If the agent only runs one-off demos, Helm is probably unnecessary.
 
 ## What Helm Adds
 
+Core ideas:
+
+- **Profile**: declares the allowed blast radius before a command runs, such as inspect-only, workspace edit, or risky edit.
+- **Guardrail**: checks command shape against local policy before execution, blocking dangerous or out-of-profile actions.
+- **Checkpoint**: preserves a visible recovery point before work that may need rollback.
+- **Audit trail**: records what ran, under which profile, with what guard decision, and what task it belonged to.
+- **File-backed memory**: keeps reusable context in files so later runs resume from durable state instead of chat history.
+
 | Repeated-agent problem | Helm adds |
 | --- | --- |
 | The agent forgets prior work | Context hydration from notes, memory, tasks, commands, and checkpoints |
