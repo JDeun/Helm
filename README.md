@@ -8,7 +8,7 @@
 
 <p align="center">Helm helps long-lived agents keep context, boundaries, rollback visibility, and traceable execution without turning your runtime into a black box.</p>
 
-<p align="center"><strong>Current release: v0.6.3</strong></p>
+<p align="center"><strong>Current release: v0.6.4</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -469,6 +469,7 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
+- [`docs/releases/0.6.4.md`](docs/releases/0.6.4.md)
 - [`docs/releases/0.6.3.md`](docs/releases/0.6.3.md)
 - [`docs/releases/0.6.2.md`](docs/releases/0.6.2.md)
 - [`docs/releases/0.6.1.md`](docs/releases/0.6.1.md)
@@ -498,7 +499,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.6.3 keeps the v0.6.2 model-health and conversational capture additions, and ships the verified hotfix for `capture-chat` finalization planning after a full local pytest pass.
+Helm v0.6.4 keeps the v0.6.3 conversational capture hotfix and adds verified guard hardening for shell write redirection plus `--guard-json` audit trail recording.
 
 ### Core
 

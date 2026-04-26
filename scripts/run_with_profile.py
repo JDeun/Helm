@@ -157,6 +157,12 @@ def finalize_task(task: dict) -> None:
     _best_effort_index(task)
 
 
+def record_guard_audit(task: dict) -> None:
+    task["status"] = "guard_audit"
+    task["finished_at"] = utc_now_iso()
+    append_ledger(task)
+
+
 def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dict:
     config = load_profiles()[profile]
     if args.meta_json:
@@ -481,6 +487,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     if guard_decision and getattr(args, "guard_json", False):
         print(json.dumps(decision_to_json(guard_decision), indent=2, ensure_ascii=False))
+        record_guard_audit(task)
         return 0
 
     if guard_mode == "enforce" and guard_decision:

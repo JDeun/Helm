@@ -160,6 +160,18 @@ def test_credential_printenv_warns_inspect_local():
     assert "credential_exposure" in decision.classification.categories
 
 
+def test_shell_redirection_without_spacing_counts_as_write():
+    decision = _guard(["bash", "-c", "echo x >blocked.txt"], "inspect_local")
+    assert decision.action == "deny"
+    assert decision.classification.writes_detected is True
+
+
+def test_shell_redirection_attached_to_token_counts_as_write():
+    decision = _guard(["bash", "-c", "echo x>blocked.txt"], "inspect_local")
+    assert decision.action == "deny"
+    assert decision.classification.writes_detected is True
+
+
 def test_process_kill_requires_approval():
     decision = _guard(["kill", "-9", "12345"], "workspace_edit")
     assert decision.action == "require_approval"

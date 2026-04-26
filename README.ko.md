@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.6.3</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.6.4</strong></p>
 
 <p align="center">
   <a href="README.md">English README</a>
@@ -462,6 +462,7 @@ python3 -m pip install --user --no-build-isolation .
 
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
+- [`docs/releases/0.6.4.md`](docs/releases/0.6.4.md)
 - [`docs/releases/0.6.3.md`](docs/releases/0.6.3.md)
 - [`docs/releases/0.6.2.md`](docs/releases/0.6.2.md)
 - [`docs/releases/0.6.1.md`](docs/releases/0.6.1.md)
@@ -491,7 +492,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## 현재 상태
 
-Helm v0.6.3은 v0.6.2의 model health와 conversational capture 기능을 유지하면서, `capture-chat` finalization planning hotfix를 전체 로컬 pytest 통과 상태로 포함한 패치 릴리즈입니다.
+Helm v0.6.4는 v0.6.3의 conversational capture hotfix를 유지하면서, shell write redirection 감지와 `--guard-json` 감사 기록을 검증된 guard hardening으로 보강한 패치 릴리즈입니다.
 
 ### 코어
 

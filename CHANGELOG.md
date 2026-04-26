@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## [0.6.4] — 2026-04-26
+
+### Fixed
+
+- **command_guard**: shell write redirection without whitespace, such as `echo x>file`, is now classified as a write and blocked under read-only profiles
+- **run_with_profile**: `--guard-json` now records a final `guard_audit` task-ledger event before exiting without running the command
+
+### Validation
+
+- full local pytest suite passed after the fix: 306 passed
+- compileall and whitespace diff checks passed
+
 ## [0.6.3] — 2026-04-25
 
 ### Fixed

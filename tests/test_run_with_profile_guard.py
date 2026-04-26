@@ -717,7 +717,7 @@ def test_guard_json_prints_decision_and_exits(capsys):
 
     with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
          patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile.append_ledger") as append_ledger, \
          patch("scripts.run_with_profile._best_effort_index"), \
          patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
          patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
@@ -734,6 +734,8 @@ def test_guard_json_prints_decision_and_exits(capsys):
 
     assert rc == 0, "--guard-json should return 0"
     mock_subprocess.assert_not_called(), "--guard-json must not execute the command"
+    assert append_ledger.call_count == 2
+    assert append_ledger.call_args.args[0]["status"] == "guard_audit"
 
     out = capsys.readouterr()
     parsed = _json.loads(out.out)

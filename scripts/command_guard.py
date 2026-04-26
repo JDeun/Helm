@@ -7,6 +7,7 @@ All classification is pure string matching against a loaded policy.
 from __future__ import annotations
 
 import json
+import re
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -518,6 +519,13 @@ def _match_patterns(text: str, rules: list[dict]) -> list[tuple[str, str | None]
     return matches
 
 
+def _contains_shell_write_redirection(command: str) -> bool:
+    if not command:
+        return False
+    redirection_pattern = r"(^|\s|\S)(?:\d?>|\d?>>|&>|&>>)"
+    return bool(re.search(redirection_pattern, command))
+
+
 def _classify_argv(
     effective_argv: list[str],
     normalized: str,
@@ -543,7 +551,10 @@ def _classify_argv(
     if not network_detected:
         network_detected = any(nc in full_norm.split() for nc in NETWORK_COMMANDS)
     if not writes_detected:
-        writes_detected = any(wc in full_norm.split() for wc in WRITE_COMMANDS)
+        writes_detected = (
+            any(wc in full_norm.split() for wc in WRITE_COMMANDS)
+            or _contains_shell_write_redirection(normalized)
+        )
 
     # Extract target paths: everything in argv that looks like a path (heuristic)
     target_paths_list: list[str] = [
