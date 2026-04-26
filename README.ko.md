@@ -4,9 +4,9 @@
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>한 번이 아니라 계속 돌리는 에이전트를 위한 safety and memory layer</strong></p>
+<p align="center"><strong>반복되는 에이전트 작업을 더 안전하고, 추적 가능하고, 복구 가능하게.</strong></p>
 
-<p align="center">Helm은 장기 실행 에이전트 workspace에 profile, guardrail, checkpoint, audit trail, file-backed memory를 붙이는 운영 레이어입니다.</p>
+<p align="center">Helm은 장기 실행 에이전트 workspace 주변에 profile, guardrail, checkpoint, audit trail, file-backed memory를 더하는 운영 레이어입니다.</p>
 
 <p align="center"><strong>현재 릴리즈: v0.6.5</strong></p>
 
@@ -39,7 +39,7 @@ helm status --path ~/.helm/workspace --brief
 helm dashboard --path ~/.helm/workspace
 ```
 
-installer는 기본적으로 Helm을 설치하고 `~/.helm/workspace`를 초기화합니다. 설치 후 `helm` 명령을 찾지 못하면 installer가 출력한 PATH 설정을 적용하세요.
+installer는 Helm을 설치하고 `~/.helm/workspace`를 만듭니다. 설치 후 `helm` 명령을 찾지 못하면 installer가 출력한 PATH 설정을 적용하세요.
 
 다른 workspace 경로를 쓰려면:
 
@@ -49,9 +49,9 @@ curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -
 
 ## 왜 Helm인가
 
-Helm은 agent runtime이 아닙니다. 이미 쓰고 있는 agent runtime 주변의 운영 레이어입니다.
+Helm은 또 하나의 agent runtime이 아닙니다. 이미 쓰고 있는 runtime 주변의 운영 레이어입니다.
 
-OpenClaw/Hermes 스타일 장기 실행 에이전트 workspace나 유사한 self-hosted agent service를 반복해서 운영하고 있고, 다음이 필요하다면 Helm이 맞습니다.
+OpenClaw/Hermes 스타일 workspace나 유사한 self-hosted agent service가 데모를 넘어 반복 운영 단계에 들어갔다면 Helm이 필요해집니다.
 
 - 명시적 execution profile로 작업 범위 제한
 - checkpoint 기반 복구 경로
@@ -59,26 +59,26 @@ OpenClaw/Hermes 스타일 장기 실행 에이전트 workspace나 유사한 self
 - chat history가 아니라 file state에서 이어지는 다음 실행
 - skill contract와 local policy 기반 운영 규칙
 
-단순한 일회성 챗봇 데모만 필요하다면 Helm은 과할 수 있습니다.
+에이전트가 일회성 데모만 수행한다면 Helm은 과할 수 있습니다.
 
 ## Helm이 더하는 것
 
-| 반복 에이전트 운영 문제 | Helm 레이어 |
+| 반복 에이전트 운영 문제 | Helm이 더하는 것 |
 | --- | --- |
-| 에이전트가 이전 작업을 잊음 | notes, memory, tasks, commands, checkpoints 기반 file-native context hydration |
-| risky edit가 너무 빠르게 진행됨 | execution profiles, command guard, checkpoint discipline |
+| 에이전트가 이전 작업을 잊음 | notes, memory, tasks, commands, checkpoints 기반 context hydration |
+| risky edit가 너무 빠르게 진행됨 | profile, command guard, checkpoint discipline |
 | 나중에 실행 이유를 설명하기 어려움 | task ledger, command log, status, dashboard, report |
-| skill 규칙이 프롬프트 관습에 머묾 | `SKILL.md` guidance와 `contract.json` 실행 정책 |
-| model fallback이 즉흥적으로 결정됨 | file-backed model-health probing과 fallback selection |
-| 운영 상태가 흩어짐 | workspace layout, adopted context sources, SQLite query index |
+| skill 규칙이 프롬프트에만 남음 | `SKILL.md` guidance와 `contract.json` 실행 정책 |
+| model fallback이 즉흥적으로 결정됨 | file-backed health check와 fallback selection |
+| 운영 상태가 흩어짐 | workspace layout, adopted sources, SQLite query index |
 
-Helm은 원칙적으로 runtime-agnostic이지만, state, memory, profiles, checkpoints, task history가 있는 persistent agent workspace를 1차 대상으로 설계되었습니다.
+Helm은 원칙적으로 runtime-agnostic이지만, state, memory, profiles, checkpoints, task history가 있는 persistent workspace를 1차 대상으로 설계되었습니다.
 
 ![Helm 설명 카툰](assets/helm-explainer-cartoon-ko.png)
 
 ## 워크플로우
 
-workspace 점검:
+workspace 점검.
 
 ```bash
 helm doctor --path ~/.helm/workspace
@@ -86,7 +86,7 @@ helm status --path ~/.helm/workspace --brief
 helm dashboard --path ~/.helm/workspace
 ```
 
-명시 profile로 명령 실행:
+명시 profile로 명령 실행.
 
 ```bash
 helm profile --path ~/.helm/workspace run inspect_local \
@@ -94,7 +94,7 @@ helm profile --path ~/.helm/workspace run inspect_local \
   -- git status --short
 ```
 
-기존 시스템을 context source로 연결:
+기존 시스템을 context source로 연결.
 
 ```bash
 helm survey --path ~/.helm/workspace
@@ -102,7 +102,7 @@ helm onboard --path ~/.helm/workspace --use-detected --dry-run
 helm onboard --path ~/.helm/workspace --use-detected
 ```
 
-rollback 후보와 최근 운영 상태 확인:
+rollback 후보와 최근 운영 상태 확인.
 
 ```bash
 helm checkpoint-recommend --path ~/.helm/workspace
@@ -110,14 +110,14 @@ helm checkpoint list --path ~/.helm/workspace
 helm report --path ~/.helm/workspace --format markdown
 ```
 
-model health 확인:
+model health 확인.
 
 ```bash
 helm health --path ~/.helm/workspace state --json
 helm health --path ~/.helm/workspace select --json
 ```
 
-demo workspace 실행:
+demo workspace 실행.
 
 ```bash
 helm doctor --path examples/demo-workspace
@@ -126,7 +126,7 @@ helm dashboard --path examples/demo-workspace
 
 ## Workspace 모델
 
-Helm은 보통 전용 workspace에 두고, 기존 시스템은 먼저 read-only context source로 붙이는 것이 안전합니다.
+Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context source로 붙이는 것이 안전합니다.
 
 - Helm state는 `.helm/` 아래에 둡니다
 - profiles, notes, policies, skill rules는 명시 파일로 유지합니다
@@ -164,7 +164,7 @@ Helm은 보통 전용 workspace에 두고, 기존 시스템은 먼저 read-only 
 
 ## 현재 상태
 
-Helm v0.6.5는 OpenClaw/Hermes 스타일 adoption 문서, 장기 실행 workspace integration, command guard hardening, `status --brief`, `dashboard`, HTML report 중심의 local operational visibility를 개선합니다.
+Helm v0.6.5는 OpenClaw/Hermes 스타일 adoption, 장기 실행 workspace integration, command guard hardening, `status --brief`, `dashboard`, HTML report 기반 local operational visibility에 집중합니다.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 

@@ -4,9 +4,9 @@
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>The safety and memory layer for agents you run more than once.</strong></p>
+<p align="center"><strong>Make repeated agent work safer, traceable, and recoverable.</strong></p>
 
-<p align="center">Helm wraps long-lived agent workspaces with profiles, guardrails, checkpoints, audit trails, and file-backed memory.</p>
+<p align="center">Helm adds profiles, guardrails, checkpoints, audit trails, and file-backed memory around long-lived agent workspaces.</p>
 
 <p align="center"><strong>Current release: v0.6.5</strong></p>
 
@@ -39,7 +39,7 @@ helm status --path ~/.helm/workspace --brief
 helm dashboard --path ~/.helm/workspace
 ```
 
-The installer installs Helm and initializes `~/.helm/workspace` by default. If `helm` is not found after installation, use the PATH line printed by the installer.
+The installer installs Helm and creates `~/.helm/workspace`. If `helm` is not found afterward, use the PATH line printed by the installer.
 
 Need a different workspace?
 
@@ -49,9 +49,9 @@ curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -
 
 ## Why Helm
 
-Helm is not an agent runtime. It is the operational layer around an agent runtime.
+Helm is not another agent runtime. It is the operating layer around the one you already run.
 
-Use Helm when you already run an OpenClaw/Hermes-style long-lived agent workspace, or a similar self-hosted agent service, and need repeated work to stay:
+Use it when an OpenClaw/Hermes-style workspace, or a similar self-hosted agent service, has moved past demos and needs repeated work to stay:
 
 - bounded by explicit execution profiles
 - recoverable through checkpoints
@@ -59,26 +59,26 @@ Use Helm when you already run an OpenClaw/Hermes-style long-lived agent workspac
 - resumable from files instead of chat history
 - governed by skill contracts and local policy
 
-If you only need a one-off chatbot demo, Helm is probably unnecessary.
+If the agent only runs one-off demos, Helm is probably unnecessary.
 
 ## What Helm Adds
 
-| Problem in repeated agent work | Helm layer |
+| Repeated-agent problem | Helm adds |
 | --- | --- |
-| The agent forgets prior work | File-native context hydration from notes, memory, tasks, commands, and checkpoints |
-| Risky edits happen too fast | Execution profiles, command guard, and checkpoint discipline |
+| The agent forgets prior work | Context hydration from notes, memory, tasks, commands, and checkpoints |
+| Risky edits happen too fast | Profiles, command guard, and checkpoint discipline |
 | Runs are hard to explain later | Task ledger, command log, status, dashboard, and reports |
-| Skills become prompt folklore | `SKILL.md` guidance plus `contract.json` execution policy |
-| Model fallback is ad hoc | File-backed model-health probing and fallback selection |
-| Operational state is scattered | Workspace layout, adopted context sources, and SQLite query index |
+| Skill rules live in prompts | `SKILL.md` guidance plus `contract.json` execution policy |
+| Model fallback is ad hoc | File-backed health checks and fallback selection |
+| Operational state is scattered | Workspace layout, adopted sources, and SQLite query index |
 
-Helm is runtime-agnostic, but it is designed first for persistent agent workspaces with state, memory, profiles, checkpoints, and task history.
+Helm is runtime-agnostic, but it is built first for persistent workspaces with state, memory, profiles, checkpoints, and task history.
 
 ![Helm explainer cartoon](assets/helm-explainer-cartoon-ko.png)
 
 ## Workflows
 
-Inspect the workspace:
+Inspect the workspace.
 
 ```bash
 helm doctor --path ~/.helm/workspace
@@ -86,7 +86,7 @@ helm status --path ~/.helm/workspace --brief
 helm dashboard --path ~/.helm/workspace
 ```
 
-Run a command under a declared profile:
+Run under a declared profile.
 
 ```bash
 helm profile --path ~/.helm/workspace run inspect_local \
@@ -94,7 +94,7 @@ helm profile --path ~/.helm/workspace run inspect_local \
   -- git status --short
 ```
 
-Adopt existing systems as context sources:
+Adopt existing systems as context sources.
 
 ```bash
 helm survey --path ~/.helm/workspace
@@ -102,7 +102,7 @@ helm onboard --path ~/.helm/workspace --use-detected --dry-run
 helm onboard --path ~/.helm/workspace --use-detected
 ```
 
-Check rollback and recent operational state:
+Check rollback and recent state.
 
 ```bash
 helm checkpoint-recommend --path ~/.helm/workspace
@@ -110,14 +110,14 @@ helm checkpoint list --path ~/.helm/workspace
 helm report --path ~/.helm/workspace --format markdown
 ```
 
-Probe model health:
+Probe model health.
 
 ```bash
 helm health --path ~/.helm/workspace state --json
 helm health --path ~/.helm/workspace select --json
 ```
 
-Try the demo workspace:
+Try the demo workspace.
 
 ```bash
 helm doctor --path examples/demo-workspace
@@ -126,7 +126,7 @@ helm dashboard --path examples/demo-workspace
 
 ## Workspace Model
 
-Helm should usually live in a dedicated workspace and treat existing systems as read-only context sources first.
+Keep Helm in a dedicated workspace. Treat existing systems as read-only context sources first.
 
 - Helm state lives under `.helm/`
 - profiles, notes, policies, and skill rules stay as explicit files
@@ -164,7 +164,7 @@ Release details:
 
 ## Status
 
-Helm v0.6.5 focuses on OpenClaw/Hermes-style adoption docs, long-lived workspace integration, command guard hardening, and local operational visibility with `status --brief`, `dashboard`, and HTML reports.
+Helm v0.6.5 focuses on OpenClaw/Hermes-style adoption, long-lived workspace integration, command guard hardening, and local operational visibility through `status --brief`, `dashboard`, and HTML reports.
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

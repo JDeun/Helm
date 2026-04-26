@@ -11,7 +11,7 @@
 
 ### Changed
 
-- **README**: shortened README and README.ko into landing-style guides, kept Quickstart installer-first, and moved detailed feature explanation to linked docs
+- **README**: shortened README and README.ko into landing-style guides, sharpened the product copy, kept Quickstart installer-first, and moved detailed feature explanation to linked docs
 
 ### Validation
 
