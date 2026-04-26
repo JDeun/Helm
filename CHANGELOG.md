@@ -11,7 +11,7 @@
 
 ### Changed
 
-- **README**: made Quickstart start with the one-line installer, clarified the OpenClaw/Hermes-style target, and moved custom install/adoption details into a separate section
+- **README**: shortened README and README.ko into landing-style guides, kept Quickstart installer-first, and moved detailed feature explanation to linked docs
 
 ### Validation
 

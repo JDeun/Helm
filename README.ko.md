@@ -6,7 +6,7 @@
 
 <p align="center"><strong>한 번이 아니라 계속 돌리는 에이전트를 위한 safety and memory layer</strong></p>
 
-<p align="center">Helm은 에이전트가 반복 실행될수록 생기는 컨텍스트 누수, 경계 붕괴, 롤백 부재, 추적 불가능성을 줄이기 위한 운영 레이어입니다.</p>
+<p align="center">Helm은 장기 실행 에이전트 workspace에 profile, guardrail, checkpoint, audit trail, file-backed memory를 붙이는 운영 레이어입니다.</p>
 
 <p align="center"><strong>현재 릴리즈: v0.6.5</strong></p>
 
@@ -22,30 +22,14 @@
 </p>
 
 <p align="center">
-  <a href="#왜-helm인가">왜 Helm인가</a> ·
   <a href="#quickstart">Quickstart</a> ·
-  <a href="#온보딩과-workspace-모델">온보딩</a> ·
-  <a href="#핵심-명령">핵심 명령</a> ·
-  <a href="#명령-가드">명령 가드</a> ·
-  <a href="#모델-헬스">모델 헬스</a> ·
-  <a href="#프로바이더-탐지">프로바이더 탐지</a> ·
-  <a href="#운영-데이터베이스">운영 데이터베이스</a> ·
-  <a href="#adaptive-harness">Adaptive Harness</a> ·
-  <a href="#스킬-품질과-운영-정책">스킬 품질</a> ·
-  <a href="#문서와-데모">문서와 데모</a>
+  <a href="#왜-helm인가">왜 Helm인가</a> ·
+  <a href="#helm이-더하는-것">Helm이 더하는 것</a> ·
+  <a href="#워크플로우">워크플로우</a> ·
+  <a href="#문서">문서</a>
 </p>
 
-## 30초 요약
-
-Helm은 또 하나의 agent framework가 아닙니다. 이미 쓰고 있는 에이전트 주변에 붙는 운영 레이어입니다. 명령 전에는 profile과 guard를 적용하고, 명령 후에는 audit trail을 남기며, risky edit 전에는 checkpoint를 만들고, 다음 실행은 chat 기억이 아니라 file-backed memory에서 이어가게 합니다.
-
-OpenClaw/Hermes 스타일의 장기 실행 에이전트 workspace나 유사한 self-hosted agent service를 반복해서 사용한다면 Helm은 그 반복 작업을 더 안전하고 추적 가능하며 복구 가능하게 만듭니다.
-
-단순한 일회성 챗봇 데모만 필요하다면 Helm은 과할 수 있습니다.
-
 ## Quickstart
-
-Helm을 설치하고 기본 workspace를 만든 뒤, 안전한 profile 명령 하나를 실행합니다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
@@ -55,118 +39,60 @@ helm status --path ~/.helm/workspace --brief
 helm dashboard --path ~/.helm/workspace
 ```
 
-installer는 기본적으로 Helm을 설치하고 `~/.helm/workspace`를 초기화합니다. 이후 명령들은 workspace를 점검하고, read-only profile 명령을 한 번 실행한 뒤 Helm이 남긴 audit state를 보여줍니다. 설치 후 `helm` 명령을 찾지 못하면 installer가 출력한 PATH 설정을 적용하세요. 더 자세한 walkthrough는 [`docs/first-run.md`](docs/first-run.md)를 보세요.
+installer는 기본적으로 Helm을 설치하고 `~/.helm/workspace`를 초기화합니다. 설치 후 `helm` 명령을 찾지 못하면 installer가 출력한 PATH 설정을 적용하세요.
 
-## 누구를 위한 도구인가
-
-- OpenClaw/Hermes 스타일 로컬 에이전트 workspace를 운영하는 개발자
-- 장기 운영 개인 에이전트 서비스를 가진 파워유저
-- 내부 self-hosted agent operations를 실험하는 팀
-- memory와 policy를 프롬프트 관습이 아니라 파일로 관리하고 싶은 builder
-
-Helm은 state, memory, profiles, checkpoints, task history가 있는 persistent agent workspace를 1차 대상으로 설계되었습니다. 일회성 command-line tool을 command level에서 감쌀 수는 있지만, 그것이 핵심 제품 약속은 아닙니다.
-
-## Helm이 아닌 것
-
-- agent runtime
-- model provider
-- hosted tracing platform
-- eval benchmark framework
-- OpenClaw, Hermes 또는 다른 agent service의 대체재
-
-Helm은 기존 runtime을 감싸 반복 작업을 더 쉽게 검토, 복구, 지속할 수 있게 만드는 레이어입니다.
-
-## 왜 Helm인가
-
-대부분의 에이전트 스택은 이미 툴 호출은 할 수 있습니다. 진짜 어려운 문제는 같은 에이전트를 계속 굴렸을 때 그것이 하나의 시스템처럼 동작하길 기대하는 순간부터 시작됩니다.
-
-보통 실패는 이런 식으로 나타납니다.
-
-- 이전 실행에서 무슨 일이 있었는지 자꾸 잊어버린다
-- 작은 로컬 모델은 multi-step 작업에서 쉽게 흔들린다
-- risky edit가 생겨도 rollback discipline이 눈에 보이지 않는다
-- 작업은 끝났는데 나중에 왜 그렇게 실행됐는지 설명하기 어렵다
-- skill은 늘어나는데 규칙은 여전히 문서나 프롬프트에만 남는다
-
-Helm은 바로 이 두 번째 층의 문제를 다룹니다.
-
-즉 Helm이 하는 일은:
-
-- 파일과 이전 운영 흔적에서 필요한 컨텍스트를 다시 읽는 것
-- 명령 전에 올바른 execution mode를 고르게 만드는 것
-- 상위 task와 저수준 command를 함께 추적하는 것
-- risky edit 전에 rollback path를 보이게 만드는 것
-- skill policy를 프롬프트 folklore가 아니라 inspectable contract로 다루는 것
-
-현재 릴리즈 기준으로는 특히 다음이 핵심입니다.
-
-- 각 스킬이 `skills/<skill>/contract.json`으로 실행 계약을 직접 소유
-- 약한 로컬 모델일수록 더 좁은 runner와 보수적 기본값으로 유도
-- manifest 존재 여부뿐 아니라 품질까지 감사 가능
-- typed memory operation과 crystallized session을 명시적으로 기록
-- `helm memory review-queue`로 unresolved follow-up 즉시 확인
-- 최근 건강 상태를 기준으로 모델 fallback을 고르는 model-health 계층
-- status/report가 workspace layout을 따르므로 OpenClaw형에서도 state를 놓치지 않음
-
-특히 아래 같은 환경에 잘 맞습니다.
-
-- 이미 agent runtime 또는 workspace가 있는 경우
-- 장기적으로 굴리는 workflow나 skill이 있는 경우
-- notes, memory, logs, checkpoints가 다음 실행에도 영향을 줘야 하는 경우
-
-에이전트를 일회성 데모로만 쓴다면 Helm은 과할 수 있습니다.
-반대로 이미 실제 반복 작업을 맡기고 있다면 Helm의 필요성이 훨씬 분명해집니다.
-
-원칙적으로 runtime-agnostic이지만, OpenClaw 스타일이나 Hermes 스타일 환경이 있으면 가장 자연스럽게 붙습니다.
-
-## 예시 시나리오
-
-장기 운영 중인 workspace에서 OpenClaw/Hermes 스타일 에이전트가 router refactor를 맡는 상황을 가정해보겠습니다.
-
-Helm이 없으면 에이전트가 부분적 컨텍스트만 읽고 너무 빨리 수정에 들어가거나, 나중에 왜 그렇게 실행됐는지 추적하기 어려울 수 있습니다.
-Helm이 있으면 explicit files, execution profiles, checkpoints, audit traces, finalization decision을 기준으로 작업이 통제됩니다.
-
-전형적인 흐름은 이렇습니다.
-
-1. notes, memory, command logs, task history, checkpoints에서 context를 다시 읽습니다.
-2. 작업 전에 적절한 execution profile을 고르거나 강제합니다.
-3. risky work에는 checkpoint discipline과 visible trace를 붙입니다.
-4. 실행 후에는 이후 판단에 남겨야 할 durable state가 무엇인지 명시적으로 평가합니다.
-5. 결과적으로 검토, 재현, 복구, 후속 작업 연결이 쉬워집니다.
-
-![Helm 설명 카툰](assets/helm-explainer-cartoon-ko.png)
-
-## Helm이 하는 일
-
-- `inspect_local`, `workspace_edit`, `risky_edit` 같은 execution profile
-- notes, memory, ontology, tasks, commands, checkpoints를 아우르는 file-native context hydration
-- task / command audit trail
-- checkpoint 생성, 조회, restore guidance
-- durable state capture planning을 포함한 task finalization
-- draft skill 생성, review, approve, reject
-- status / report / validate 중심의 운영 가시성
-- runtime-neutral memory policy (confidence, recency, supersession, crystallization, audit-first)
-- policy-driven model health probing과 fallback selection
-- profiled shell run 없이도 durable capture를 남기는 conversational capture
-- 결정론적 명령 가드와 위험 점수/승인 워크플로우
-- provider-agnostic LLM 탐지 (API/로컬, 시크릿 미저장)
-- JSONL 위의 SQLite 쿼리 인덱스
-
-## 커스텀 설치와 기존 시스템 연결
-
-기본 `~/.helm/workspace`가 아닌 다른 workspace 경로를 쓰려면:
+다른 workspace 경로를 쓰려면:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --workspace ~/work/helm
 ```
 
-workspace 초기화 없이 설치만 하려면:
+## 왜 Helm인가
+
+Helm은 agent runtime이 아닙니다. 이미 쓰고 있는 agent runtime 주변의 운영 레이어입니다.
+
+OpenClaw/Hermes 스타일 장기 실행 에이전트 workspace나 유사한 self-hosted agent service를 반복해서 운영하고 있고, 다음이 필요하다면 Helm이 맞습니다.
+
+- 명시적 execution profile로 작업 범위 제한
+- checkpoint 기반 복구 경로
+- task log와 command log 기반 추적성
+- chat history가 아니라 file state에서 이어지는 다음 실행
+- skill contract와 local policy 기반 운영 규칙
+
+단순한 일회성 챗봇 데모만 필요하다면 Helm은 과할 수 있습니다.
+
+## Helm이 더하는 것
+
+| 반복 에이전트 운영 문제 | Helm 레이어 |
+| --- | --- |
+| 에이전트가 이전 작업을 잊음 | notes, memory, tasks, commands, checkpoints 기반 file-native context hydration |
+| risky edit가 너무 빠르게 진행됨 | execution profiles, command guard, checkpoint discipline |
+| 나중에 실행 이유를 설명하기 어려움 | task ledger, command log, status, dashboard, report |
+| skill 규칙이 프롬프트 관습에 머묾 | `SKILL.md` guidance와 `contract.json` 실행 정책 |
+| model fallback이 즉흥적으로 결정됨 | file-backed model-health probing과 fallback selection |
+| 운영 상태가 흩어짐 | workspace layout, adopted context sources, SQLite query index |
+
+Helm은 원칙적으로 runtime-agnostic이지만, state, memory, profiles, checkpoints, task history가 있는 persistent agent workspace를 1차 대상으로 설계되었습니다.
+
+## 워크플로우
+
+workspace 점검:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --skip-init
+helm doctor --path ~/.helm/workspace
+helm status --path ~/.helm/workspace --brief
+helm dashboard --path ~/.helm/workspace
 ```
 
-외부 context source를 adopt할 준비가 되면 기존 시스템을 연결합니다.
+명시 profile로 명령 실행:
+
+```bash
+helm profile --path ~/.helm/workspace run inspect_local \
+  --task-name "inspect repository state" \
+  -- git status --short
+```
+
+기존 시스템을 context source로 연결:
 
 ```bash
 helm survey --path ~/.helm/workspace
@@ -174,458 +100,71 @@ helm onboard --path ~/.helm/workspace --use-detected --dry-run
 helm onboard --path ~/.helm/workspace --use-detected
 ```
 
-## 온보딩과 Workspace 모델
-
-Helm은 보통 별도 workspace로 시작하고, 기존 시스템은 우선 read-only context source로 붙이는 방식이 맞습니다.
-
-권장 기본 모델은 다음과 같습니다.
-
-- Helm은 별도 workspace로 둘 것
-- runtime state는 `.helm/` 아래에 둘 것
-- profiles, notes, policies, skill rules는 명시 파일로 둘 것
-- 기존 OpenClaw, Hermes, notes vault는 adopt해서 연결할 것
-
-Quickstart 이후 추천 adoption 흐름:
-
-```bash
-helm survey --path ~/.helm/workspace
-helm onboard --path ~/.helm/workspace --use-detected --dry-run
-helm onboard --path ~/.helm/workspace --use-detected
-```
-
-기본적으로 `helm onboard`는 적용 후 `doctor`, `validate`, `status --verbose`까지 이어서 실행합니다.
-adoption만 하고 싶다면:
-
-```bash
-helm onboard --path ~/.helm/workspace --use-detected --skip-checks
-```
-
-명시적으로 source를 붙이려면:
-
-```bash
-helm adopt --path ~/.helm/workspace --from-path ~/.openclaw/workspace --name openclaw-main
-helm adopt --path ~/.helm/workspace --from-path ~/.hermes --name hermes-main
-helm adopt --path ~/.helm/workspace --from-path ~/Documents/Obsidian/MyVault --kind generic --name obsidian-main
-helm sources --path ~/.helm/workspace
-```
-
-기존 OpenClaw나 Hermes 트리를 Helm이 기본값으로 덮어쓰는 일은 없어야 합니다. Obsidian은 필수가 아니고, Helm이 중요하게 보는 것은 특정 앱이 아니라 명시적인 파일 상태입니다. 다만 이미 Obsidian에 운영 노트를 쌓고 있다면 read-only source로 연결하는 것이 좋은 기본값입니다.
-
-## 핵심 명령
-
-execution profile 확인:
-
-```bash
-helm profile list --path ~/.helm/workspace
-```
-
-라우팅 전에 context hydration:
-
-```bash
-helm context --path ~/.helm/workspace --describe-modes
-helm context --path ~/.helm/workspace --mode failures --limit 5
-helm context --path ~/.helm/workspace --include notes tasks commands --summary --limit 8
-```
-
-외부 source adopt 및 조회:
-
-```bash
-helm adopt --path ~/.helm/workspace --from-path ~/.openclaw/workspace --name openclaw-main
-helm context --path ~/.helm/workspace --adapter openclaw-main --include notes tasks commands --limit 8
-```
-
-checkpoint를 수반하는 risky task 실행:
-
-```bash
-helm profile --path ~/.helm/workspace run risky_edit \
-  --task-name "router refactor" \
-  -- python3 -c 'print("hello")'
-```
-
-rollback 후보 확인:
+rollback 후보와 최근 운영 상태 확인:
 
 ```bash
 helm checkpoint-recommend --path ~/.helm/workspace
 helm checkpoint list --path ~/.helm/workspace
-helm checkpoint show --path ~/.helm/workspace <checkpoint-id>
-```
-
-최근 task handoff snapshot 확인:
-
-```bash
-helm context --path ~/.helm/workspace state-snapshot
-helm context --path ~/.helm/workspace state-snapshot --task-id <task-id> --json
-```
-
-draft skill 생성과 검토:
-
-```bash
-helm skill --path ~/.helm/workspace draft-from-task \
-  --task-id <task-id> \
-  --name example-skill \
-  --description "Example reusable workflow"
-
-helm skill --path ~/.helm/workspace assess-draft --name example-skill
-helm skill-diff --path ~/.helm/workspace --name example-skill
-helm skill-approve --path ~/.helm/workspace --name example-skill --dry-run
-```
-
-운영 요약 확인:
-
-```bash
-helm status --path ~/.helm/workspace --verbose
 helm report --path ~/.helm/workspace --format markdown
 ```
 
-모델 헬스 상태 확인과 fallback 선택:
+model health 확인:
 
 ```bash
 helm health --path ~/.helm/workspace state --json
 helm health --path ~/.helm/workspace select --json
 ```
 
-채팅 기반 변경을 task ledger와 memory plan에 바로 기록:
+demo workspace 실행:
 
 ```bash
-helm memory --path ~/.helm/workspace capture-chat \
-  --task-name "release state 문서화" \
-  --path README.md \
-  --path CHANGELOG.md \
-  --json
+helm doctor --path examples/demo-workspace
+helm dashboard --path examples/demo-workspace
 ```
 
-## 명령 가드
+## Workspace 모델
 
-Helm은 모든 명령 실행 전에 결정론적 명령 가드를 평가합니다:
+Helm은 보통 전용 workspace에 두고, 기존 시스템은 먼저 read-only context source로 붙이는 것이 안전합니다.
 
-- **절대 차단**: `rm -rf /` 같은 치명적 명령은 항상 차단됩니다
-- **프로파일 강제**: `inspect_local`은 쓰기/네트워크를 차단하고, `workspace_edit`은 네트워크를 차단합니다
-- **위험 점수**: 명령은 감지된 카테고리에 따라 위험 점수(0.0–1.0)를 받습니다
-- **승인 워크플로우**: 위험한 명령은 `--approve-risk`를 필요로 합니다
+- Helm state는 `.helm/` 아래에 둡니다
+- profiles, notes, policies, skill rules는 명시 파일로 유지합니다
+- OpenClaw, Hermes, notes vault는 overwrite하지 않고 adopt해서 연결합니다
+- JSONL은 append-only 원본이고, SQLite는 query index입니다
 
-```bash
-# 가드가 위험한 명령을 차단합니다
-helm profile run inspect_local -- rm -rf build
-# GUARD DENY: write detected under inspect_local
+## 문서
 
-# 알려진 위험 작업에 대해 승인으로 재정의
-helm profile run risky_edit --approve-risk -- rm -rf build
+먼저 볼 문서:
 
-# 감사 모드는 기록만 하고 차단하지 않습니다
-helm profile run workspace_edit --guard-mode audit -- curl https://example.com
-
-# 실행 없이 가드 결정 확인
-helm profile run workspace_edit --guard-json -- rm -rf build
-```
-
-가드 모드: `enforce` (기본값), `audit` (기록만), `off` (비활성화하되 기록).
-
-## 모델 헬스
-
-Helm은 이제 별도 model-health 계층을 가집니다. 목적은 단순합니다. 어떤 모델이 최근 healthy였는지 파일에 남기고, 필요할 때 다시 probe하고, 다음 턴에서 쓸 fallback 후보를 채팅이 아니라 상태 파일 기준으로 고르는 것입니다.
-
-기본 템플릿은 `references/model_recovery_policy.json`에 있습니다. 비워 둔 채 discovery 기반 선택만 써도 되고, 실제로 probe할 모델과 probe kind를 명시해서 적극적인 health check를 돌릴 수도 있습니다.
-기본 템플릿에는 실전적인 local-first 체인을 넣어 두었습니다: `ollama/llama3.2:latest` 다음 `openai/gpt-4.1-mini`, 그 다음 `google_gemini/gemini-2.5-flash` 순서입니다.
-
-전형적인 흐름:
-
-```bash
-# 저장된 상태 확인
-helm health --path ~/.helm/workspace state --json
-
-# 정의된 후보 probe
-helm health --path ~/.helm/workspace probe --json
-
-# 다음 턴에 쓸 가장 적절한 healthy 후보 선택
-helm health --path ~/.helm/workspace select --json
-```
-
-`helm doctor`도 이제 model-health policy 경로, state 경로, 현재 선택된 후보를 같이 보여주므로 runtime handoff를 더 명시적으로 확인할 수 있습니다.
-
-가드는 heredoc 주입, base64 파이프 실행, `/dev/tcp` 네트워크 접근 같은 셸 우회 패턴도 감지합니다. 가드 예외는 fail-closed(기본 `require_approval`)이며, manual-remote 핸드오프 전에도 가드 평가가 실행되어 우회를 방지합니다.
-
-## 프로바이더 탐지
-
-Helm은 API를 호출하지 않고 사용 가능한 LLM 프로바이더를 감지합니다:
-
-- **API 프로바이더**: 19개 프로바이더를 환경 변수 존재 여부로 감지 (Anthropic, OpenAI, Gemini, OpenRouter, Azure, Bedrock, Vertex, Mistral, Groq, Together, Fireworks, Cohere, DeepSeek, xAI, Replicate, Perplexity, HuggingFace, Cerebras, NVIDIA NIM)
-- **로컬 프로바이더**: 4개 프로바이더를 엔드포인트 프로브로 감지 (Ollama, LM Studio, llama.cpp, vLLM)
-- **GPU 감지**: NVIDIA, Apple Silicon, AMD (ROCm) 및 멀티 GPU 지원
-- **커스텀 레지스트리**: `model_provider_policy.json`으로 사용자 정의 프로바이더 추가 가능
-- **API 호출 없음**: 프로바이더 감지는 클라우드 API에 요청을 보내지 않음
-- **시크릿 저장 없음**: API 키 값은 로깅이나 저장되지 않음
-
-전체 디스커버리 보고서를 보려면 `helm doctor`를 실행하세요.
-
-## 운영 데이터베이스
-
-Helm은 JSONL 작업 원장에 대한 SQLite 쿼리 인덱스를 유지합니다:
-
-```bash
-helm db init              # SQLite 인덱스 생성
-helm db rebuild           # JSONL 소스 파일에서 재빌드
-helm db verify            # JSONL/SQLite 드리프트 확인
-helm db status            # 인덱스 통계 표시
-```
-
-인덱스 조회:
-
-```bash
-helm db query --status completed --limit 10
-helm db query --guard-action deny --json
-```
-
-JSONL은 추가 전용 진실 소스(source of truth)로 유지됩니다. SQLite 실패는 명령 실행을 차단하지 않습니다.
-
-## Adaptive Harness
-
-Helm은 model tier에 따라 강제 수준을 조절하는 adaptive harness도 포함합니다.
-
-프롬프트 규율만 믿지 않고 preflight/postflight 검증을 코드로 강제하려면 이 경로를 씁니다.
-
-```bash
-helm harness --path ~/.helm/workspace policy
-helm harness --path examples/demo-workspace contract --skill router-context-demo
-helm harness --path examples/demo-workspace preflight \
-  --skill router-context-demo \
-  --profile inspect_local \
-  --model gemma4:e4b \
-  --task-name "router triage" \
-  --request "라우터 변경 전에 필요한 컨텍스트를 먼저 점검해줘" \
-  -- python3 -c 'print("ok")'
-```
-
-### 스킬 소유 정책
-
-- 각 스킬이 `contract.json`에서 `allowed_profiles`, `default_profile` 선언
-- strict runner 필요 여부도 manifest에서 선언
-- `skill_relevance` 점수와 block/warning 임계값은 `references/adaptive_harness_policy.json`에서 조정
-- planning, design, drafting 요청은 `interaction_workflow`로 태깅
-
-### Evidence 요구사항
-
-- browser-heavy workflow는 완료 전 `browser_evidence` 필수
-- blocked retrieval workflow는 `retrieval_evidence`로 escalation 추적
-- 파일 기반 workflow는 `file_intake_evidence`로 parser routing 감사
-- 명시적 evidence 누락 시 task ledger에서 추론으로 보강 가능
-
-### 운영자 도구
-
-- `python3 scripts/adaptive_harness.py backfill-evidence` — 기존 run에 추론 evidence 보강
-- `python3 scripts/run_with_profile.py validate-manifests --json` — manifest 누락/형식 오류 감사
-- `python3 scripts/run_with_profile.py audit-manifest-quality --json` — 약하거나 generic한 contract 감지
-
-## 스킬 품질과 운영 정책
-
-Helm workspace를 장기적으로 다듬을 때 중요한 것은 스킬을 많이 쌓거나 규칙을 많이 늘리는 것이 아닙니다.
-핵심은 어떤 스킬이 들어와도 Helm이 그것을 안정적으로 운영할 수 있게 만드는 것입니다.
-
-### 거버넌스 질문
-
-Helm이 계속 대답할 수 있어야 하는 질문은 이런 것들입니다.
-
-- 최소 어떤 입력을 먼저 받아야 하는가
-- 어떤 순서로 판단해야 하는가
-- 어디서 멈추고 승인이나 handoff를 받아야 하는가
-- 좋은 답변의 기본 형태는 무엇인가
-- 실패했을 때 workflow를 망치지 않고 어떻게 설명해야 하는가
-
-그래서 Helm에서 좋은 스킬은 단순히 설명이 좋은 스킬이 아닙니다.
-`SKILL.md` 안에 운영 계약이 드러나고, `contract.json`으로 실행 경계가 좁혀져 있는 스킬입니다.
-
-### 권장 기본값
-
-- 새 스킬은 `inspect_local`에서 시작할 것
-- 실제로 필요할 때만 `workspace_edit`, `service_ops`, `risky_edit`로 넓힐 것
-- account-bound 또는 irreversible action은 `approval_keywords`로 눈에 띄게 둘 것
-- 약한 로컬 모델이 즉흥 실행하면 위험한 흐름은 strict runner로 묶을 것
-- release 전이나 정책 수정 후에는 `validate-manifests`와 `audit-manifest-quality`를 함께 돌릴 것
-- durable memory, workflow artifact, promoted skill rule을 같은 층으로 섞지 말 것
-
-### SKILL.md 권장 기본값
-
-- `Input contract`, `Decision contract`, `Output contract`, `Failure contract`를 명시할 것
-- 입력 누락 시 첫 질문은 짧고 unblock-oriented 하게 쓸 것
-- 기본 출력 형식과 길이 제한을 둘 것
-- 스킬이 스스로 단정하거나 완료했다고 말하면 안 되는 경계를 적을 것
-
-검토 기준은 [docs/skill-quality-and-policy.md](docs/skill-quality-and-policy.md), memory/promotion 경계는 [docs/knowledge-contract.md](docs/knowledge-contract.md)를 보면 됩니다.
-
-### 가시성 보조 명령
-
-- `helm run-contract --path <workspace> --json` 으로 최신 실행 계약 스냅샷 확인
-- `helm capability-diff --path <workspace> --json` 으로 최근 실행 간 capability 차이 확인
-- `helm dashboard --path <workspace>` 로 compact local operations dashboard 확인
-
-## File-Native Context Hydration
-
-Helm의 context 모델은 의도적으로 explicit합니다.
-
-hidden prompt state에 기대기보다 아래 파일과 운영 흔적을 다시 읽습니다.
-
-- notes와 curated memory files
-- `memory/` 아래의 file-native memory
-- ontology entities / relations
-- task ledger
-- command log
-- checkpoints
-- adopt된 external source
-
-방향 자체는 wiki-style, externalized working-context와 맞닿아 있지만, 특정 upstream 시스템의 복제품이 아니라 실전 운영용 CLI와 workspace 계층으로 구현한 것입니다.
-
-## Task Finalization
-
-Helm에서 task finalization은 단순히 "프로세스가 끝났다"가 아닙니다.
-
-의미 있는 작업이라면 아래를 남겨야 합니다.
-
-- 실행 trace
-- rollback / recovery 판단에 필요한 가시성
-- durable state를 추가로 기록해야 하는지에 대한 명시적 결정
-
-현재 Helm 릴리스는 이를 task ledger 안의 `memory_capture` 계획으로 구현합니다. 이 계획은 다음 단계에서 `daily_memory`, `long_term_memory`, `ontology`, 사람이 읽기 좋은 `notes` 중 어디를 업데이트해야 할지 추천합니다.
-이제 여기에 더해 `helm memory op ...`, `helm memory crystallize`, `helm memory review-queue`로 후속 판단과 review backlog도 운영 기록으로 분리할 수 있습니다.
-
-finalize된 `run_with_profile.py` 작업은 `.helm/state-snapshots/` 아래에 짧은 markdown handoff artifact를 남기고, task ledger에서 `state_snapshot`으로 연결됩니다. 스냅샷에는 작업 상태, memory-capture 요약, harness routing 메타데이터, skill relevance, route decision, evidence 존재 여부가 포함됩니다.
-다음 profiled run은 `HELM_PREVIOUS_STATE_SNAPSHOT`과 `OPENCLAW_PREVIOUS_STATE_SNAPSHOT`으로 이전 스냅샷 경로를 받아, OpenClaw형 워크플로우도 동일한 resume hint를 활용할 수 있습니다.
-
-## 설치 메모
-
-로컬 checkout에서 설치:
-
-```bash
-python3 -m pip install --user --no-build-isolation .
-```
-
-`helm`이 바로 잡히지 않으면 installer가 shell profile에 추가해야 할 user bin 경로를 출력합니다.
-
-## 문서와 데모
-
-- [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/first-run.md`](docs/first-run.md)
+- [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/demos.md`](docs/demos.md)
-- [`docs/profile-templates.md`](docs/profile-templates.md)
 - [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
-- [`docs/integrations/openhands.md`](docs/integrations/openhands.md)
 - [`docs/integrations/existing-agent-workspace.md`](docs/integrations/existing-agent-workspace.md)
+
+핵심 개념:
+
+- [`docs/execution-profiles.md`](docs/execution-profiles.md)
+- [`docs/memory-operations-policy.md`](docs/memory-operations-policy.md)
+- [`docs/task-finalization.md`](docs/task-finalization.md)
+- [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
+- [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
+
+포지셔닝:
+
 - [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
 - [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
-- [`docs/release-checklist.md`](docs/release-checklist.md)
-- [`docs/releases/0.6.5.md`](docs/releases/0.6.5.md)
-- [`docs/releases/0.6.4.md`](docs/releases/0.6.4.md)
-- [`docs/releases/0.6.3.md`](docs/releases/0.6.3.md)
-- [`docs/releases/0.6.2.md`](docs/releases/0.6.2.md)
-- [`docs/releases/0.6.1.md`](docs/releases/0.6.1.md)
-- [`docs/router-context-hydration.md`](docs/router-context-hydration.md)
-- [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
-- [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
-- [`docs/task-finalization.md`](docs/task-finalization.md)
-- [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
-- [`examples/demo-workspace`](examples/demo-workspace)
+
+릴리즈:
+
 - [`CHANGELOG.md`](CHANGELOG.md)
-
-demo workspace로 바로 실행해보려면:
-
-```bash
-helm survey --path examples/demo-workspace
-helm doctor --path examples/demo-workspace
-helm validate --path examples/demo-workspace
-helm context --path examples/demo-workspace recent-state --limit 5
-helm memory --path examples/demo-workspace pending-captures --limit 5
-helm memory --path examples/demo-workspace review-queue --limit 5
-helm memory --path examples/demo-workspace audit-coherence --json
-helm memory --path examples/demo-workspace capture-chat --task-name "demo memory capture" --path README.md
-helm health --path examples/demo-workspace state --json
-helm dashboard --path examples/demo-workspace
-helm ops --path examples/demo-workspace capture-state --limit 10
-helm report --path examples/demo-workspace --format markdown
-```
+- [`docs/releases/0.6.5.md`](docs/releases/0.6.5.md)
 
 ## 현재 상태
 
-Helm v0.6.5는 v0.6.4의 guard hardening을 유지하면서, OpenClaw/Hermes 스타일 adoption 문서, 장기 실행 workspace integration 예제, `status --brief`, `dashboard`, HTML report 기반의 로컬 운영 가시성을 보강한 패치 릴리즈입니다.
+Helm v0.6.5는 OpenClaw/Hermes 스타일 adoption 문서, 장기 실행 workspace integration, command guard hardening, `status --brief`, `dashboard`, HTML report 중심의 local operational visibility를 개선합니다.
 
-### 코어
-
-- Helm-native CLI 패키징
-- read-only adoption 기반 separate workspace 모델
-- file-native context hydration
-- durable capture planning 포함 task finalization
-- typed memory operation과 crystallized session artifact
-- policy-driven model health probing과 fallback selection
-- profiled shell run 없이도 남길 수 있는 conversational memory capture
-
-### 보안
-
-- 위험 점수와 승인 워크플로우를 갖춘 결정론적 명령 가드
-- `SemanticResult` 구조적 반환 타입으로 우회 방지 semantic 분석
-- 재귀적 셸 언래핑 (최대 깊이 5) 및 인터프리터 감지
-- heredoc, base64, `/dev/tcp` 우회 패턴 감지
-- 가드 예외 시 fail-closed 정책 (tuple 기반, 불변)
-- manual-remote 핸드오프 전 가드 평가
-- `--guard-json` 플래그로 머신 리더블 가드 결정 출력
-- 제한된 프로필을 위한 최소 환경 격리
-
-### 신뢰성
-
-- 프로바이더 탐지: API 19개, 로컬 4개 (API 호출 없음, 시크릿 미저장)
-- `.helm/model-health-state.json` 기반 모델 헬스 상태 저장과 fallback 선택
-- GPU/VRAM 감지: NVIDIA, Apple Silicon, AMD (ROCm), 멀티 GPU (`lru_cache` 적용)
-- policy JSON을 통한 커스텀 프로바이더 레지스트리
-- JSONL 위의 SQLite 쿼리 인덱스 (init, rebuild, verify, query), 스레드 안전 캐싱
-- 크로스 플랫폼 sentinel-region 파일 잠금 기반 atomic JSONL append
-- 스키마 버전 관리 및 스트리밍 JSONL 읽기 (대용량 파일 OOM 방지)
-- 서브프로세스 타임아웃 제어 (`--timeout`, 기본 1800초)
-- discovery, hardware, guard 섹션이 포함된 확장 `helm doctor`
-
-### 거버넌스
-
-- 스킬 소유 정책 기반 manifest adaptive harness
-- 스킬 contract 해석을 위한 deep merge
-- 스킬 contract의 manifest 감사 및 품질 감사
-- `SKILL.md` 품질 기준과 계약형 draft 템플릿
-- checkpoint, report, skill review 흐름
-- unresolved memory 이슈를 위한 review-queue 가시성
-
-### CLI
-
-- `helm db init/rebuild/verify/status/query`
-- `helm doctor --skip-discovery`
-- state-snapshot 조회 및 handoff artifact
-- 스냅샷 기반 intelligence tier 해석 (L0-L4)
-- 298개 테스트 (pytest, 크로스 플랫폼)
-
-의도적으로 빠진 것:
-
-- private memory / ontology data
-- 개인 agent overlay
-- credentials 또는 private task history
-
-## 포지셔닝
-
-짧게 말하면 Helm은 이렇습니다.
-
-> agent runtime이 실제 작업을 하고, Helm은 그 작업이 어떻게 준비되고, 실행되고, 추적되고, finalization되고, 복구되는지를 다룹니다.
-
-Helm은 다음이 아닙니다.
-
-- 새로운 foundation model
-- chat UI
-- 완전 자율형 agent platform
-- 모든 runtime의 대체재
-
-Helm은 다음입니다.
-
-- operations layer
-- governance / observability layer
-- 로컬 및 개인 에이전트를 위한 stability-first orchestration layer
-
-## Acknowledgements
-
-Helm은 실제 OpenClaw 기반 개인 에이전트 워크스페이스 운영 경험과, Hermes 계열 runtime discipline, wiki-style externalized working context, skills-based workflow design, checkpoint 중심 로컬 운영 관점의 영향을 받아 다듬어진 결과물입니다.
-
-여기에 언급된 프로젝트나 인물의 공식 확장판이나 협업 결과물은 아닙니다.
+Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 
 ## 라이선스
 
