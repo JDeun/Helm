@@ -11,7 +11,7 @@
 
 ### Changed
 
-- **README**: replaced the overlapping first-run/quick-start copy with a shorter Quickstart, clarified the OpenClaw/Hermes-style target, and moved install/adoption details into a separate onboarding section
+- **README**: made Quickstart start with the one-line installer, clarified the OpenClaw/Hermes-style target, and moved custom install/adoption details into a separate section
 
 ### Validation
 

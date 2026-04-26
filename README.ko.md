@@ -45,17 +45,17 @@ OpenClaw/Hermes 스타일의 장기 실행 에이전트 workspace나 유사한 s
 
 ## Quickstart
 
-Helm으로 안전한 명령 하나를 실행하고, 그 결과로 남은 상태를 확인합니다.
+Helm을 설치하고 기본 workspace를 만든 뒤, 안전한 profile 명령 하나를 실행합니다.
 
 ```bash
-helm init --path ~/.helm/workspace
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
 helm doctor --path ~/.helm/workspace
 helm profile --path ~/.helm/workspace run inspect_local --task-name "first Helm inspection" -- git status --short
 helm status --path ~/.helm/workspace --brief
 helm dashboard --path ~/.helm/workspace
 ```
 
-이 흐름은 workspace를 만들고, 상태를 점검하고, read-only profile 명령을 한 번 실행한 뒤 Helm이 남긴 audit state를 보여줍니다. 더 자세한 walkthrough는 [`docs/first-run.md`](docs/first-run.md)를 보세요.
+installer는 기본적으로 Helm을 설치하고 `~/.helm/workspace`를 초기화합니다. 이후 명령들은 workspace를 점검하고, read-only profile 명령을 한 번 실행한 뒤 Helm이 남긴 audit state를 보여줍니다. 설치 후 `helm` 명령을 찾지 못하면 installer가 출력한 PATH 설정을 적용하세요. 더 자세한 walkthrough는 [`docs/first-run.md`](docs/first-run.md)를 보세요.
 
 ## 누구를 위한 도구인가
 
@@ -64,7 +64,7 @@ helm dashboard --path ~/.helm/workspace
 - 내부 self-hosted agent operations를 실험하는 팀
 - memory와 policy를 프롬프트 관습이 아니라 파일로 관리하고 싶은 builder
 
-Helm은 state, memory, profiles, checkpoints, task history가 있는 persistent agent workspace를 1차 대상으로 설계되었습니다. 일회성 coding tool을 command level에서 감쌀 수는 있지만, 그것이 핵심 제품 약속은 아닙니다.
+Helm은 state, memory, profiles, checkpoints, task history가 있는 persistent agent workspace를 1차 대상으로 설계되었습니다. 일회성 command-line tool을 command level에서 감쌀 수는 있지만, 그것이 핵심 제품 약속은 아닙니다.
 
 ## Helm이 아닌 것
 
@@ -121,7 +121,7 @@ Helm은 바로 이 두 번째 층의 문제를 다룹니다.
 
 ## 예시 시나리오
 
-장기 운영 중인 workspace에서 coding agent가 router refactor를 맡는 상황을 가정해보겠습니다.
+장기 운영 중인 workspace에서 OpenClaw/Hermes 스타일 에이전트가 router refactor를 맡는 상황을 가정해보겠습니다.
 
 Helm이 없으면 에이전트가 부분적 컨텍스트만 읽고 너무 빨리 수정에 들어가거나, 나중에 왜 그렇게 실행됐는지 추적하기 어려울 수 있습니다.
 Helm이 있으면 explicit files, execution profiles, checkpoints, audit traces, finalization decision을 기준으로 작업이 통제됩니다.
@@ -152,23 +152,21 @@ Helm이 있으면 explicit files, execution profiles, checkpoints, audit traces,
 - provider-agnostic LLM 탐지 (API/로컬, 시크릿 미저장)
 - JSONL 위의 SQLite 쿼리 인덱스
 
-## 설치와 온보딩
+## 커스텀 설치와 기존 시스템 연결
 
-Helm을 설치합니다.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
-```
-
-workspace를 만들고 첫 운영 점검을 실행합니다.
+기본 `~/.helm/workspace`가 아닌 다른 workspace 경로를 쓰려면:
 
 ```bash
-helm init --path ~/.helm/workspace
-helm doctor --path ~/.helm/workspace
-helm status --path ~/.helm/workspace --brief
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --workspace ~/work/helm
 ```
 
-준비가 되면 기존 시스템을 연결합니다.
+workspace 초기화 없이 설치만 하려면:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --skip-init
+```
+
+외부 context source를 adopt할 준비가 되면 기존 시스템을 연결합니다.
 
 ```bash
 helm survey --path ~/.helm/workspace
@@ -187,10 +185,9 @@ Helm은 보통 별도 workspace로 시작하고, 기존 시스템은 우선 read
 - profiles, notes, policies, skill rules는 명시 파일로 둘 것
 - 기존 OpenClaw, Hermes, notes vault는 adopt해서 연결할 것
 
-추천 초기 흐름:
+Quickstart 이후 추천 adoption 흐름:
 
 ```bash
-helm init --path ~/.helm/workspace
 helm survey --path ~/.helm/workspace
 helm onboard --path ~/.helm/workspace --use-detected --dry-run
 helm onboard --path ~/.helm/workspace --use-detected

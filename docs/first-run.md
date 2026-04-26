@@ -6,10 +6,10 @@ This is the shortest path from a clean install to a useful Helm signal.
 
 Run one safe command through Helm, inspect the operational state it leaves behind, and confirm where later tasks will be audited.
 
-## 5-minute path
+## Quickstart Path
 
 ```bash
-helm init --path ~/.helm/workspace
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
 helm doctor --path ~/.helm/workspace
 helm profile --path ~/.helm/workspace run inspect_local --task-name "first Helm inspection" -- git status --short
 helm status --path ~/.helm/workspace --brief
@@ -18,7 +18,7 @@ helm report --path ~/.helm/workspace --format markdown
 
 ## What happened
 
-- `helm init` created a dedicated workspace and policy files.
+- `install.sh` installed Helm and created the default dedicated workspace with policy files.
 - `helm doctor` checked whether the workspace is structurally usable.
 - `inspect_local` ran a read-oriented command under a declared execution profile.
 - `helm status --brief` summarized whether the workspace needs attention.

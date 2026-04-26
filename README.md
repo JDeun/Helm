@@ -45,17 +45,17 @@ If you only need a one-off chatbot demo, Helm is probably unnecessary.
 
 ## Quickstart
 
-Run one safe command through Helm and inspect the state it records:
+Install Helm, create the default workspace, and run one safe profiled command:
 
 ```bash
-helm init --path ~/.helm/workspace
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
 helm doctor --path ~/.helm/workspace
 helm profile --path ~/.helm/workspace run inspect_local --task-name "first Helm inspection" -- git status --short
 helm status --path ~/.helm/workspace --brief
 helm dashboard --path ~/.helm/workspace
 ```
 
-This creates a workspace, checks it, runs one read-only profiled command, and shows the audit state Helm captured. For the longer walkthrough, see [`docs/first-run.md`](docs/first-run.md).
+The installer installs Helm and initializes `~/.helm/workspace` by default. The remaining commands check the workspace, run one read-only profiled command, and show the audit state Helm captured. If `helm` is not found after installation, use the PATH line printed by the installer. For the longer walkthrough, see [`docs/first-run.md`](docs/first-run.md).
 
 ## Who it is for
 
@@ -64,7 +64,7 @@ This creates a workspace, checks it, runs one read-only profiled command, and sh
 - Teams prototyping internal self-hosted agent operations
 - Builders who want memory and policy as files rather than prompt folklore
 
-Helm is designed first for persistent agent workspaces with state, memory, profiles, checkpoints, and task history. It can wrap one-off coding tools at the command level, but that is not the core product promise.
+Helm is designed first for persistent agent workspaces with state, memory, profiles, checkpoints, and task history. It can wrap one-off command-line tools at the command level, but that is not the core product promise.
 
 ## Helm is not
 
@@ -121,7 +121,7 @@ Helm is runtime-agnostic in principle, but it is easiest to adopt when you alrea
 
 ## Example Scenario
 
-A coding agent is asked to refactor a router in a long-lived workspace.
+An OpenClaw/Hermes-style agent is asked to refactor a router in a long-lived workspace.
 
 Without Helm, the agent may act on partial context, edit too quickly, and leave weak rollback visibility.
 With Helm, the runtime is governed through explicit files, execution profiles, checkpoints, audit traces, and visible finalization decisions.
@@ -152,23 +152,21 @@ Typical flow:
 - provider-agnostic LLM discovery (API and local, no secrets stored)
 - SQLite query index over operational JSONL
 
-## Install And Onboard
+## Custom Install And Adoption
 
-Install Helm:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
-```
-
-Create a workspace and run the first operational check:
+Use a custom workspace path when you do not want the default `~/.helm/workspace`:
 
 ```bash
-helm init --path ~/.helm/workspace
-helm doctor --path ~/.helm/workspace
-helm status --path ~/.helm/workspace --brief
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --workspace ~/work/helm
 ```
 
-Connect existing systems when ready:
+Install without initializing a workspace:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --skip-init
+```
+
+Connect existing systems when you are ready to adopt external context sources:
 
 ```bash
 helm survey --path ~/.helm/workspace
@@ -187,10 +185,9 @@ The default model is:
 - keep profiles, notes, policies, and skill rules as explicit files
 - adopt existing OpenClaw, Hermes, and note vaults instead of mutating them
 
-Recommended first-run flow:
+Recommended adoption flow after Quickstart:
 
 ```bash
-helm init --path ~/.helm/workspace
 helm survey --path ~/.helm/workspace
 helm onboard --path ~/.helm/workspace --use-detected --dry-run
 helm onboard --path ~/.helm/workspace --use-detected
