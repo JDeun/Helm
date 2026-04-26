@@ -11,6 +11,8 @@ Use `scripts/ops_memory_query.py` when you need one query surface across:
 
 The ontology already stores durable entities and relations, but operational state also lives in task, command, and checkpoint records. This query tool closes that gap by returning all of them in one normalized result stream.
 
+For routing policy and when to run these queries, see [Router Context Hydration](./router-context-hydration.md).
+
 ## Examples
 
 Recent cross-layer context:

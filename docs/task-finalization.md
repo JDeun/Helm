@@ -32,14 +32,7 @@ Helm uses these durable targets as planning vocabulary:
 
 Helm does not assume every workspace uses every layer. The point is to make the decision explicit and inspectable.
 
-For richer workspaces, the stronger ladder is:
-
-1. working context
-2. episodic or crystallized session record
-3. semantic memory
-4. procedural rule
-
-Finalization is where Helm decides whether the run should stay at layer 2 or move further.
+For the full runtime-neutral ladder and promotion policy, see [Memory Operations Policy](./memory-operations-policy.md). This document only defines where the finalization decision happens.
 
 ## Support Artifacts Versus Breakage
 
@@ -76,12 +69,7 @@ The current implementation adds planning and observability:
 
 Actual mutation of workspace-specific memory files stays intentionally separate because each runtime has different write rules.
 
-Even when mutation stays runtime-specific, Helm should still make these decisions inspectable:
-
-- whether the run produced a crystallized session digest
-- whether the resulting claim is high, medium, or low confidence
-- whether the run appears to supersede older task state
-- whether contradiction or scope review should block automatic promotion
+Even when mutation stays runtime-specific, Helm should still make the finalization decision inspectable. Confidence, recency, supersession, scope, and review flags are defined in [Memory Operations Policy](./memory-operations-policy.md).
 
 ## Operator Commands
 
@@ -98,10 +86,4 @@ The second expansion adds direct inspection commands so operators do not need to
 
 ## Audit And Maintenance Direction
 
-Helm's direction is audit-first:
-
-- ingest, promotion, overwrite, supersession, deletion, and rollback should all stay inspectable
-- maintenance loops should distinguish automatic repair from human-review-required changes
-- stale or low-confidence state should be visible without forcing destructive automatic cleanup
-
-See [Memory Operations Policy](./memory-operations-policy.md) for the runtime-neutral contract Helm should apply across runtimes.
+Helm's direction is audit-first: finalization should expose what durable state may need follow-up, while [Memory Operations Policy](./memory-operations-policy.md) defines how later ingest, promotion, overwrite, supersession, deletion, rollback, and review should be governed.

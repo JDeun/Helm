@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- **docs**: reduced internal duplication across onboarding, integration, context hydration, finalization, and knowledge-contract docs
+- **README**: wrapped the custom installer command so GitHub rendering does not clip the workspace flag
+
 ## [0.6.5] — 2026-04-26
 
 ### Added

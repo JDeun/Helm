@@ -44,7 +44,8 @@ The installer installs Helm and creates `~/.helm/workspace`. If `helm` is not fo
 Need a different workspace?
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --workspace ~/work/helm
+curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh \
+  | bash -s -- --workspace ~/work/helm
 ```
 
 ## Why Helm

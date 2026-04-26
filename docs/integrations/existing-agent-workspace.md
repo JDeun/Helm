@@ -6,8 +6,9 @@ Helm should usually stay in its own workspace and adopt the existing agent works
 
 ## Setup
 
+Create the Helm workspace with the README Quickstart, then verify it:
+
 ```bash
-helm init --path ~/.helm/workspace
 helm doctor --path ~/.helm/workspace
 ```
 

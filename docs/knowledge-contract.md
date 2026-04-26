@@ -55,12 +55,7 @@ Good knowledge contracts answer:
 - what counts as a failure pattern worth preserving
 - what conditions justify promoting a workflow into a reusable skill
 
-They should also answer:
-
-- how confidence and recency are represented when a claim is promoted
-- how newer state supersedes older state without destroying auditability
-- when a session needs crystallization before semantic promotion
-- which scope boundary applies to the knowledge being promoted
+The detailed policy for metadata such as confidence, recency, supersession, crystallization, review, and scope lives in [Memory Operations Policy](./memory-operations-policy.md). This document only defines when knowledge is durable enough to promote.
 
 ## Anti-patterns
 
@@ -78,16 +73,7 @@ In Helm terms:
 - finalization decides whether durable capture is required
 - skill quality review decides when workflow knowledge is strong enough to promote
 
-That means knowledge contract should be treated as a first-class runtime policy.
-
-The runtime should be able to explain, in files:
-
-- what metadata makes a claim inspectable enough to keep
-- what promotion ladder is allowed
-- what review flags block automatic promotion
-- what supersession model prevents stale state from acting like current truth
-
-See [Memory Operations Policy](./memory-operations-policy.md) for the runtime-neutral operating model behind those decisions.
+That means the knowledge contract is the promotion boundary between "this happened once" and "this should influence future runs."
 
 The goal is not more memory by default.
 The goal is memory, artifacts, and rules that remain coherent when the runtime changes.

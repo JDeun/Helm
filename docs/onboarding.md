@@ -2,10 +2,9 @@
 
 Helm should normally start as its own workspace, then adopt existing runtimes and note stores explicitly.
 
-The intended sequence is:
+After the README Quickstart or `install.sh` has created `~/.helm/workspace`, the intended adoption sequence is:
 
 ```bash
-helm init --path ~/.helm/workspace
 helm survey --path ~/.helm/workspace
 helm onboard --path ~/.helm/workspace --use-detected --dry-run
 helm onboard --path ~/.helm/workspace --use-detected

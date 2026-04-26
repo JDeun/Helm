@@ -11,8 +11,9 @@ The recommended relationship is:
 
 ## Adopt an OpenClaw workspace
 
+After creating the Helm workspace with the README Quickstart:
+
 ```bash
-helm init --path ~/.helm/workspace
 helm adopt --path ~/.helm/workspace --from-path ~/.openclaw/workspace --name openclaw-main
 helm sources --path ~/.helm/workspace
 helm context --path ~/.helm/workspace --adapter openclaw-main --include notes tasks commands --limit 8
