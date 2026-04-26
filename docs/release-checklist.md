@@ -1,12 +1,11 @@
-# Helm 0.5.12 Release Checklist
+# Helm Release Checklist
 
-Use this checklist before cutting the `0.5.12` release.
+Use this checklist before cutting a Helm release.
 
 ## Version and metadata
 
-- confirm `pyproject.toml` version is `0.5.12`
-- confirm `setup.py` version is `0.5.12`
-- confirm `CHANGELOG.md` includes `0.5.12`
+- confirm `pyproject.toml` and `setup.py` have the intended version
+- confirm `CHANGELOG.md` includes the intended version or an accurate Unreleased section
 - confirm README asset links and docs links render correctly
 
 ## Packaging
@@ -30,7 +29,10 @@ Use this checklist before cutting the `0.5.12` release.
 - `helm doctor --path /tmp/helm-release-smoke`
 - `helm validate --path /tmp/helm-release-smoke`
 - `helm status --path /tmp/helm-release-smoke --verbose`
+- `helm status --path /tmp/helm-release-smoke --brief`
+- `helm dashboard --path /tmp/helm-release-smoke`
 - confirm memory operation counts and review queue counts are visible in status output when state exists
+- `helm report --path /tmp/helm-release-smoke --format html`
 - `helm ops --path /tmp/helm-release-smoke capture-state`
 - `HELM_WORKSPACE=examples/demo-workspace python3 scripts/run_with_profile.py validate-manifests --json`
 - `HELM_WORKSPACE=examples/demo-workspace python3 scripts/run_with_profile.py audit-manifest-quality --json`
@@ -51,11 +53,13 @@ Use this checklist before cutting the `0.5.12` release.
 - `helm ops --path examples/demo-workspace capture-state --limit 10`
 - `helm checkpoint --path examples/demo-workspace finalize`
 - `helm checkpoint-recommend --path examples/demo-workspace`
+- `helm dashboard --path examples/demo-workspace`
 - `helm report --path examples/demo-workspace --format markdown`
+- `helm report --path examples/demo-workspace --format html`
 
 ## Release outputs
 
-- create git tag: `v0.5.12`
-- draft GitHub release notes from `docs/releases/0.5.12.md`
+- create git tag: `v<version>`
+- draft GitHub release notes from `docs/releases/<version>.md`
 - attach screenshots or README visuals if needed
 - publish source release after the checklist passes

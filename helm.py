@@ -35,6 +35,7 @@ from commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_ski
 from commands.status import (
     build_status_payload,
     cmd_capability_diff,
+    cmd_dashboard,
     cmd_detect,
     cmd_init,
     cmd_report,
@@ -130,7 +131,13 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     status.add_argument("--json", action="store_true")
     status.add_argument("--verbose", action="store_true")
+    status.add_argument("--brief", action="store_true", help="Print a compact health-oriented status summary.")
     status.set_defaults(func=cmd_status)
+
+    dashboard = subparsers.add_parser("dashboard", help="Show a compact local operations dashboard.")
+    dashboard.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    dashboard.add_argument("--json", action="store_true")
+    dashboard.set_defaults(func=cmd_dashboard)
 
     run_contract = subparsers.add_parser("run-contract", help="Show the latest run contract snapshot or one task's execution contract.")
     run_contract.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
@@ -281,7 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
     report = subparsers.add_parser("report", help="Produce a high-level Helm operations report.")
     report.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     report.add_argument("--limit", type=int, default=20)
-    report.add_argument("--format", choices=["text", "json", "markdown"], default="text")
+    report.add_argument("--format", choices=["text", "json", "markdown", "html"], default="text")
     report.set_defaults(func=cmd_report)
 
     db = subparsers.add_parser("db", help="Manage the SQLite operations index.")

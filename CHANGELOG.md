@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- **docs**: added first-run, demo, integration, comparison, and profile-template guidance for external adopters
+- **examples**: added integration wrapper scripts for Codex-style preflight and risky refactor verification flows
+- **status/report**: added `helm status --brief`, `helm dashboard`, and `helm report --format html` for faster operational visibility
+
 ## [0.6.4] — 2026-04-26
 
 ### Fixed

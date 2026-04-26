@@ -127,6 +127,56 @@ def test_status_surfaces_memory_operation_and_crystallized_counts() -> None:
         assert "memory_review_queue_count=1" in result.stdout
 
 
+def test_status_brief_surfaces_health_and_next_action() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        (root / ".helm" / "task-ledger.jsonl").write_text(
+            json.dumps(
+                {
+                    "task_id": "task-review",
+                    "task_name": "blocked write",
+                    "status": "blocked",
+                    "profile": "inspect_local",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli("status", "--path", str(root), "--brief")
+
+        assert result.returncode == 0, result.stderr
+        assert "health=attention" in result.stdout
+        assert "layout=helm" in result.stdout
+        assert "tasks=" in result.stdout
+
+
+def test_report_html_outputs_html_document() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+
+        result = run_cli("report", "--path", str(root), "--format", "html")
+
+        assert result.returncode == 0, result.stderr
+        assert "<!doctype html>" in result.stdout
+        assert "<h1>Helm Report</h1>" in result.stdout
+
+
+def test_dashboard_outputs_compact_sections() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+
+        result = run_cli("dashboard", "--path", str(root))
+
+        assert result.returncode == 0, result.stderr
+        assert "Helm Dashboard" in result.stdout
+        assert "Recent tasks" in result.stdout
+        assert "Next actions" in result.stdout
+
+
 def test_status_uses_openclaw_state_root_when_layout_is_openclaw() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)

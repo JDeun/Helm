@@ -35,6 +35,45 @@
   <a href="#docs-and-demo">Docs and Demo</a>
 </p>
 
+## 30-second version
+
+Helm is not another agent framework. It is the operational layer around agents you already run: profiles before commands, audit trails after commands, checkpoints before risky edits, and file-backed memory so future runs do not depend on chat history.
+
+Use Helm if you already run Codex, Claude Code, OpenClaw, OpenHands-style runtimes, or your own local agent scripts and want repeated work to become safer, traceable, and recoverable.
+
+If you only need a one-off chatbot demo, Helm is probably unnecessary.
+
+## Who it is for
+
+- Developers running local or self-hosted agents against real projects
+- Power users with long-lived personal-agent workspaces
+- Teams prototyping internal agents that need visible boundaries and rollback discipline
+- Builders who want memory and policy as files rather than prompt folklore
+
+If you use Codex, Claude Code, OpenClaw, or OpenHands-style runtimes, Helm gives you the operations layer those runtimes usually leave to convention.
+
+## 5-minute first run
+
+```bash
+helm init --path ~/.helm/workspace
+helm doctor --path ~/.helm/workspace
+helm profile --path ~/.helm/workspace run inspect_local --task-name "first Helm inspection" -- git status --short
+helm status --path ~/.helm/workspace --brief
+helm report --path ~/.helm/workspace --format markdown
+```
+
+This creates a workspace, checks it, runs one read-only profiled command, and shows the audit state Helm captured. For the longer version, see [`docs/first-run.md`](docs/first-run.md).
+
+## Helm is not
+
+- an agent runtime
+- a model provider
+- a hosted tracing platform
+- an eval benchmark framework
+- a replacement for your existing coding agent
+
+Helm wraps repeated agent operations so existing runtimes become easier to inspect, recover, and continue.
+
 ## Why Helm
 
 Most agent stacks can already call tools. The harder problem starts when you keep using the same agent and expect it to behave like a system.
@@ -113,24 +152,26 @@ Typical flow:
 
 ## Quick Start
 
-Install Helm and create a workspace:
+Install Helm:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
-helm init --path ~/.helm/workspace
 ```
 
-Survey existing systems and apply onboarding:
+Create a workspace and run the first operational check:
+
+```bash
+helm init --path ~/.helm/workspace
+helm doctor --path ~/.helm/workspace
+helm status --path ~/.helm/workspace --brief
+```
+
+Connect existing systems when ready:
 
 ```bash
 helm survey --path ~/.helm/workspace
+helm onboard --path ~/.helm/workspace --use-detected --dry-run
 helm onboard --path ~/.helm/workspace --use-detected
-```
-
-Use a custom workspace if needed:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --workspace ~/work/helm
 ```
 
 ## Onboarding and Workspace Model
@@ -421,6 +462,7 @@ Operator visibility helpers:
 
 - `helm run-contract --path <workspace> --json` prints the latest run contract snapshot
 - `helm capability-diff --path <workspace> --json` compares recent execution capabilities across runs
+- `helm dashboard --path <workspace>` shows a compact local operations dashboard
 
 ## File-Native Context Hydration
 
@@ -468,6 +510,17 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 ## Docs and Demo
 
 - [`docs/onboarding.md`](docs/onboarding.md)
+- [`docs/first-run.md`](docs/first-run.md)
+- [`docs/demos.md`](docs/demos.md)
+- [`docs/profile-templates.md`](docs/profile-templates.md)
+- [`docs/integrations/codex.md`](docs/integrations/codex.md)
+- [`docs/integrations/claude-code.md`](docs/integrations/claude-code.md)
+- [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
+- [`docs/integrations/openhands.md`](docs/integrations/openhands.md)
+- [`docs/integrations/existing-project.md`](docs/integrations/existing-project.md)
+- [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
+- [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
+- [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
 - [`docs/releases/0.6.4.md`](docs/releases/0.6.4.md)
 - [`docs/releases/0.6.3.md`](docs/releases/0.6.3.md)
@@ -493,6 +546,7 @@ helm memory --path examples/demo-workspace review-queue --limit 5
 helm memory --path examples/demo-workspace audit-coherence --json
 helm memory --path examples/demo-workspace capture-chat --task-name "demo memory capture" --path README.md
 helm health --path examples/demo-workspace state --json
+helm dashboard --path examples/demo-workspace
 helm ops --path examples/demo-workspace capture-state --limit 10
 helm report --path examples/demo-workspace --format markdown
 ```

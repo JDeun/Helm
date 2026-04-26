@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import shutil
 from collections import Counter
@@ -185,6 +186,129 @@ def format_report_markdown(payload: dict) -> str:
     return "\n".join(lines)
 
 
+def format_report_html(payload: dict) -> str:
+    markdown = format_report_markdown(payload)
+    body_lines: list[str] = []
+    in_list = False
+    for line in markdown.splitlines():
+        if line.startswith("# "):
+            if in_list:
+                body_lines.append("</ul>")
+                in_list = False
+            body_lines.append(f"<h1>{html.escape(line[2:])}</h1>")
+        elif line.startswith("## "):
+            if in_list:
+                body_lines.append("</ul>")
+                in_list = False
+            body_lines.append(f"<h2>{html.escape(line[3:])}</h2>")
+        elif line.startswith("- "):
+            if not in_list:
+                body_lines.append("<ul>")
+                in_list = True
+            body_lines.append(f"<li>{html.escape(line[2:])}</li>")
+        elif not line.strip():
+            if in_list:
+                body_lines.append("</ul>")
+                in_list = False
+        else:
+            body_lines.append(f"<p>{html.escape(line)}</p>")
+    if in_list:
+        body_lines.append("</ul>")
+    return "\n".join(
+        [
+            "<!doctype html>",
+            "<html lang=\"en\">",
+            "<head>",
+            "<meta charset=\"utf-8\">",
+            "<title>Helm Report</title>",
+            "<style>",
+            "body{font-family:ui-sans-serif,system-ui,sans-serif;max-width:920px;margin:40px auto;padding:0 20px;line-height:1.55;color:#0f172a;background:#f8fafc}",
+            "h1,h2{line-height:1.2}code{background:#e2e8f0;padding:0.1rem 0.25rem;border-radius:0.25rem}li{margin:0.3rem 0}",
+            "</style>",
+            "</head>",
+            "<body>",
+            *body_lines,
+            "</body>",
+            "</html>",
+        ]
+    )
+
+
+def format_status_brief(payload: dict, onboarding: dict) -> str:
+    failed = payload["task_status_counts"].get("failed", 0)
+    blocked = payload["task_status_counts"].get("blocked", 0)
+    running = payload["task_status_counts"].get("running", 0)
+    risk_count = failed + blocked + running + len(payload["recent_failed_commands"])
+    health = "attention" if risk_count or payload["memory_review_queue_count"] else "ok"
+    lines = [
+        f"health={health}",
+        f"workspace={payload['workspace']}",
+        f"layout={payload['layout']}",
+        "tasks=" + json.dumps(payload["task_status_counts"], ensure_ascii=False, sort_keys=True),
+        f"failed_commands={len(payload['recent_failed_commands'])}",
+        f"checkpoints={len(payload['recent_checkpoints'])}",
+        f"memory_review_queue={payload['memory_review_queue_count']}",
+        f"onboarding_actions={len(onboarding['actions'])}",
+    ]
+    if payload["recent_failed_commands"]:
+        command = payload["recent_failed_commands"][-1]
+        lines.append(
+            "latest_failed_command="
+            f"task={command.get('task_id')} exit={command.get('exit_code')} label={command.get('label')}"
+        )
+    if payload["recent_checkpoints"]:
+        checkpoint = payload["recent_checkpoints"][-1]
+        lines.append(
+            "latest_checkpoint="
+            f"{checkpoint.get('checkpoint_id')} label={checkpoint.get('label')}"
+        )
+    if payload["memory_review_queue_count"]:
+        lines.append(f"next=helm memory review-queue --path {payload['workspace']}")
+    elif onboarding["actions"]:
+        lines.append(f"next={onboarding['actions'][0]}")
+    return "\n".join(lines)
+
+
+def format_dashboard_text(payload: dict, onboarding: dict) -> str:
+    lines = [
+        "Helm Dashboard",
+        f"workspace: {payload['workspace']}",
+        f"layout: {payload['layout']}",
+        "",
+        "Status",
+        "  tasks: " + json.dumps(payload["task_status_counts"], ensure_ascii=False, sort_keys=True),
+        "  finalization: " + json.dumps(payload["finalization_counts"], ensure_ascii=False, sort_keys=True),
+        f"  failed commands: {len(payload['recent_failed_commands'])}",
+        f"  memory review queue: {payload['memory_review_queue_count']}",
+        "",
+        "Recent tasks",
+    ]
+    if payload["recent_tasks"]:
+        for task in payload["recent_tasks"][-5:]:
+            lines.append(
+                f"  - {task.get('task_id')} [{task.get('status')}] "
+                f"{task.get('task_name') or '-'} profile={task.get('profile') or '-'}"
+            )
+    else:
+        lines.append("  - none")
+    lines.append("")
+    lines.append("Recent checkpoints")
+    if payload["recent_checkpoints"]:
+        for checkpoint in payload["recent_checkpoints"][-5:]:
+            lines.append(f"  - {checkpoint.get('checkpoint_id')} {checkpoint.get('label') or '-'}")
+    else:
+        lines.append("  - none")
+    lines.append("")
+    lines.append("Next actions")
+    if payload["memory_review_queue_count"]:
+        lines.append(f"  - helm memory review-queue --path {payload['workspace']}")
+    for action in onboarding["actions"][:5]:
+        lines.append(f"  - {action}")
+    if not payload["memory_review_queue_count"] and not onboarding["actions"]:
+        lines.append("  - none")
+    return "\n".join(lines)
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     root = target_root(args.path or str(DEFAULT_WORKSPACE), create=True)
     references_dir = root / "references"
@@ -281,6 +405,9 @@ def cmd_status(args: argparse.Namespace) -> int:
         payload["onboarding"] = onboarding
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
+    if getattr(args, "brief", False):
+        print(format_status_brief(payload, onboarding))
+        return 0
     print(f"workspace={payload['workspace']}")
     print(f"layout={payload['layout']}")
     print(f"state_dir={payload['state_dir']}")
@@ -342,6 +469,18 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    root = target_root(args.path)
+    payload = build_status_payload(root)
+    onboarding = build_onboarding_payload(root)
+    if args.json:
+        payload["onboarding"] = onboarding
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    print(format_dashboard_text(payload, onboarding))
+    return 0
+
+
 def cmd_run_contract(args: argparse.Namespace) -> int:
     root = target_root(args.path)
     payload = build_run_contract_payload(root, task_id=args.task_id)
@@ -378,6 +517,9 @@ def cmd_report(args: argparse.Namespace) -> int:
         return 0
     if args.format == "markdown":
         print(format_report_markdown(payload))
+        return 0
+    if args.format == "html":
+        print(format_report_html(payload))
         return 0
     print(f"workspace={payload['workspace']}")
     print(f"tasks_in_window={payload['period_task_count']}")

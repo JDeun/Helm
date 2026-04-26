@@ -35,6 +35,45 @@
   <a href="#문서와-데모">문서와 데모</a>
 </p>
 
+## 30초 요약
+
+Helm은 또 하나의 agent framework가 아닙니다. 이미 쓰고 있는 에이전트 주변에 붙는 운영 레이어입니다. 명령 전에는 profile과 guard를 적용하고, 명령 후에는 audit trail을 남기며, risky edit 전에는 checkpoint를 만들고, 다음 실행은 chat 기억이 아니라 file-backed memory에서 이어가게 합니다.
+
+Codex, Claude Code, OpenClaw, OpenHands 스타일 런타임, 또는 직접 만든 로컬 agent script를 반복해서 사용한다면 Helm은 그 반복 작업을 더 안전하고 추적 가능하며 복구 가능하게 만듭니다.
+
+단순한 일회성 챗봇 데모만 필요하다면 Helm은 과할 수 있습니다.
+
+## 누구를 위한 도구인가
+
+- 실제 프로젝트에 로컬/셀프호스팅 에이전트를 돌리는 개발자
+- 장기 운영 개인 에이전트 workspace를 가진 파워유저
+- 내부 agent workflow에 명시적 경계와 rollback discipline이 필요한 팀
+- memory와 policy를 프롬프트 관습이 아니라 파일로 관리하고 싶은 builder
+
+Codex, Claude Code, OpenClaw, OpenHands 스타일 런타임을 쓴다면 Helm은 보통 그 런타임이 관습으로 남겨두는 운영 레이어를 제공합니다.
+
+## 5분 첫 실행
+
+```bash
+helm init --path ~/.helm/workspace
+helm doctor --path ~/.helm/workspace
+helm profile --path ~/.helm/workspace run inspect_local --task-name "first Helm inspection" -- git status --short
+helm status --path ~/.helm/workspace --brief
+helm report --path ~/.helm/workspace --format markdown
+```
+
+이 흐름은 workspace를 만들고, 상태를 점검하고, read-only profile 명령을 한 번 실행한 뒤 Helm이 남긴 audit state를 보여줍니다. 더 자세한 설명은 [`docs/first-run.md`](docs/first-run.md)를 보세요.
+
+## Helm이 아닌 것
+
+- agent runtime
+- model provider
+- hosted tracing platform
+- eval benchmark framework
+- 기존 coding agent의 대체재
+
+Helm은 기존 runtime을 감싸 반복 작업을 더 쉽게 검토, 복구, 지속할 수 있게 만드는 레이어입니다.
+
 ## 왜 Helm인가
 
 대부분의 에이전트 스택은 이미 툴 호출은 할 수 있습니다. 진짜 어려운 문제는 같은 에이전트를 계속 굴렸을 때 그것이 하나의 시스템처럼 동작하길 기대하는 순간부터 시작됩니다.
@@ -113,24 +152,26 @@ Helm이 있으면 explicit files, execution profiles, checkpoints, audit traces,
 
 ## Quick Start
 
-Helm을 설치하고 workspace를 만듭니다.
+Helm을 설치합니다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
-helm init --path ~/.helm/workspace
 ```
 
-그 다음 기존 시스템을 survey하고 onboarding을 적용합니다.
+workspace를 만들고 첫 운영 점검을 실행합니다.
+
+```bash
+helm init --path ~/.helm/workspace
+helm doctor --path ~/.helm/workspace
+helm status --path ~/.helm/workspace --brief
+```
+
+준비가 되면 기존 시스템을 연결합니다.
 
 ```bash
 helm survey --path ~/.helm/workspace
+helm onboard --path ~/.helm/workspace --use-detected --dry-run
 helm onboard --path ~/.helm/workspace --use-detected
-```
-
-workspace 경로를 바로 지정하려면:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- --workspace ~/work/helm
 ```
 
 ## 온보딩과 Workspace 모델
@@ -415,6 +456,7 @@ Helm이 계속 대답할 수 있어야 하는 질문은 이런 것들입니다.
 
 - `helm run-contract --path <workspace> --json` 으로 최신 실행 계약 스냅샷 확인
 - `helm capability-diff --path <workspace> --json` 으로 최근 실행 간 capability 차이 확인
+- `helm dashboard --path <workspace>` 로 compact local operations dashboard 확인
 
 ## File-Native Context Hydration
 
@@ -461,6 +503,17 @@ python3 -m pip install --user --no-build-isolation .
 ## 문서와 데모
 
 - [`docs/onboarding.md`](docs/onboarding.md)
+- [`docs/first-run.md`](docs/first-run.md)
+- [`docs/demos.md`](docs/demos.md)
+- [`docs/profile-templates.md`](docs/profile-templates.md)
+- [`docs/integrations/codex.md`](docs/integrations/codex.md)
+- [`docs/integrations/claude-code.md`](docs/integrations/claude-code.md)
+- [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
+- [`docs/integrations/openhands.md`](docs/integrations/openhands.md)
+- [`docs/integrations/existing-project.md`](docs/integrations/existing-project.md)
+- [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
+- [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
+- [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
 - [`docs/release-checklist.md`](docs/release-checklist.md)
 - [`docs/releases/0.6.4.md`](docs/releases/0.6.4.md)
 - [`docs/releases/0.6.3.md`](docs/releases/0.6.3.md)
@@ -486,6 +539,7 @@ helm memory --path examples/demo-workspace review-queue --limit 5
 helm memory --path examples/demo-workspace audit-coherence --json
 helm memory --path examples/demo-workspace capture-chat --task-name "demo memory capture" --path README.md
 helm health --path examples/demo-workspace state --json
+helm dashboard --path examples/demo-workspace
 helm ops --path examples/demo-workspace capture-state --limit 10
 helm report --path examples/demo-workspace --format markdown
 ```
