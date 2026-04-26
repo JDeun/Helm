@@ -74,6 +74,8 @@ If you only need a one-off chatbot demo, Helm is probably unnecessary.
 
 Helm is runtime-agnostic, but it is designed first for persistent agent workspaces with state, memory, profiles, checkpoints, and task history.
 
+![Helm explainer cartoon](assets/helm-explainer-cartoon-ko.png)
+
 ## Workflows
 
 Inspect the workspace:

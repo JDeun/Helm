@@ -74,6 +74,8 @@ OpenClaw/Hermes 스타일 장기 실행 에이전트 workspace나 유사한 self
 
 Helm은 원칙적으로 runtime-agnostic이지만, state, memory, profiles, checkpoints, task history가 있는 persistent agent workspace를 1차 대상으로 설계되었습니다.
 
+![Helm 설명 카툰](assets/helm-explainer-cartoon-ko.png)
+
 ## 워크플로우
 
 workspace 점검:
