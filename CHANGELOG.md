@@ -6,13 +6,12 @@
 
 ### Added
 
-- **docs**: added first-run, demo, integration, comparison, and profile-template guidance for external adopters
-- **examples**: added integration wrapper scripts for Codex-style preflight and risky refactor verification flows
+- **docs**: added first-run, demo, OpenClaw/Hermes-style integration, comparison, and profile-template guidance for external adopters
 - **status/report**: added `helm status --brief`, `helm dashboard`, and `helm report --format html` for faster operational visibility
 
 ### Changed
 
-- **README**: replaced the overlapping first-run/quick-start copy with a shorter Quickstart and moved install/adoption details into a separate onboarding section
+- **README**: replaced the overlapping first-run/quick-start copy with a shorter Quickstart, clarified the OpenClaw/Hermes-style target, and moved install/adoption details into a separate onboarding section
 
 ### Validation
 

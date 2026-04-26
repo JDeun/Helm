@@ -1,6 +1,6 @@
-# OpenHands-style Runtime Integration
+# OpenHands-style Long-lived Runtime Integration
 
-For OpenHands or similar local agent runtimes, use Helm as an outer operations wrapper rather than replacing the runtime.
+For OpenHands-style local agent services that keep workspace state across runs, use Helm as an operations layer around that service. Helm is most useful when the runtime has durable task state, project state, or repeatable workflows. It is less compelling for one-off interactive coding sessions.
 
 ## Basic wrapper pattern
 
@@ -10,7 +10,7 @@ helm profile --path ~/.helm/workspace run workspace_edit \
   -- ./run-openhands-task.sh
 ```
 
-The wrapper script can start the runtime, pass a task prompt, or run the verification command that follows the runtime's edits.
+The wrapper script can start the local runtime service, pass a task prompt, or run the verification command that follows the runtime's edits.
 
 ## Recommended boundaries
 

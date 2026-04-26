@@ -39,7 +39,7 @@
 
 Helm is not another agent framework. It is the operational layer around agents you already run: profiles before commands, audit trails after commands, checkpoints before risky edits, and file-backed memory so future runs do not depend on chat history.
 
-Use Helm if you already run Codex, Claude Code, OpenClaw, OpenHands-style runtimes, or your own local agent scripts and want repeated work to become safer, traceable, and recoverable.
+Use Helm if you already run an OpenClaw/Hermes-style long-lived agent workspace, or a similar self-hosted agent service, and want repeated work to become safer, traceable, and recoverable.
 
 If you only need a one-off chatbot demo, Helm is probably unnecessary.
 
@@ -59,12 +59,12 @@ This creates a workspace, checks it, runs one read-only profiled command, and sh
 
 ## Who it is for
 
-- Developers running local or self-hosted agents against real projects
-- Power users with long-lived personal-agent workspaces
-- Teams prototyping internal agents that need visible boundaries and rollback discipline
+- Developers running OpenClaw/Hermes-style local agent workspaces
+- Power users with long-lived personal-agent services
+- Teams prototyping internal self-hosted agent operations
 - Builders who want memory and policy as files rather than prompt folklore
 
-If you use Codex, Claude Code, OpenClaw, or OpenHands-style runtimes, Helm gives you the operations layer those runtimes usually leave to convention.
+Helm is designed first for persistent agent workspaces with state, memory, profiles, checkpoints, and task history. It can wrap one-off coding tools at the command level, but that is not the core product promise.
 
 ## Helm is not
 
@@ -72,7 +72,7 @@ If you use Codex, Claude Code, OpenClaw, or OpenHands-style runtimes, Helm gives
 - a model provider
 - a hosted tracing platform
 - an eval benchmark framework
-- a replacement for your existing coding agent
+- a replacement for OpenClaw, Hermes, or another agent service
 
 Helm wraps repeated agent operations so existing runtimes become easier to inspect, recover, and continue.
 
@@ -515,11 +515,9 @@ If `helm` is not on your `PATH`, the installer prints the user-level bin directo
 - [`docs/first-run.md`](docs/first-run.md)
 - [`docs/demos.md`](docs/demos.md)
 - [`docs/profile-templates.md`](docs/profile-templates.md)
-- [`docs/integrations/codex.md`](docs/integrations/codex.md)
-- [`docs/integrations/claude-code.md`](docs/integrations/claude-code.md)
 - [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
 - [`docs/integrations/openhands.md`](docs/integrations/openhands.md)
-- [`docs/integrations/existing-project.md`](docs/integrations/existing-project.md)
+- [`docs/integrations/existing-agent-workspace.md`](docs/integrations/existing-agent-workspace.md)
 - [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
 - [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
@@ -556,7 +554,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## Current Status
 
-Helm v0.6.5 keeps the v0.6.4 guard hardening and improves adoption docs, runtime integration examples, and local operational visibility with `status --brief`, `dashboard`, and HTML reports.
+Helm v0.6.5 keeps the v0.6.4 guard hardening and improves OpenClaw/Hermes-style adoption docs, long-lived workspace integration examples, and local operational visibility with `status --brief`, `dashboard`, and HTML reports.
 
 ### Core
 

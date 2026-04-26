@@ -39,7 +39,7 @@
 
 Helm은 또 하나의 agent framework가 아닙니다. 이미 쓰고 있는 에이전트 주변에 붙는 운영 레이어입니다. 명령 전에는 profile과 guard를 적용하고, 명령 후에는 audit trail을 남기며, risky edit 전에는 checkpoint를 만들고, 다음 실행은 chat 기억이 아니라 file-backed memory에서 이어가게 합니다.
 
-Codex, Claude Code, OpenClaw, OpenHands 스타일 런타임, 또는 직접 만든 로컬 agent script를 반복해서 사용한다면 Helm은 그 반복 작업을 더 안전하고 추적 가능하며 복구 가능하게 만듭니다.
+OpenClaw/Hermes 스타일의 장기 실행 에이전트 workspace나 유사한 self-hosted agent service를 반복해서 사용한다면 Helm은 그 반복 작업을 더 안전하고 추적 가능하며 복구 가능하게 만듭니다.
 
 단순한 일회성 챗봇 데모만 필요하다면 Helm은 과할 수 있습니다.
 
@@ -59,12 +59,12 @@ helm dashboard --path ~/.helm/workspace
 
 ## 누구를 위한 도구인가
 
-- 실제 프로젝트에 로컬/셀프호스팅 에이전트를 돌리는 개발자
-- 장기 운영 개인 에이전트 workspace를 가진 파워유저
-- 내부 agent workflow에 명시적 경계와 rollback discipline이 필요한 팀
+- OpenClaw/Hermes 스타일 로컬 에이전트 workspace를 운영하는 개발자
+- 장기 운영 개인 에이전트 서비스를 가진 파워유저
+- 내부 self-hosted agent operations를 실험하는 팀
 - memory와 policy를 프롬프트 관습이 아니라 파일로 관리하고 싶은 builder
 
-Codex, Claude Code, OpenClaw, OpenHands 스타일 런타임을 쓴다면 Helm은 보통 그 런타임이 관습으로 남겨두는 운영 레이어를 제공합니다.
+Helm은 state, memory, profiles, checkpoints, task history가 있는 persistent agent workspace를 1차 대상으로 설계되었습니다. 일회성 coding tool을 command level에서 감쌀 수는 있지만, 그것이 핵심 제품 약속은 아닙니다.
 
 ## Helm이 아닌 것
 
@@ -72,7 +72,7 @@ Codex, Claude Code, OpenClaw, OpenHands 스타일 런타임을 쓴다면 Helm은
 - model provider
 - hosted tracing platform
 - eval benchmark framework
-- 기존 coding agent의 대체재
+- OpenClaw, Hermes 또는 다른 agent service의 대체재
 
 Helm은 기존 runtime을 감싸 반복 작업을 더 쉽게 검토, 복구, 지속할 수 있게 만드는 레이어입니다.
 
@@ -508,11 +508,9 @@ python3 -m pip install --user --no-build-isolation .
 - [`docs/first-run.md`](docs/first-run.md)
 - [`docs/demos.md`](docs/demos.md)
 - [`docs/profile-templates.md`](docs/profile-templates.md)
-- [`docs/integrations/codex.md`](docs/integrations/codex.md)
-- [`docs/integrations/claude-code.md`](docs/integrations/claude-code.md)
 - [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
 - [`docs/integrations/openhands.md`](docs/integrations/openhands.md)
-- [`docs/integrations/existing-project.md`](docs/integrations/existing-project.md)
+- [`docs/integrations/existing-agent-workspace.md`](docs/integrations/existing-agent-workspace.md)
 - [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
 - [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
@@ -549,7 +547,7 @@ helm report --path examples/demo-workspace --format markdown
 
 ## 현재 상태
 
-Helm v0.6.5는 v0.6.4의 guard hardening을 유지하면서, adoption 문서, runtime integration 예제, `status --brief`, `dashboard`, HTML report 기반의 로컬 운영 가시성을 보강한 패치 릴리즈입니다.
+Helm v0.6.5는 v0.6.4의 guard hardening을 유지하면서, OpenClaw/Hermes 스타일 adoption 문서, 장기 실행 workspace integration 예제, `status --brief`, `dashboard`, HTML report 기반의 로컬 운영 가시성을 보강한 패치 릴리즈입니다.
 
 ### 코어
 
