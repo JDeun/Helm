@@ -1,0 +1,40 @@
+<svg width="1120" height="720" viewBox="0 0 1120 720" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Helm three-minute demo terminal capture</title>
+  <desc id="desc">A terminal-style capture showing Helm doctor, profiled command execution, checkpoint creation, and dashboard output.</desc>
+  <rect width="1120" height="720" rx="18" fill="#0b1020"/>
+  <rect x="24" y="24" width="1072" height="672" rx="12" fill="#111827" stroke="#334155"/>
+  <rect x="24" y="24" width="1072" height="44" rx="12" fill="#1f2937"/>
+  <circle cx="52" cy="46" r="7" fill="#ef4444"/>
+  <circle cx="76" cy="46" r="7" fill="#f59e0b"/>
+  <circle cx="100" cy="46" r="7" fill="#22c55e"/>
+  <text x="132" y="51" fill="#cbd5e1" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="14">helm demo - local operations layer</text>
+
+  <g font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">
+    <text x="54" y="104" fill="#94a3b8">$</text>
+    <text x="78" y="104" fill="#e5e7eb">helm doctor --path ~/.helm/demo --skip-discovery</text>
+    <text x="78" y="132" fill="#22c55e">healthy=yes</text>
+    <text x="78" y="158" fill="#cbd5e1">layout=helm</text>
+    <text x="78" y="184" fill="#cbd5e1">ok references/execution_profiles.json: present</text>
+    <text x="78" y="210" fill="#cbd5e1">ok .helm/checkpoints: present</text>
+
+    <text x="54" y="258" fill="#94a3b8">$</text>
+    <text x="78" y="258" fill="#e5e7eb">helm profile run inspect_local --task-name "inspect demo workspace" -- ls -la</text>
+    <text x="78" y="286" fill="#cbd5e1">MEMORY.md    docs/    memory/    references/    skills/</text>
+    <text x="78" y="312" fill="#22c55e">task recorded: inspect demo workspace [completed] profile=inspect_local</text>
+
+    <text x="54" y="360" fill="#94a3b8">$</text>
+    <text x="78" y="360" fill="#e5e7eb">helm checkpoint create --path ~/.helm/demo --label before-risky-work --include .helm</text>
+    <text x="78" y="388" fill="#cbd5e1">{</text>
+    <text x="102" y="414" fill="#cbd5e1">"checkpoint_id": "20260427T141258Z-before-risky-work",</text>
+    <text x="102" y="440" fill="#cbd5e1">"archive": ".helm/checkpoints/.../snapshot.tar.gz"</text>
+    <text x="78" y="466" fill="#cbd5e1">}</text>
+
+    <text x="54" y="514" fill="#94a3b8">$</text>
+    <text x="78" y="514" fill="#e5e7eb">helm dashboard --path ~/.helm/demo</text>
+    <text x="78" y="548" fill="#f8fafc">Helm Dashboard</text>
+    <text x="78" y="576" fill="#cbd5e1">tasks: {"completed": 1}</text>
+    <text x="78" y="602" fill="#cbd5e1">failed commands: 0</text>
+    <text x="78" y="628" fill="#cbd5e1">recent task: inspect demo workspace profile=inspect_local</text>
+    <text x="78" y="654" fill="#22c55e">recent checkpoint: before-risky-work</text>
+  </g>
+</svg>

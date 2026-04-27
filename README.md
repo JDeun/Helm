@@ -88,6 +88,8 @@ If the agent only runs one-off demos, Helm is probably unnecessary.
 
 ## Three-Minute Demo
 
+![Helm three-minute demo terminal capture](https://raw.githubusercontent.com/JDeun/Helm/main/assets/helm-three-minute-demo.svg)
+
 ```bash
 helm profile --path ~/.helm/workspace run inspect_local \
   --task-name "inspect current repository" \
