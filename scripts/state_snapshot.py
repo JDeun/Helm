@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from datetime import datetime, timezone
@@ -89,6 +90,7 @@ def build_state_snapshot(task: dict, *, workspace: Path) -> dict:
                     "finalization_status": memory_capture.get("finalization_status"),
                     "recommended_layers": memory_capture.get("recommended_layers", []),
                     "event_types": memory_capture.get("event_types", []),
+                    "touched_paths": memory_capture.get("touched_paths", []),
                 }
             )
         )
@@ -168,3 +170,73 @@ def latest_snapshot_path(state_root: Path) -> Path | None:
         return None
     matches = sorted(path for path in snapshots_root.glob("*.md") if path.is_file())
     return matches[-1] if matches else None
+
+
+def load_latest_tasks(task_ledger: Path) -> list[dict]:
+    if not task_ledger.exists():
+        return []
+    by_task: dict[str, dict] = {}
+    anonymous: list[dict] = []
+    for line in task_ledger.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        task_id = payload.get("task_id")
+        if task_id:
+            by_task[str(task_id)] = payload
+        else:
+            anonymous.append(payload)
+    return [*anonymous, *by_task.values()]
+
+
+def snapshot_payload(
+    task_id: str | None = None,
+    *,
+    workspace: Path,
+    state_root: Path,
+) -> dict:
+    tasks = load_latest_tasks(state_root / "task-ledger.jsonl")
+    target = None
+    if task_id:
+        target = next((task for task in tasks if task.get("task_id") == task_id), None)
+    elif tasks:
+        target = next((task for task in reversed(tasks) if task.get("state_snapshot")), None)
+    meta = (target or {}).get("state_snapshot") or {}
+    path = workspace / meta["path"] if meta.get("path") else latest_snapshot_path(state_root)
+    content = path.read_text(encoding="utf-8") if path and path.exists() else None
+    return {
+        "workspace": str(workspace),
+        "task": target,
+        "snapshot": meta or None,
+        "snapshot_path": str(path) if path else None,
+        "content": content,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Inspect Helm task state snapshots.")
+    parser.add_argument("--workspace", "--path", default=".", help="Workspace root. Defaults to current directory.")
+    parser.add_argument("--state-root", help="State root. Defaults to <workspace>/.helm.")
+    parser.add_argument("--task-id")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    workspace = Path(args.workspace).expanduser().resolve()
+    state_root = Path(args.state_root).expanduser().resolve() if args.state_root else workspace / ".helm"
+    payload = snapshot_payload(args.task_id, workspace=workspace, state_root=state_root)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    if not payload["content"]:
+        print("No state snapshot found.")
+        return 0
+    print(payload["content"], end="" if payload["content"].endswith("\n") else "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

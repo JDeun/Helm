@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "helm-agent-ops"
-version = "0.6.5"
+version = "0.6.6"
 description = "Stability-first operations CLI for long-lived agent workspaces."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,9 +16,13 @@ helm = "helm:main"
 
 [tool.setuptools]
 py-modules = ["helm", "helm_workspace", "helm_context"]
+include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["scripts", "commands"]
+include = ["scripts", "commands", "references"]
+
+[tool.setuptools.package-data]
+references = ["*.json", "*.md"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

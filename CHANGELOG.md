@@ -2,10 +2,30 @@
 
 ## Unreleased
 
+No unreleased changes.
+
+## [0.6.6] — 2026-04-27
+
+### Added
+
+- **docs**: added Helm product definition, module split, and dogfooding-boundary docs to clarify what should be promoted from private OpenClaw-style workspaces into public Helm
+- **state_snapshot**: added a portable snapshot inspection CLI and `snapshot_payload(...)` helper for reading the latest task state snapshot from a Helm workspace
+
 ### Changed
 
+- **packaging**: bundled `references/*.json` and `references/*.md` as package data so installed `helm init` can copy required reference files
 - **docs**: reduced internal duplication across onboarding, integration, context hydration, finalization, and knowledge-contract docs
+- **README**: linked the new positioning docs and updated release/status copy for v0.6.6
 - **README**: wrapped the custom installer command so GitHub rendering does not clip the workspace flag
+- **ops_db**: reused JSONL parsing across task and command logs, added a command task-id index, accepted `guard.evaluated_at`, and made drift checks compare latest task state instead of raw JSONL line count
+- **run_with_profile**: centralized guard fallback and blocked-task ledger recording, and made ledger append trigger best-effort SQLite indexing once
+- **state_snapshot**: includes touched paths from memory-capture metadata when present
+
+### Validation
+
+- full local pytest suite passed after the release update: 309 passed
+- target install smoke passed: installed package includes `references/*`, `helm init` succeeds from the installed wheel, and `scripts.state_snapshot.snapshot_payload` imports from the installed target
+- `git diff --check` passed
 
 ## [0.6.5] — 2026-04-26
 

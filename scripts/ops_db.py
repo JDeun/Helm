@@ -81,6 +81,7 @@ CREATE INDEX IF NOT EXISTS idx_task_status ON task_index(status);
 CREATE INDEX IF NOT EXISTS idx_task_profile ON task_index(profile);
 CREATE INDEX IF NOT EXISTS idx_guard_action ON guard_decision_index(action);
 CREATE INDEX IF NOT EXISTS idx_guard_task_id ON guard_decision_index(task_id);
+CREATE INDEX IF NOT EXISTS idx_command_task_id ON command_index(task_id);
 """
 
 
@@ -89,12 +90,38 @@ def db_path_for_state_root(state_root: Path) -> Path:
     return state_root / "ops-index.sqlite3"
 
 
+def _iter_jsonl_objects(path: Path, *, warnings: list[str]) -> list[tuple[int, dict]]:
+    rows: list[tuple[int, dict]] = []
+    if not path.exists():
+        return rows
+    try:
+        with path.open(encoding="utf-8") as handle:
+            for lineno, line in enumerate(handle, start=1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    warnings.append(f"{path.name} line {lineno}: {exc}")
+                    continue
+                if not isinstance(entry, dict):
+                    warnings.append(f"{path.name} line {lineno}: expected JSON object")
+                    continue
+                rows.append((lineno, entry))
+    except OSError as exc:
+        warnings.append(f"Could not read {path.name}: {exc}")
+    return rows
+
+
 def _check_schema_version(conn: sqlite3.Connection) -> None:
     try:
         row = conn.execute("SELECT value FROM schema_info WHERE key='schema_version'").fetchone()
         if row and row[0] != _SCHEMA_VERSION:
-            import warnings
-            warnings.warn(f"Database schema version {row[0]} != expected {_SCHEMA_VERSION}, consider rebuild")
+            _warnings.warn(
+                f"Database schema version {row[0]} != expected {_SCHEMA_VERSION}, consider rebuild",
+                stacklevel=2,
+            )
     except sqlite3.OperationalError:
         pass  # schema_info table may not exist yet
 
@@ -116,7 +143,10 @@ def init_db(db_path: Path) -> None:
     try:
         conn.executescript(_DDL)
         conn.execute(
-            "INSERT OR IGNORE INTO schema_info (key, value) VALUES (?, ?)",
+            """
+            INSERT INTO schema_info (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """,
             ("schema_version", _SCHEMA_VERSION),
         )
         conn.commit()
@@ -176,7 +206,7 @@ def _insert_guard(conn: sqlite3.Connection, entry: dict, source_file: str, sourc
             json.dumps(guard.get("matched_rules") or [], ensure_ascii=False),
             json.dumps(guard.get("reasons") or [], ensure_ascii=False),
             json.dumps(guard.get("classification") or {}, ensure_ascii=False),
-            guard.get("created_at") or entry.get("started_at"),
+            guard.get("created_at") or guard.get("evaluated_at") or entry.get("started_at"),
             source_file,
             source_line,
         ),
@@ -203,7 +233,7 @@ def _insert_discovery(conn: sqlite3.Connection, entry: dict) -> None:
             entry.get("task_id"),
             runtime.get("kind"),
             runtime.get("confidence"),
-            json.dumps(runtime.get("model_state") or {}, ensure_ascii=False),
+            json.dumps(discovery.get("runtime_model_state") or runtime.get("model_state") or {}, ensure_ascii=False),
             json.dumps(discovery.get("helm_intelligence_state") or {}, ensure_ascii=False),
             json.dumps(discovery.get("hardware") or {}, ensure_ascii=False),
             json.dumps(discovery.get("strategy") or {}, ensure_ascii=False),
@@ -242,73 +272,39 @@ def rebuild_index(*, state_root: Path, db_path: Path | None = None) -> dict:
         guard_rows = 0
         discovery_rows = 0
 
-        # Read task-ledger.jsonl
         ledger_path = state_root / "task-ledger.jsonl"
-        if ledger_path.exists():
-            try:
-                with open(ledger_path, encoding="utf-8") as fh:
-                    for lineno, line in enumerate(fh, start=1):
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            entry = json.loads(line)
-                        except json.JSONDecodeError as exc:
-                            warnings.append(f"task-ledger.jsonl line {lineno}: {exc}")
-                            continue
-                        if not isinstance(entry, dict):
-                            warnings.append(f"task-ledger.jsonl line {lineno}: expected JSON object")
-                            continue
-                        _insert_task(conn, entry, "task-ledger.jsonl", lineno)
-                        task_rows += 1
-                        if entry.get("guard") and isinstance(entry["guard"], dict) and entry["guard"].get("action"):
-                            _insert_guard(conn, entry, "task-ledger.jsonl", lineno)
-                            guard_rows += 1
-                        if entry.get("discovery") and isinstance(entry["discovery"], dict):
-                            _insert_discovery(conn, entry)
-                            discovery_rows += 1
-            except OSError as exc:
-                warnings.append(f"Could not read task-ledger.jsonl: {exc}")
+        for lineno, entry in _iter_jsonl_objects(ledger_path, warnings=warnings):
+            _insert_task(conn, entry, "task-ledger.jsonl", lineno)
+            task_rows += 1
+            if entry.get("guard") and isinstance(entry["guard"], dict) and entry["guard"].get("action"):
+                _insert_guard(conn, entry, "task-ledger.jsonl", lineno)
+                guard_rows += 1
+            if entry.get("discovery") and isinstance(entry["discovery"], dict):
+                _insert_discovery(conn, entry)
+                discovery_rows += 1
 
-        # Read command-log.jsonl if exists
         command_log_path = state_root / "command-log.jsonl"
-        if command_log_path.exists():
-            try:
-                with open(command_log_path, encoding="utf-8") as fh:
-                    for lineno, line in enumerate(fh, start=1):
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            entry = json.loads(line)
-                        except json.JSONDecodeError as exc:
-                            warnings.append(f"command-log.jsonl line {lineno}: {exc}")
-                            continue
-                        if not isinstance(entry, dict):
-                            warnings.append(f"command-log.jsonl line {lineno}: expected JSON object")
-                            continue
-                        conn.execute(
-                            """
-                            INSERT INTO command_index
-                                (task_id, command_preview, profile, exit_code, started_at, finished_at,
-                                 source_file, source_line, raw_json)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                entry.get("task_id"),
-                                entry.get("command_preview"),
-                                entry.get("profile"),
-                                entry.get("exit_code"),
-                                entry.get("started_at"),
-                                entry.get("finished_at"),
-                                "command-log.jsonl",
-                                lineno,
-                                json.dumps(entry, ensure_ascii=False),
-                            ),
-                        )
-                        command_rows += 1
-            except OSError as exc:
-                warnings.append(f"Could not read command-log.jsonl: {exc}")
+        for lineno, entry in _iter_jsonl_objects(command_log_path, warnings=warnings):
+            conn.execute(
+                """
+                INSERT INTO command_index
+                    (task_id, command_preview, profile, exit_code, started_at, finished_at,
+                     source_file, source_line, raw_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    entry.get("task_id"),
+                    entry.get("command_preview"),
+                    entry.get("profile"),
+                    entry.get("exit_code"),
+                    entry.get("started_at"),
+                    entry.get("finished_at"),
+                    "command-log.jsonl",
+                    lineno,
+                    json.dumps(entry, ensure_ascii=False),
+                ),
+            )
+            command_rows += 1
 
         conn.commit()
     finally:
@@ -364,13 +360,17 @@ def verify_index(*, state_root: Path) -> dict:
     Returns {"jsonl_task_lines": int, "task_rows": int, "drift": bool}
     """
     ledger_path = state_root / "task-ledger.jsonl"
-    jsonl_task_lines = 0
-    if ledger_path.exists():
-        try:
-            with open(ledger_path, encoding="utf-8") as fh:
-                jsonl_task_lines = sum(1 for line in fh if line.strip())
-        except OSError:
-            pass
+    warnings: list[str] = []
+    rows = _iter_jsonl_objects(ledger_path, warnings=warnings)
+    by_task: dict[str, dict] = {}
+    anonymous = 0
+    for _, entry in rows:
+        task_id = entry.get("task_id")
+        if task_id:
+            by_task[str(task_id)] = entry
+        else:
+            anonymous += 1
+    jsonl_task_lines = len(by_task) + anonymous
 
     task_rows = 0
     db_path = db_path_for_state_root(state_root)
@@ -388,6 +388,7 @@ def verify_index(*, state_root: Path) -> dict:
         "jsonl_task_lines": jsonl_task_lines,
         "task_rows": task_rows,
         "drift": jsonl_task_lines != task_rows,
+        "warnings": warnings,
     }
 
 

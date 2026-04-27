@@ -8,7 +8,7 @@
 
 <p align="center">Helm adds profiles, guardrails, checkpoints, audit trails, and file-backed memory around long-lived agent workspaces.</p>
 
-<p align="center"><strong>Current release: v0.6.5</strong></p>
+<p align="center"><strong>Current release: v0.6.6</strong></p>
 
 <p align="center">
   <a href="README.ko.md">한국어 README</a>
@@ -162,6 +162,9 @@ Core concepts:
 
 Positioning:
 
+- [`docs/opensource-product-definition.md`](docs/opensource-product-definition.md)
+- [`docs/opensource-module-split.md`](docs/opensource-module-split.md)
+- [`docs/helm-dogfooding-reference.md`](docs/helm-dogfooding-reference.md)
 - [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
 - [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
@@ -169,11 +172,11 @@ Positioning:
 Release details:
 
 - [`CHANGELOG.md`](CHANGELOG.md)
-- [`docs/releases/0.6.5.md`](docs/releases/0.6.5.md)
+- [`docs/releases/0.6.6.md`](docs/releases/0.6.6.md)
 
 ## Status
 
-Helm v0.6.5 focuses on OpenClaw/Hermes-style adoption, long-lived workspace integration, command guard hardening, and local operational visibility through `status --brief`, `dashboard`, and HTML reports.
+Helm v0.6.6 focuses on packaged reference-file reliability, clearer public/private dogfooding boundaries, and portable operations improvements promoted from OpenClaw practice.
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

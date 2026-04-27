@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 장기 실행 에이전트 workspace 주변에 profile, guardrail, checkpoint, audit trail, file-backed memory를 더하는 운영 레이어입니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.6.5</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.6.6</strong></p>
 
 <p align="center">
   <a href="README.md">English README</a>
@@ -162,6 +162,9 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 
 포지셔닝:
 
+- [`docs/opensource-product-definition.md`](docs/opensource-product-definition.md)
+- [`docs/opensource-module-split.md`](docs/opensource-module-split.md)
+- [`docs/helm-dogfooding-reference.md`](docs/helm-dogfooding-reference.md)
 - [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
 - [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
@@ -169,11 +172,11 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 릴리즈:
 
 - [`CHANGELOG.md`](CHANGELOG.md)
-- [`docs/releases/0.6.5.md`](docs/releases/0.6.5.md)
+- [`docs/releases/0.6.6.md`](docs/releases/0.6.6.md)
 
 ## 현재 상태
 
-Helm v0.6.5는 OpenClaw/Hermes 스타일 adoption, 장기 실행 workspace integration, command guard hardening, `status --brief`, `dashboard`, HTML report 기반 local operational visibility에 집중합니다.
+Helm v0.6.6은 packaged reference file 안정성, public/private dogfooding 경계 정리, OpenClaw 실전 운영에서 검증된 portable operations 개선에 집중합니다.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 

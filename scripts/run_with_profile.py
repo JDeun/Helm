@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
 from helm_workspace import get_workspace_layout
 from scripts.memory_capture import build_memory_capture_plan
 from scripts.state_io import append_jsonl_atomic
-from scripts.command_guard import evaluate_command_guard, decision_to_json
+from scripts.command_guard import CommandClassification, GuardDecision, evaluate_command_guard, decision_to_json
 from scripts.state_snapshot import latest_snapshot_path, write_state_snapshot
 from scripts.skill_manifest_lib import (
     load_skill_policies as load_manifest_policies,
@@ -135,13 +135,13 @@ def ensure_ledger_dir() -> None:
 
 
 def append_ledger(entry: dict) -> None:
-    from scripts.state_io import append_jsonl_atomic
     append_jsonl_atomic(TASK_LEDGER, entry)
+    _best_effort_index(entry)
 
 
 def _best_effort_index(task: dict) -> None:
     try:
-        from scripts.ops_db import db_path_for_state_root, index_task_entry
+        from scripts.ops_db import index_task_entry
         index_task_entry(state_root=STATE_ROOT, entry=task, source_file="task-ledger.jsonl")
     except Exception:
         pass
@@ -154,13 +154,70 @@ def finalize_task(task: dict) -> None:
     except OSError as exc:
         task["state_snapshot_error"] = str(exc)
     append_ledger(task)
-    _best_effort_index(task)
 
 
 def record_guard_audit(task: dict) -> None:
     task["status"] = "guard_audit"
     task["finished_at"] = utc_now_iso()
     append_ledger(task)
+
+
+def block_task(task: dict, *, reason: str, stage: str = "guard") -> None:
+    task["status"] = "blocked"
+    task["finished_at"] = utc_now_iso()
+    task["failure_stage"] = stage
+    task["failure_reason"] = reason
+    append_ledger(task)
+
+
+def fallback_guard_decision(command: list[str], args: argparse.Namespace, exc: Exception) -> GuardDecision:
+    return GuardDecision(
+        action="require_approval",
+        risk_score=0.5,
+        score_breakdown={"guard_error": 0.5},
+        selected_profile=args.profile,
+        recommended_profile=None,
+        reasons=(f"guard evaluation error: {exc}",),
+        matched_rules=tuple(),
+        classification=CommandClassification(
+            normalized_command=" ".join(command),
+            argv=tuple(command),
+            shell_wrapped=False,
+            shell_inner_command=None,
+            categories=("unknown",),
+            matched_rules=tuple(),
+            writes_detected=False,
+            network_detected=False,
+            destructive_detected=False,
+            privilege_detected=False,
+            remote_detected=False,
+        ),
+        approval_required=True,
+        approval_hint="--approve-risk",
+    )
+
+
+def evaluate_guard_for_run(
+    *,
+    args: argparse.Namespace,
+    command: list[str],
+    profiles: dict[str, dict],
+    guard_mode: str,
+) -> GuardDecision | None:
+    if guard_mode == "off":
+        return None
+    try:
+        return evaluate_command_guard(
+            command=command,
+            selected_profile=args.profile,
+            profiles=profiles,
+            workspace=WORKSPACE,
+            task_name=getattr(args, "task_name", None),
+            task_goal=getattr(args, "task_goal", None),
+        )
+    except Exception as exc:
+        print(f"WARNING: Guard evaluation failed: {exc}. Defaulting to require_approval.", file=sys.stderr)
+        return fallback_guard_decision(command, args, exc)
 
 
 def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dict:
@@ -419,7 +476,6 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     task = task_stub(args.profile, args, command)
     append_ledger(task)
-    _best_effort_index(task)
 
     checkpoint = run_checkpoint(args.profile, args)
     if checkpoint and checkpoint.get("error"):
@@ -441,43 +497,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if guard_mode == "off" and guard_mode_source == "env":
         print("WARNING: Guard disabled via HELM_GUARD_MODE environment variable", file=sys.stderr)
 
-    if guard_mode != "off":
-        try:
-            guard_decision = evaluate_command_guard(
-                command=command,
-                selected_profile=args.profile,
-                profiles=profiles,
-                workspace=WORKSPACE,
-                task_name=getattr(args, "task_name", None),
-                task_goal=getattr(args, "task_goal", None),
-            )
-        except Exception as exc:
-            print(f"WARNING: Guard evaluation failed: {exc}. Defaulting to require_approval.", file=sys.stderr)
-            from scripts.command_guard import GuardDecision, CommandClassification
-            guard_decision = GuardDecision(
-                action="require_approval",
-                risk_score=0.5,
-                score_breakdown={"guard_error": 0.5},
-                selected_profile=args.profile,
-                recommended_profile=None,
-                reasons=tuple([f"guard evaluation error: {exc}"]),
-                matched_rules=tuple(),
-                classification=CommandClassification(
-                    normalized_command=" ".join(command),
-                    argv=tuple(command),
-                    shell_wrapped=False,
-                    shell_inner_command=None,
-                    categories=tuple(["unknown"]),
-                    matched_rules=tuple(),
-                    writes_detected=False,
-                    network_detected=False,
-                    destructive_detected=False,
-                    privilege_detected=False,
-                    remote_detected=False,
-                ),
-                approval_required=True,
-                approval_hint="--approve-risk",
-            )
+    guard_decision = evaluate_guard_for_run(args=args, command=command, profiles=profiles, guard_mode=guard_mode)
 
     task["guard"] = (
         decision_to_json(guard_decision) if guard_decision
@@ -492,20 +512,12 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     if guard_mode == "enforce" and guard_decision:
         if guard_decision.action == "deny":
-            task["status"] = "blocked"
-            task["failure_stage"] = "guard"
-            task["failure_reason"] = "guard deny"
-            append_ledger(task)
-            _best_effort_index(task)
+            block_task(task, reason="guard deny")
             print(f"GUARD DENY: {', '.join(guard_decision.reasons)}", file=sys.stderr)
             return EXIT_GUARD_DENY
 
         if guard_decision.action == "require_approval" and not getattr(args, "approve_risk", False):
-            task["status"] = "blocked"
-            task["failure_stage"] = "guard"
-            task["failure_reason"] = "approval required"
-            append_ledger(task)
-            _best_effort_index(task)
+            block_task(task, reason="approval required")
             hint = guard_decision.approval_hint or "Use --approve-risk to proceed."
             print(f"GUARD APPROVAL REQUIRED: {', '.join(guard_decision.reasons)}", file=sys.stderr)
             print(f"Hint: {hint}", file=sys.stderr)
@@ -546,7 +558,6 @@ def cmd_run(args: argparse.Namespace) -> int:
     task["status"] = "running"
     task["started_execution_at"] = utc_now_iso()
     append_ledger(task)
-    _best_effort_index(task)
 
     writes_allowed = config.get("writes_allowed", True)
     network_allowed = config.get("network_allowed", True)
