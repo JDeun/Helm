@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-No unreleased changes.
+### Added
+
+- **community**: added contributing guidance, security policy, issue templates, and a pull request template for external contributors
+- **docs**: added a three-minute demo focused on profiles, checkpoints, reports, and durable local task history
+
+### Changed
+
+- **README**: sharpened the public landing copy around concrete coding-agent operating problems and added a quick comparison table
 
 ## [0.6.6] — 2026-04-27
 

@@ -4,9 +4,9 @@
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>Make repeated agent work safer, traceable, and recoverable.</strong></p>
+<p align="center"><strong>Stop long-running coding agents from losing context, making unsafe edits, and becoming impossible to audit.</strong></p>
 
-<p align="center">Helm adds profiles, guardrails, checkpoints, audit trails, and file-backed memory around long-lived agent workspaces.</p>
+<p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
 <p align="center"><strong>Current release: v0.6.6</strong></p>
 
@@ -50,6 +50,17 @@ curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -
 
 ## Why Helm
 
+Helm is for developers who already use coding agents for real work and need the session to leave behind something more durable than chat history.
+
+Use Helm when you want to:
+
+- run agent-adjacent commands under explicit risk profiles
+- block destructive or out-of-profile commands before they execute
+- create visible recovery points before broad edits
+- keep task and command history in local files
+- rehydrate future runs from workspace state instead of memory alone
+- review what happened after a long session ends
+
 Helm is not another agent runtime. It is the operating layer around the one you already run.
 
 Use it when an OpenClaw/Hermes-style workspace, or a similar self-hosted agent service, has moved past demos and needs repeated work to stay:
@@ -61,6 +72,32 @@ Use it when an OpenClaw/Hermes-style workspace, or a similar self-hosted agent s
 - governed by skill contracts and local policy
 
 If the agent only runs one-off demos, Helm is probably unnecessary.
+
+## Three-Minute Demo
+
+```bash
+helm profile --path ~/.helm/workspace run inspect_local \
+  --task-name "inspect current repository" \
+  -- git status --short
+
+helm checkpoint create --path ~/.helm/workspace \
+  --label before-risky-work \
+  --include ~/.helm/workspace
+
+helm report --path ~/.helm/workspace --format markdown
+helm dashboard --path ~/.helm/workspace
+```
+
+This leaves a task ledger, command log, checkpoint record, and dashboard summary on disk.
+
+## How Helm Fits
+
+| Category | Better for | Helm adds |
+| --- | --- | --- |
+| Agent frameworks | prompts, planners, tool loops, agent graphs | profiles, guard decisions, checkpoints, task ledgers |
+| Observability tools | hosted traces, service metrics, telemetry correlation | pre-execution policy and local recovery state |
+| Eval tools | scoring model output or task success | operational history around repeated human-agent work |
+| Shell wrappers | command convenience | workspace state, memory capture, reports, and recovery discipline |
 
 ## What Helm Adds
 
@@ -146,6 +183,7 @@ Keep Helm in a dedicated workspace. Treat existing systems as read-only context 
 
 Start here:
 
+- [`docs/three-minute-demo.md`](docs/three-minute-demo.md)
 - [`docs/first-run.md`](docs/first-run.md)
 - [`docs/onboarding.md`](docs/onboarding.md)
 - [`docs/demos.md`](docs/demos.md)
@@ -172,6 +210,8 @@ Positioning:
 Release details:
 
 - [`CHANGELOG.md`](CHANGELOG.md)
+- [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- [`SECURITY.md`](SECURITY.md)
 - [`docs/releases/0.6.6.md`](docs/releases/0.6.6.md)
 
 ## Status
