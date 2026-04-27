@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.6.6</strong></p>
+<p align="center"><strong>Current release: v0.6.7</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -88,7 +88,7 @@ If the agent only runs one-off demos, Helm is probably unnecessary.
 
 ## Three-Minute Demo
 
-![Helm three-minute demo terminal capture](https://raw.githubusercontent.com/JDeun/Helm/main/assets/helm-three-minute-demo.svg)
+![Helm three-minute demo terminal capture](https://raw.githubusercontent.com/JDeun/Helm/main/assets/helm-three-minute-demo.gif)
 
 ```bash
 helm profile --path ~/.helm/workspace run inspect_local \
@@ -228,11 +228,12 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.6.7.md`](docs/releases/0.6.7.md)
 - [`docs/releases/0.6.6.md`](docs/releases/0.6.6.md)
 
 ## Status
 
-Helm v0.6.6 focuses on packaged reference-file reliability, clearer public/private dogfooding boundaries, and portable operations improvements promoted from OpenClaw practice.
+Helm v0.6.7 focuses on public project polish: PyPI install visibility, landing-page links, and a three-minute demo GIF for faster first-time evaluation.
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

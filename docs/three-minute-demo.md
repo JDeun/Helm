@@ -2,7 +2,7 @@
 
 This demo shows Helm's core promise: profile a command, leave an audit trail, create a checkpoint, and inspect the resulting workspace state.
 
-![Helm three-minute demo terminal capture](../assets/helm-three-minute-demo.svg)
+![Helm three-minute demo terminal capture](../assets/helm-three-minute-demo.gif)
 
 ## 1. Install and initialize
 

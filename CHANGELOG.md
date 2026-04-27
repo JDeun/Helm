@@ -2,14 +2,26 @@
 
 ## Unreleased
 
+## [0.6.7] — 2026-04-27
+
 ### Added
 
 - **community**: added contributing guidance, security policy, issue templates, and a pull request template for external contributors
 - **docs**: added a three-minute demo focused on profiles, checkpoints, reports, and durable local task history
+- **docs**: added a public launch checklist for repository, PyPI, demo, announcement, and landing-page readiness
+- **demo**: added an animated three-minute demo GIF and terminal capture asset for README and demo docs
 
 ### Changed
 
 - **README**: sharpened the public landing copy around concrete coding-agent operating problems and added a quick comparison table
+- **README**: added PyPI install-first quickstart copy, PyPI/version badges, publish workflow badge, and landing-page links
+- **packaging**: added Landing, Documentation, and Security project URLs for PyPI metadata
+
+### Validation
+
+- generated demo GIF locally with Pillow
+- package build passed: `python3 -m build`
+- `git diff --check` passed
 
 ## [0.6.6] — 2026-04-27
 
