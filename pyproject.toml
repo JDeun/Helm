@@ -8,11 +8,39 @@ version = "0.6.6"
 description = "Stability-first operations CLI for long-lived agent workspaces."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "JDeun" }]
+keywords = [
+  "ai-agents",
+  "agent-ops",
+  "coding-agents",
+  "guardrails",
+  "checkpoints",
+  "local-first",
+  "developer-tools",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
+  "Topic :: System :: Systems Administration",
+]
 
 [project.scripts]
 helm = "helm:main"
+
+[project.urls]
+Homepage = "https://github.com/JDeun/Helm"
+Repository = "https://github.com/JDeun/Helm"
+Issues = "https://github.com/JDeun/Helm/issues"
+Changelog = "https://github.com/JDeun/Helm/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 py-modules = ["helm", "helm_workspace", "helm_context"]

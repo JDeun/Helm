@@ -9,6 +9,9 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+build/
+dist/
+*.egg-info/
 
 # Local runtime state
 .helm/
