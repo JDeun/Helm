@@ -11,12 +11,15 @@
 <p align="center"><strong>현재 릴리즈: v0.6.6</strong></p>
 
 <p align="center">
+  <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
   <a href="README.md">English README</a>
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/helm-agent-ops?style=flat-square"></a>
+  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="PyPI Python versions" src="https://img.shields.io/pypi/pyversions/helm-agent-ops?style=flat-square"></a>
+  <a href="https://github.com/JDeun/Helm/actions/workflows/publish.yml"><img alt="Publish to PyPI" src="https://img.shields.io/github/actions/workflow/status/JDeun/Helm/publish.yml?branch=main&label=publish&style=flat-square"></a>
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f172a?style=flat-square">
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-1d4ed8?style=flat-square">
   <img alt="Stability first" src="https://img.shields.io/badge/focus-stability--first-334155?style=flat-square">
   <img alt="Runtime agnostic" src="https://img.shields.io/badge/runtime-agnostic-475569?style=flat-square">
 </p>
@@ -26,10 +29,20 @@
   <a href="#왜-helm인가">왜 Helm인가</a> ·
   <a href="#helm이-더하는-것">Helm이 더하는 것</a> ·
   <a href="#워크플로우">워크플로우</a> ·
-  <a href="#문서">문서</a>
+  <a href="#문서">문서</a> ·
+  <a href="https://v0-helm-agent-ops.vercel.app/">Landing Page</a>
 </p>
 
 ## Quickstart
+
+PyPI에서 설치:
+
+```bash
+python -m pip install helm-agent-ops
+helm --help
+```
+
+또는 workspace bootstrap installer 사용:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
@@ -203,6 +216,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`docs/opensource-product-definition.md`](docs/opensource-product-definition.md)
 - [`docs/opensource-module-split.md`](docs/opensource-module-split.md)
 - [`docs/helm-dogfooding-reference.md`](docs/helm-dogfooding-reference.md)
+- [`docs/public-launch-checklist.md`](docs/public-launch-checklist.md)
 - [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
 - [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)

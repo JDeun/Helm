@@ -38,9 +38,12 @@ helm = "helm:main"
 
 [project.urls]
 Homepage = "https://github.com/JDeun/Helm"
+Landing = "https://v0-helm-agent-ops.vercel.app/"
+Documentation = "https://github.com/JDeun/Helm/tree/main/docs"
 Repository = "https://github.com/JDeun/Helm"
 Issues = "https://github.com/JDeun/Helm/issues"
 Changelog = "https://github.com/JDeun/Helm/blob/main/CHANGELOG.md"
+Security = "https://github.com/JDeun/Helm/blob/main/SECURITY.md"
 
 [tool.setuptools]
 py-modules = ["helm", "helm_workspace", "helm_context"]
