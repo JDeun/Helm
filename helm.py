@@ -32,6 +32,11 @@ from commands.memory import cmd_memory
 from commands.ops import cmd_ops
 from commands.profile import cmd_profile
 from commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_skill_reject, cmd_skill_review
+from commands.skill_lifecycle import (
+    cmd_skill_lifecycle_report,
+    cmd_skill_lifecycle_scan,
+    cmd_skill_lifecycle_status,
+)
 from commands.status import (
     build_status_payload,
     cmd_capability_diff,
@@ -264,6 +269,29 @@ def build_parser() -> argparse.ArgumentParser:
     skill_reject.add_argument("--reason", required=True, help="Short rejection reason.")
     skill_reject.add_argument("--json", action="store_true")
     skill_reject.set_defaults(func=cmd_skill_reject)
+
+    skill_lifecycle = subparsers.add_parser(
+        "skill-lifecycle",
+        help="Track, report on, and curate skill lifecycle state without modifying SKILL.md.",
+    )
+    skill_lifecycle_subparsers = skill_lifecycle.add_subparsers(dest="skill_lifecycle_command", required=True)
+
+    sl_scan = skill_lifecycle_subparsers.add_parser("scan", help="Reconcile usage.json with skills/ on disk.")
+    sl_scan.add_argument("--path", help="Workspace path to target.")
+    sl_scan.add_argument("--dry-run", action="store_true", help="Preview changes without writing usage.json.")
+    sl_scan.add_argument("--json", action="store_true")
+    sl_scan.set_defaults(func=cmd_skill_lifecycle_scan)
+
+    sl_status = skill_lifecycle_subparsers.add_parser("status", help="Print a lifecycle summary.")
+    sl_status.add_argument("--path", help="Workspace path to target.")
+    sl_status.add_argument("--json", action="store_true")
+    sl_status.set_defaults(func=cmd_skill_lifecycle_status)
+
+    sl_report = skill_lifecycle_subparsers.add_parser("report", help="Produce a markdown or JSON lifecycle report.")
+    sl_report.add_argument("--path", help="Workspace path to target.")
+    sl_report.add_argument("--format", choices=["markdown", "json"], default="markdown")
+    sl_report.add_argument("--out", help="Write the report to this file instead of stdout.")
+    sl_report.set_defaults(func=cmd_skill_lifecycle_report)
 
     ops = subparsers.add_parser("ops", help="Inspect daily, task, and command reports.")
     ops.add_argument("--path", help="Workspace path to target.")

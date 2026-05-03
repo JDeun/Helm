@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- **skill-lifecycle (M1)**: read-only sidecar telemetry layer. New CLI `helm skill-lifecycle scan|status|report` reconciles `<workspace>/.openclaw/skill-lifecycle/usage.json` with skills on disk, classifies source (workspace/bundled/hub), detects archived skills under `skills/.archive/`, and renders markdown or JSON reports. Never modifies `SKILL.md`; mutating commands land in M2.
+- **docs**: added `docs/skill-lifecycle.md` covering layout, commands, configuration, source classification, and event log schema.
+- **tests**: added `tests/test_skill_lifecycle.py` with 16 cases covering scan registration, idempotency, dry-run, missing/archived detection, source classification, and report rendering.
+
 ## [0.6.7] — 2026-04-27
 
 ### Added

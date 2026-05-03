@@ -1,0 +1,160 @@
+# Skill Lifecycle Management
+
+Sidecar telemetry and curation tooling for skills installed in a Helm or
+OpenClaw workspace. Tracks when skills are used, when they are patched, and
+which ones have gone stale — without modifying `SKILL.md` files themselves.
+
+This is a conservative lifecycle layer. It records observations and surfaces
+candidates; it never auto-deletes a skill, and the only state mutations it
+performs are explicit (`archive`, `pin`, `stale --apply`).
+
+> Status: M1 (read-only: `scan`, `status`, `report`). Mutating commands and
+> runner integration land in later milestones.
+
+## Why
+
+Long-running agents accumulate skills. Some get used every day, some get used
+once, some encode a workaround that has been outdated for months. Without
+usage data the only signal for "should this skill still exist?" is intuition.
+
+This layer answers the basic questions:
+
+- when was this skill last used?
+- how many times has it been used?
+- which skills have I never actually run?
+- which skills look like umbrella consolidation candidates?
+- which skills make negative claims ("X does not work") that may be stale?
+
+## Layout
+
+All metadata lives next to the workspace it describes, under
+`<workspace>/.openclaw/skill-lifecycle/`:
+
+```
+<workspace>/.openclaw/skill-lifecycle/
+├── usage.json     central per-skill metadata index
+├── events.jsonl   append-only event log
+└── config.json    policy / thresholds
+```
+
+Archived skills move to `<workspace>/skills/.archive/<skill>/`. The dot
+prefix keeps them out of normal skill discovery while preserving the
+original directory layout for restore.
+
+## Commands
+
+### `helm skill-lifecycle scan`
+
+Walk `<workspace>/skills/*/SKILL.md` and reconcile `usage.json` with what is
+on disk.
+
+```bash
+helm skill-lifecycle scan --path ~/.openclaw/workspace
+helm skill-lifecycle scan --path ~/.openclaw/workspace --dry-run
+helm skill-lifecycle scan --path ~/.openclaw/workspace --json
+```
+
+What scan does:
+
+- Registers any newly discovered skill (creating its metadata entry).
+- Refreshes `path` and `source` if they changed since the last scan.
+- Marks entries `state="missing"` when their `SKILL.md` no longer exists.
+- Detects skills only present under `skills/.archive/` and records them as
+  `archived` with an `archive_path` pointer.
+- Reactivates an archived entry to `active` if a fresh `SKILL.md` reappears
+  under `skills/<name>/`.
+
+What scan does not do:
+
+- It never modifies any `SKILL.md`.
+- It never moves files. (Use `archive` / `restore` for that — M2.)
+- In `--dry-run` mode it writes nothing.
+
+### `helm skill-lifecycle status`
+
+Print a compact lifecycle summary: total skills, state counts, never-used
+list, least-recently-used list, archive candidates.
+
+```bash
+helm skill-lifecycle status --path ~/.openclaw/workspace
+helm skill-lifecycle status --path ~/.openclaw/workspace --json
+```
+
+### `helm skill-lifecycle report`
+
+Render a markdown or JSON report.
+
+```bash
+helm skill-lifecycle report --path ~/.openclaw/workspace --format markdown --out reports/skill-lifecycle.md
+helm skill-lifecycle report --path ~/.openclaw/workspace --format json
+```
+
+## Configuration
+
+`config.json` is created on the first non-dry-run scan with these defaults:
+
+```json
+{
+  "enabled": true,
+  "stale_after_days": 45,
+  "archive_after_days": 120,
+  "never_used_stale_after_days": 30,
+  "auto_archive": false,
+  "auto_stale": false,
+  "hide_archived_from_registry": true,
+  "hide_stale_from_prompt": false,
+  "protect_sources": ["bundled", "hub"],
+  "negative_claim_ttl_days": 30,
+  "report_top_n": 20
+}
+```
+
+Edit the file directly to tune thresholds. `auto_stale` and `auto_archive`
+default to false — state changes always require an explicit command.
+
+## Source classification
+
+Each skill is classified as one of:
+
+- `workspace` — locally authored (default)
+- `bundled` — marker file `.bundled` exists in the skill directory, or the
+  `SKILL.md` frontmatter declares `source: bundled`
+- `hub` — same pattern with `.hub` / `source: hub`
+
+`protect_sources` in config governs which sources are excluded from
+auto-stale and auto-archive decisions.
+
+## Event log
+
+Every state-changing operation appends one JSONL line to `events.jsonl`:
+
+```json
+{"ts":"2026-05-03T05:48:31+00:00","event":"skill_registered","skill_id":"car","source":"workspace"}
+{"ts":"2026-05-03T05:48:31+00:00","event":"skill_missing","skill_id":"old"}
+```
+
+The log is append-only. Future milestones add `skill_used`, `skill_success`,
+`skill_failure`, `skill_archived`, `skill_restored`, `skill_pinned`, etc.
+
+## What this does not change
+
+This layer is a sidecar. It deliberately:
+
+- never rewrites `SKILL.md`
+- never auto-deletes any skill
+- never touches OpenClaw core source
+
+Discovery filtering is achieved by physically moving skills under
+`skills/.archive/` (a dot-prefixed directory standard skill discovery
+typically skips). If the runtime later wants to consume lifecycle metadata
+directly, it can read `usage.json` — the schema is stable from M1.
+
+## Roadmap
+
+- M2: `pin`, `unpin`, `stale`, `archive`, `restore`, `events --skill <name>`
+- M3: runner integration — `run_with_profile.py` and `skill_capture.py` emit
+  `skill_used`, `skill_success`, `skill_failure`, `skill_promoted`,
+  `skill_rejected` events
+- M4: `negative-claims` subcommand + umbrella candidate detection
+- M5+ (out of band): runtime-side hooks if the agent runtime adopts the
+  schema natively
