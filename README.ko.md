@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 AI agent workspace를 위한 로컬 운영 레이어입니다. 명령 전 profile, 위험 작업 전 checkpoint, chat이 사라진 뒤에도 남는 durable task history를 제공합니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.7.1</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.7.2</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -228,6 +228,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.7.2.md`](docs/releases/0.7.2.md)
 - [`docs/releases/0.7.1.md`](docs/releases/0.7.1.md)
 - [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md)
 - [`docs/releases/0.6.7.md`](docs/releases/0.6.7.md)
@@ -235,7 +236,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 
 ## 현재 상태
 
-Helm v0.7.1은 v0.7.0에 추가된 skill-lifecycle layer를 보강합니다. task-ledger 연결, mtime/atime observer + 수동 `view`, negative-claim 영구 metadata, 풍부해진 umbrella 클러스터링이 들어갔습니다. 자세한 내용은 [`docs/skill-lifecycle.md`](docs/skill-lifecycle.md) 참고.
+Helm v0.7.2는 PRD의 남은 optional 항목을 채웁니다. `helm curator` alias, umbrella의 `execution_profile` 시그널, persisted negative claim에 대한 `revalidation-due`, archive dry-run의 파일 인벤토리 미리보기. 자세한 내용은 [`docs/skill-lifecycle.md`](docs/skill-lifecycle.md) 참고.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 

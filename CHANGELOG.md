@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## [0.7.2] — 2026-05-03
+
+### Added
+
+- **`helm curator` alias**: every `helm skill-lifecycle <subcommand>` is now also reachable as `helm curator <subcommand>` (PRD 6.3 optional alias).
+- **umbrella execution-profile signal**: new `execution_profile` cluster type groups active skills by their `default_profile` declared in `<workspace>/references/skill_profile_policies.json`. Closes the last unimplemented signal from PRD 6.6.
+- **`helm skill-lifecycle revalidation-due`**: surfaces persisted negative claims whose TTL has elapsed (`detected_at` or `last_revalidated_at` + `ttl_days` < now) and `status` is not `resolved`. Reports per-claim overdue days and the TTL anchor. Subset of PRD Phase 5 that does not require LLM automation.
+- **archive dry-run information**: `helm skill-lifecycle archive --dry-run` now shows the file count, total bytes, and a sample of files inside the directory that would move. Concrete preview before applying.
+
+### Tests
+
+- 60 lifecycle test cases (5 added since v0.7.1): execution-profile signal positive/negative, TTL-based revalidation due (anchored on `detected_at` and `last_revalidated_at`), `status="resolved"` exclusion, and archive plan file summary.
+- Full suite: 369 tests passing.
+
 ## [0.7.1] — 2026-05-03
 
 ### Added

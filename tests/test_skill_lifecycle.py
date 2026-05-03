@@ -32,6 +32,7 @@ from scripts.skill_lifecycle_lib import (
     record_runner_event,
     render_report_json,
     render_report_markdown,
+    revalidation_due_claims,
     save_config,
     save_usage,
     scan,
@@ -874,6 +875,115 @@ def test_correlate_events_with_ledger_joins_task_metadata(tmp_path: Path) -> Non
     assert matched[0]["task_status"] == "completed"
     assert matched[0]["task_exit_code"] == 0
     assert len(unmatched) >= 1
+
+
+def test_umbrella_includes_execution_profile_signal(tmp_path: Path) -> None:
+    for name in ("alpha", "beta", "gamma"):
+        _write_skill(tmp_path, name)
+    refs = tmp_path / "references"
+    refs.mkdir()
+    (refs / "skill_profile_policies.json").write_text(
+        json.dumps({
+            "skills": {
+                "alpha": {"default_profile": "inspect_local"},
+                "beta":  {"default_profile": "inspect_local"},
+                "gamma": {"default_profile": "inspect_local"},
+            }
+        }),
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    clusters = detect_umbrella_candidates(paths, min_cluster_size=3)
+    profile_clusters = [c for c in clusters if c.signal == "execution_profile"]
+    assert len(profile_clusters) == 1
+    assert profile_clusters[0].token == "inspect_local"
+    assert set(profile_clusters[0].skill_ids) == {"alpha", "beta", "gamma"}
+
+
+def test_umbrella_execution_profile_no_policy_file(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    clusters = detect_umbrella_candidates(paths, min_cluster_size=2)
+    assert all(c.signal != "execution_profile" for c in clusters)
+
+
+def test_revalidation_due_filters_by_ttl(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\n- this command does not work\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    persist_negative_claims(paths, ttl_days=30)
+
+    # No claims overdue immediately after persist.
+    assert revalidation_due_claims(paths) == []
+
+    # Backdate detected_at to be 45 days old → 15 days overdue.
+    usage = load_usage(paths)
+    from datetime import datetime, timedelta, timezone
+    backdate = (datetime.now(timezone.utc) - timedelta(days=45)).isoformat(timespec="seconds")
+    for claim in usage["skills"]["alpha"]["negative_claims"]:
+        claim["detected_at"] = backdate
+    save_usage(paths, usage)
+
+    due = revalidation_due_claims(paths)
+    assert len(due) == 1
+    assert due[0]["skill_id"] == "alpha"
+    assert due[0]["anchor"] == "detected_at"
+    assert due[0]["due_since_days"] >= 14.5
+
+    # Once last_revalidated_at is set to now, it's no longer overdue.
+    usage = load_usage(paths)
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for claim in usage["skills"]["alpha"]["negative_claims"]:
+        claim["last_revalidated_at"] = now_iso
+    save_usage(paths, usage)
+    assert revalidation_due_claims(paths) == []
+
+
+def test_revalidation_due_skips_resolved(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\n- this command does not work\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    persist_negative_claims(paths, ttl_days=30)
+
+    from datetime import datetime, timedelta, timezone
+    backdate = (datetime.now(timezone.utc) - timedelta(days=45)).isoformat(timespec="seconds")
+    usage = load_usage(paths)
+    for claim in usage["skills"]["alpha"]["negative_claims"]:
+        claim["detected_at"] = backdate
+        claim["status"] = "resolved"
+    save_usage(paths, usage)
+
+    assert revalidation_due_claims(paths) == []
+
+
+def test_archive_plan_includes_file_summary(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\nbody\n", encoding="utf-8"
+    )
+    (skill_dir / "extra.txt").write_text("hello", encoding="utf-8")
+    sub = skill_dir / "references"
+    sub.mkdir()
+    (sub / "note.md").write_text("note body", encoding="utf-8")
+
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    plan = plan_archive(paths, "alpha", DEFAULT_CONFIG)
+    assert plan.file_count == 3
+    assert plan.total_bytes > 0
+    assert "SKILL.md" in plan.sample_files
+    assert any("note.md" in s for s in plan.sample_files)
 
 
 def test_archived_skill_reactivation(tmp_path: Path) -> None:

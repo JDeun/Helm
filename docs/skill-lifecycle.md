@@ -8,9 +8,11 @@ This is a conservative lifecycle layer. It records observations and surfaces
 candidates; it never auto-deletes a skill, and the only state mutations it
 performs are explicit (`archive`, `pin`, `stale --apply`).
 
-> Status: post-M4 polish — adds task-ledger correlation, mtime/atime
-> observer, manual `view` event, persistent negative-claim metadata, and
-> richer umbrella signals (description token + downstream sharing).
+> Status: PRD-complete except for OpenClaw-core-dependent items. Includes
+> task-ledger correlation, observer + manual `view`, persisted negative-
+> claim metadata with TTL revalidation, four umbrella signals (name token,
+> description token, downstream share, execution profile), Pin Candidates
+> + Recommended Actions report sections, and the `helm curator` alias.
 
 ## Why
 
@@ -171,6 +173,8 @@ across three signals:
   appear in more than ~25% of skills are filtered as too generic
 - `downstream_share` — skills that reference the same downstream skill
   in backticks (`` `<skill-id>` ``) inside their SKILL.md body
+- `execution_profile` — skills declaring the same `default_profile` in
+  `<workspace>/references/skill_profile_policies.json`
 
 ```bash
 helm skill-lifecycle umbrella --path ~/.openclaw/workspace
@@ -225,6 +229,38 @@ filesystem atime semantics.
 
 ```bash
 helm skill-lifecycle view --path ~/.openclaw/workspace car
+```
+
+### `helm skill-lifecycle revalidation-due`
+
+Surface persisted negative claims whose TTL window has elapsed and need
+re-checking.
+
+```bash
+helm skill-lifecycle revalidation-due --path ~/.openclaw/workspace
+helm skill-lifecycle revalidation-due --path ~/.openclaw/workspace --json
+```
+
+A claim is "due for revalidation" when:
+
+- it has a non-null `detected_at` (or `last_revalidated_at`) and
+  positive `ttl_days`
+- the TTL anchor (`last_revalidated_at` if present, else `detected_at`)
+  + `ttl_days` is in the past
+- its `status` is not `resolved`
+
+Each result includes the `skill_id`, the TTL `anchor`, and how many days
+overdue the claim is.
+
+### `helm curator <subcommand>`
+
+Short alias. `helm curator` is equivalent to `helm skill-lifecycle` for
+every subcommand.
+
+```bash
+helm curator status --path ~/.openclaw/workspace
+helm curator scan --path ~/.openclaw/workspace
+helm curator report --path ~/.openclaw/workspace --format markdown
 ```
 
 ### Persisting negative claims

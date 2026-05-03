@@ -19,7 +19,7 @@ import os
 import re
 import shutil
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
@@ -702,6 +702,29 @@ class ArchivePlan:
     source_dir: Path
     target_dir: Path
     relative_archive_path: str
+    file_count: int = 0
+    total_bytes: int = 0
+    sample_files: tuple[str, ...] = ()
+
+
+def _summarize_directory(directory: Path, *, sample_limit: int = 10) -> tuple[int, int, tuple[str, ...]]:
+    file_count = 0
+    total_bytes = 0
+    samples: list[str] = []
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file():
+            continue
+        file_count += 1
+        try:
+            total_bytes += path.stat().st_size
+        except OSError:
+            pass
+        if len(samples) < sample_limit:
+            try:
+                samples.append(str(path.relative_to(directory)))
+            except ValueError:
+                samples.append(path.name)
+    return file_count, total_bytes, tuple(samples)
 
 
 def plan_archive(paths: LifecyclePaths, skill_id: str, config: dict[str, Any]) -> ArchivePlan:
@@ -728,11 +751,15 @@ def plan_archive(paths: LifecyclePaths, skill_id: str, config: dict[str, Any]) -
         raise LifecycleError(f"archive target already exists: {target_dir}")
 
     relative_archive = (target_dir / "SKILL.md").relative_to(paths.workspace).as_posix()
+    file_count, total_bytes, sample_files = _summarize_directory(source_dir)
     return ArchivePlan(
         skill_id=skill_id,
         source_dir=source_dir,
         target_dir=target_dir,
         relative_archive_path=relative_archive,
+        file_count=file_count,
+        total_bytes=total_bytes,
+        sample_files=sample_files,
     )
 
 
@@ -908,6 +935,51 @@ def _hash_claim(skill_id: str, line_no: int, text: str) -> str:
 DEFAULT_CLAIM_TTL_DAYS = 30
 DEFAULT_CLAIM_CONFIDENCE = 0.6
 DEFAULT_CLAIM_STATUS = "needs_review"
+
+
+def revalidation_due_claims(paths: LifecyclePaths) -> list[dict[str, Any]]:
+    """Return persisted negative claims past their TTL window.
+
+    A claim is "due for revalidation" when:
+      - it has a non-null detected_at and ttl_days,
+      - and (last_revalidated_at or detected_at) + ttl_days is in the past,
+      - and its status is not already "resolved".
+
+    The returned dicts inherit the persisted claim shape and add
+    `skill_id`, `due_since_days`, and `anchor` ("last_revalidated_at" or
+    "detected_at").
+    """
+    if not paths.usage_path.exists():
+        return []
+    usage = load_usage(paths)
+    now = datetime.now(timezone.utc)
+    due: list[dict[str, Any]] = []
+    for skill_id, entry in usage.get("skills", {}).items():
+        for claim in entry.get("negative_claims") or []:
+            if not isinstance(claim, dict):
+                continue
+            if claim.get("status") == "resolved":
+                continue
+            ttl = claim.get("ttl_days")
+            if not isinstance(ttl, (int, float)) or ttl <= 0:
+                continue
+            anchor_key = "last_revalidated_at" if claim.get("last_revalidated_at") else "detected_at"
+            anchor_value = claim.get(anchor_key)
+            anchor_dt = _parse_iso(anchor_value)
+            if anchor_dt is None:
+                continue
+            if anchor_dt.tzinfo is None:
+                anchor_dt = anchor_dt.replace(tzinfo=timezone.utc)
+            due_at = anchor_dt + timedelta(days=float(ttl))
+            if due_at <= now:
+                overdue_days = (now - due_at).total_seconds() / 86400.0
+                merged = dict(claim)
+                merged["skill_id"] = skill_id
+                merged["anchor"] = anchor_key
+                merged["due_since_days"] = round(overdue_days, 1)
+                due.append(merged)
+    due.sort(key=lambda c: c["due_since_days"], reverse=True)
+    return due
 
 
 def persist_negative_claims(
@@ -1116,6 +1188,64 @@ def _detect_umbrella_by_description(
     return clusters
 
 
+def _detect_umbrella_by_execution_profile(
+    skill_profiles: dict[str, str],
+    *,
+    min_cluster_size: int,
+) -> list[UmbrellaCluster]:
+    """Group skills by their declared default execution profile.
+
+    Skills sharing the same default profile have aligned risk / capability
+    requirements, so they are reasonable candidates to live behind a common
+    umbrella router that selects between them at runtime.
+    """
+    if not skill_profiles:
+        return []
+    profile_to_skills: dict[str, set[str]] = {}
+    for skill_id, profile in skill_profiles.items():
+        if not profile:
+            continue
+        profile_to_skills.setdefault(profile, set()).add(skill_id)
+
+    clusters: list[UmbrellaCluster] = []
+    for profile, skills in sorted(profile_to_skills.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        if len(skills) < min_cluster_size:
+            continue
+        clusters.append(
+            UmbrellaCluster(
+                token=profile,
+                skill_ids=tuple(sorted(skills)),
+                signal="execution_profile",
+            )
+        )
+    return clusters
+
+
+def _load_skill_profiles(paths: LifecyclePaths) -> dict[str, str]:
+    """Read skill -> default execution profile from the workspace policy file.
+
+    Fail-soft: returns {} if the file is missing or unreadable.
+    """
+    policy_path = paths.workspace / "references" / "skill_profile_policies.json"
+    if not policy_path.exists():
+        return {}
+    try:
+        data = json.loads(policy_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    skills_block = data.get("skills") if isinstance(data, dict) else None
+    if not isinstance(skills_block, dict):
+        return {}
+    profiles: dict[str, str] = {}
+    for skill_id, entry in skills_block.items():
+        if not isinstance(entry, dict):
+            continue
+        default = entry.get("default_profile")
+        if isinstance(default, str) and default:
+            profiles[skill_id] = default
+    return profiles
+
+
 def _detect_umbrella_by_downstream_share(
     skill_downstreams: dict[str, set[str]],
     *,
@@ -1194,11 +1324,13 @@ def detect_umbrella_candidates(paths: LifecyclePaths, *, min_cluster_size: int =
     if not paths.skills_root.exists():
         return []
     name_tokens, descriptions, downstream_refs = _scan_skill_meta(paths)
+    skill_profiles = _load_skill_profiles(paths)
 
     clusters: list[UmbrellaCluster] = []
     clusters.extend(_detect_umbrella_by_name_token(name_tokens, min_cluster_size=min_cluster_size))
     clusters.extend(_detect_umbrella_by_description(descriptions, min_cluster_size=min_cluster_size))
     clusters.extend(_detect_umbrella_by_downstream_share(downstream_refs, min_cluster_size=min_cluster_size))
+    clusters.extend(_detect_umbrella_by_execution_profile(skill_profiles, min_cluster_size=min_cluster_size))
     return clusters
 
 

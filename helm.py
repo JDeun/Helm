@@ -41,6 +41,7 @@ from commands.skill_lifecycle import (
     cmd_skill_lifecycle_pin,
     cmd_skill_lifecycle_report,
     cmd_skill_lifecycle_restore,
+    cmd_skill_lifecycle_revalidation_due,
     cmd_skill_lifecycle_scan,
     cmd_skill_lifecycle_stale,
     cmd_skill_lifecycle_status,
@@ -283,6 +284,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     skill_lifecycle = subparsers.add_parser(
         "skill-lifecycle",
+        aliases=["curator"],
         help="Track, report on, and curate skill lifecycle state without modifying SKILL.md.",
     )
     skill_lifecycle_subparsers = skill_lifecycle.add_subparsers(dest="skill_lifecycle_command", required=True)
@@ -370,6 +372,14 @@ def build_parser() -> argparse.ArgumentParser:
     sl_view.add_argument("--path", help="Workspace path to target.")
     sl_view.add_argument("skill", help="Skill id whose view to record.")
     sl_view.set_defaults(func=cmd_skill_lifecycle_view)
+
+    sl_revalidate = skill_lifecycle_subparsers.add_parser(
+        "revalidation-due",
+        help="List persisted negative claims past their TTL window and need revalidation.",
+    )
+    sl_revalidate.add_argument("--path", help="Workspace path to target.")
+    sl_revalidate.add_argument("--json", action="store_true")
+    sl_revalidate.set_defaults(func=cmd_skill_lifecycle_revalidation_due)
 
     ops = subparsers.add_parser("ops", help="Inspect daily, task, and command reports.")
     ops.add_argument("--path", help="Workspace path to target.")

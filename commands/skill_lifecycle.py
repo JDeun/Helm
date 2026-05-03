@@ -29,12 +29,21 @@ from scripts.skill_lifecycle_lib import (
     record_runner_event,
     render_report_json,
     render_report_markdown,
+    revalidation_due_claims,
     save_config,
     save_usage,
     scan,
     set_pinned,
     stale_candidates,
 )
+
+
+def _human_bytes(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024.0 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024.0
+    return f"{n:.1f} GB"
 
 
 def _paths_for(args: argparse.Namespace) -> LifecyclePaths:
@@ -224,6 +233,12 @@ def cmd_skill_lifecycle_archive(args: argparse.Namespace) -> int:
     print(f"{label} archive {plan.skill_id}")
     print(f"  from: {plan.source_dir}")
     print(f"  to:   {plan.target_dir}")
+    print(f"  contents: {plan.file_count} files, {_human_bytes(plan.total_bytes)}")
+    if plan.sample_files:
+        for sample in plan.sample_files:
+            print(f"    - {sample}")
+        if plan.file_count > len(plan.sample_files):
+            print(f"    - ... ({plan.file_count - len(plan.sample_files)} more)")
 
     if args.apply:
         apply_archive(paths, plan)
@@ -371,6 +386,32 @@ def cmd_skill_lifecycle_view(args: argparse.Namespace) -> int:
         return 2
     entry = load_usage(paths)["skills"][args.skill]
     print(f"viewed: {args.skill} (view_count={entry['view_count']})")
+    return 0
+
+
+def cmd_skill_lifecycle_revalidation_due(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    rows = revalidation_due_claims(paths)
+
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+
+    if not rows:
+        print("(no claims past their TTL)")
+        return 0
+
+    print(f"revalidation-due claims: {len(rows)}")
+    for claim in rows:
+        anchor = claim.get("anchor", "detected_at")
+        print(
+            f"  {claim['skill_id']} ({claim.get('skill_md', '?')}:{claim.get('line_no', '?')}) "
+            f"[{claim.get('keyword', '?')}] overdue {claim['due_since_days']:.1f}d (anchor={anchor})"
+        )
+        text = claim.get("text") or ""
+        if text:
+            print(f"    > {text}")
     return 0
 
 

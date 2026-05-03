@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.7.1</strong></p>
+<p align="center"><strong>Current release: v0.7.2</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -228,6 +228,7 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.7.2.md`](docs/releases/0.7.2.md)
 - [`docs/releases/0.7.1.md`](docs/releases/0.7.1.md)
 - [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md)
 - [`docs/releases/0.6.7.md`](docs/releases/0.6.7.md)
@@ -235,7 +236,7 @@ Release details:
 
 ## Status
 
-Helm v0.7.1 polishes the skill-lifecycle layer added in v0.7.0: task-ledger correlation, mtime/atime observer plus manual `view`, persisted negative-claim metadata, and richer umbrella clustering. See [`docs/skill-lifecycle.md`](docs/skill-lifecycle.md).
+Helm v0.7.2 fills the remaining PRD optional items: `helm curator` alias, umbrella `execution_profile` signal, `revalidation-due` for persisted negative claims, and concrete file-inventory preview for archive dry-runs. See [`docs/skill-lifecycle.md`](docs/skill-lifecycle.md).
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 
