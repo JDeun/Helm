@@ -35,7 +35,9 @@ from commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_ski
 from commands.skill_lifecycle import (
     cmd_skill_lifecycle_archive,
     cmd_skill_lifecycle_events,
+    cmd_skill_lifecycle_ledger,
     cmd_skill_lifecycle_negative_claims,
+    cmd_skill_lifecycle_observe,
     cmd_skill_lifecycle_pin,
     cmd_skill_lifecycle_report,
     cmd_skill_lifecycle_restore,
@@ -44,6 +46,7 @@ from commands.skill_lifecycle import (
     cmd_skill_lifecycle_status,
     cmd_skill_lifecycle_umbrella,
     cmd_skill_lifecycle_unpin,
+    cmd_skill_lifecycle_view,
 )
 from commands.status import (
     build_status_payload,
@@ -339,6 +342,9 @@ def build_parser() -> argparse.ArgumentParser:
     sl_neg = skill_lifecycle_subparsers.add_parser("negative-claims", help="Scan SKILL.md for negative claim candidates.")
     sl_neg.add_argument("--path", help="Workspace path to target.")
     sl_neg.add_argument("--json", action="store_true")
+    sl_neg.add_argument("--persist", action="store_true", help="Write detected claims into per-skill metadata (preserves prior status fields).")
+    sl_neg.add_argument("--ttl-days", type=int, default=30, help="ttl_days field on newly persisted claims (default 30).")
+    sl_neg.add_argument("--confidence", type=float, default=0.6, help="confidence field on newly persisted claims (default 0.6).")
     sl_neg.set_defaults(func=cmd_skill_lifecycle_negative_claims)
 
     sl_umb = skill_lifecycle_subparsers.add_parser("umbrella", help="Surface umbrella consolidation candidates.")
@@ -346,6 +352,24 @@ def build_parser() -> argparse.ArgumentParser:
     sl_umb.add_argument("--min-cluster-size", type=int, default=3, help="Minimum number of skills sharing a token to count as a cluster.")
     sl_umb.add_argument("--json", action="store_true")
     sl_umb.set_defaults(func=cmd_skill_lifecycle_umbrella)
+
+    sl_ledger = skill_lifecycle_subparsers.add_parser("ledger", help="Show lifecycle events joined with the task ledger.")
+    sl_ledger.add_argument("--path", help="Workspace path to target.")
+    sl_ledger.add_argument("--skill", help="Filter by skill id.")
+    sl_ledger.add_argument("--limit", type=int, default=None, help="Show only the last N events.")
+    sl_ledger.add_argument("--json", action="store_true")
+    sl_ledger.set_defaults(func=cmd_skill_lifecycle_ledger)
+
+    sl_observe = skill_lifecycle_subparsers.add_parser("observe", help="Poll SKILL.md mtime/atime to record skill_patched and skill_viewed events.")
+    sl_observe.add_argument("--path", help="Workspace path to target.")
+    sl_observe.add_argument("--dry-run", action="store_true", help="Preview without writing.")
+    sl_observe.add_argument("--json", action="store_true")
+    sl_observe.set_defaults(func=cmd_skill_lifecycle_observe)
+
+    sl_view = skill_lifecycle_subparsers.add_parser("view", help="Manually record a skill_viewed event (atime-independent).")
+    sl_view.add_argument("--path", help="Workspace path to target.")
+    sl_view.add_argument("skill", help="Skill id whose view to record.")
+    sl_view.set_defaults(func=cmd_skill_lifecycle_view)
 
     ops = subparsers.add_parser("ops", help="Inspect daily, task, and command reports.")
     ops.add_argument("--path", help="Workspace path to target.")

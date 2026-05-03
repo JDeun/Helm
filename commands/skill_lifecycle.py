@@ -1,4 +1,4 @@
-"""Helm CLI commands for skill lifecycle management (M1: read-only)."""
+"""Helm CLI commands for skill lifecycle management."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from commands import target_root
 from scripts.skill_lifecycle_lib import (
@@ -15,13 +16,17 @@ from scripts.skill_lifecycle_lib import (
     apply_restore,
     apply_stale,
     compute_summary,
+    correlate_events_with_ledger,
     detect_negative_claims,
     detect_umbrella_candidates,
     load_config,
     load_usage,
+    observe,
+    persist_negative_claims,
     plan_archive,
     plan_restore,
     read_events,
+    record_runner_event,
     render_report_json,
     render_report_markdown,
     save_config,
@@ -248,32 +253,42 @@ def cmd_skill_lifecycle_restore(args: argparse.Namespace) -> int:
 
 def cmd_skill_lifecycle_negative_claims(args: argparse.Namespace) -> int:
     paths = _paths_for(args)
-    _ensure_config(paths, write=False)
+    _ensure_config(paths, write=args.persist)
     candidates = detect_negative_claims(paths)
 
+    persisted = None
+    if args.persist:
+        persisted = persist_negative_claims(paths, ttl_days=args.ttl_days, confidence=args.confidence)
+
     if args.json:
-        payload = [
-            {
-                "claim_id": c.claim_id,
-                "skill_id": c.skill_id,
-                "skill_md": c.skill_md,
-                "line_no": c.line_no,
-                "keyword": c.keyword,
-                "text": c.text,
-            }
-            for c in candidates
-        ]
+        payload: dict[str, Any] = {
+            "candidates": [
+                {
+                    "claim_id": c.claim_id,
+                    "skill_id": c.skill_id,
+                    "skill_md": c.skill_md,
+                    "line_no": c.line_no,
+                    "keyword": c.keyword,
+                    "text": c.text,
+                }
+                for c in candidates
+            ],
+        }
+        if persisted is not None:
+            payload["persisted"] = persisted
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
 
     if not candidates:
         print("(no negative-claim candidates)")
-        return 0
+    else:
+        print(f"negative-claim candidates: {len(candidates)}")
+        for claim in candidates:
+            print(f"  {claim.skill_id} ({claim.skill_md}:{claim.line_no}) [{claim.keyword}]")
+            print(f"    > {claim.text}")
 
-    print(f"negative-claim candidates: {len(candidates)}")
-    for claim in candidates:
-        print(f"  {claim.skill_id} ({claim.skill_md}:{claim.line_no}) [{claim.keyword}]")
-        print(f"    > {claim.text}")
+    if persisted is not None:
+        print(f"persisted: added={persisted['added']} kept={persisted['kept']}")
     return 0
 
 
@@ -283,7 +298,10 @@ def cmd_skill_lifecycle_umbrella(args: argparse.Namespace) -> int:
     clusters = detect_umbrella_candidates(paths, min_cluster_size=args.min_cluster_size)
 
     if args.json:
-        payload = [{"token": c.token, "skill_ids": list(c.skill_ids)} for c in clusters]
+        payload = [
+            {"signal": c.signal, "token": c.token, "skill_ids": list(c.skill_ids)}
+            for c in clusters
+        ]
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
 
@@ -293,9 +311,97 @@ def cmd_skill_lifecycle_umbrella(args: argparse.Namespace) -> int:
 
     print(f"umbrella candidate clusters: {len(clusters)}")
     for cluster in clusters:
-        print(f"  shared token `{cluster.token}` ({len(cluster.skill_ids)} skills)")
+        print(f"  [{cluster.signal}] `{cluster.token}` ({len(cluster.skill_ids)} skills)")
         for skill_id in cluster.skill_ids:
             print(f"    - {skill_id}")
+    return 0
+
+
+def cmd_skill_lifecycle_ledger(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    rows = correlate_events_with_ledger(paths, skill_id=args.skill, limit=args.limit)
+
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+
+    if not rows:
+        print("(no events)")
+        return 0
+    for row in rows:
+        ts = row.get("ts", "?")
+        event = row.get("event", "?")
+        skill_id = row.get("skill_id", "")
+        task_name = row.get("task_name") or ""
+        task_status = row.get("task_status") or ""
+        exit_code = row.get("task_exit_code")
+        suffix_parts = []
+        if task_name:
+            suffix_parts.append(f"task={task_name!r}")
+        if task_status:
+            suffix_parts.append(f"status={task_status}")
+        if exit_code is not None:
+            suffix_parts.append(f"exit={exit_code}")
+        suffix = " ".join(suffix_parts)
+        print(f"{ts} {event} {skill_id} {suffix}".rstrip())
+    return 0
+
+
+def cmd_skill_lifecycle_view(args: argparse.Namespace) -> int:
+    """Manually record a skill_viewed event.
+
+    Useful when atime-based observation is unreliable (e.g., macOS APFS
+    deferred atime updates) — callers that explicitly opened a SKILL.md can
+    record the view directly via this command instead.
+    """
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    if not paths.usage_path.exists():
+        print("error: lifecycle layer not initialized; run `helm skill-lifecycle scan` first", file=sys.stderr)
+        return 2
+    ok = record_runner_event(
+        paths.workspace,
+        skill_id=args.skill,
+        event="skill_viewed",
+        extra={"source": "manual"},
+    )
+    if not ok:
+        print(f"error: unknown skill or recording failed: {args.skill}", file=sys.stderr)
+        return 2
+    entry = load_usage(paths)["skills"][args.skill]
+    print(f"viewed: {args.skill} (view_count={entry['view_count']})")
+    return 0
+
+
+def cmd_skill_lifecycle_observe(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=not args.dry_run)
+    result = observe(paths, dry_run=args.dry_run)
+
+    if args.json:
+        payload = {
+            "baseline": result.baseline,
+            "viewed": result.viewed,
+            "patched": result.patched,
+            "total_observed": result.total_observed,
+            "dry_run": args.dry_run,
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    label = "[dry-run] " if args.dry_run else ""
+    print(f"{label}observed: {result.total_observed}")
+    if result.baseline:
+        print(f"{label}baselined (first observation): {len(result.baseline)}")
+    if result.viewed:
+        print(f"{label}skill_viewed (atime advanced): {len(result.viewed)}")
+        for skill_id in result.viewed:
+            print(f"  ~ {skill_id}")
+    if result.patched:
+        print(f"{label}skill_patched (mtime advanced): {len(result.patched)}")
+        for skill_id in result.patched:
+            print(f"  + {skill_id}")
     return 0
 
 

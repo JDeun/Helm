@@ -8,8 +8,9 @@ This is a conservative lifecycle layer. It records observations and surfaces
 candidates; it never auto-deletes a skill, and the only state mutations it
 performs are explicit (`archive`, `pin`, `stale --apply`).
 
-> Status: M4 (read-only + mutating + runner integration + negative-claim and
-> umbrella candidate detection).
+> Status: post-M4 polish — adds task-ledger correlation, mtime/atime
+> observer, manual `view` event, persistent negative-claim metadata, and
+> richer umbrella signals (description token + downstream sharing).
 
 ## Why
 
@@ -161,16 +162,93 @@ graceful handling, not a stale claim). Treat the output as a review queue.
 ### `helm skill-lifecycle umbrella`
 
 Surface umbrella consolidation candidates by clustering active skill ids
-that share a meaningful name token.
+across three signals:
+
+- `name_token` — skills sharing a meaningful token in their id (e.g.,
+  `*-search`)
+- `description_token` — skills sharing a distinctive token in their
+  `SKILL.md` frontmatter `description:` (Jaccard-style); tokens that
+  appear in more than ~25% of skills are filtered as too generic
+- `downstream_share` — skills that reference the same downstream skill
+  in backticks (`` `<skill-id>` ``) inside their SKILL.md body
 
 ```bash
 helm skill-lifecycle umbrella --path ~/.openclaw/workspace
 helm skill-lifecycle umbrella --path ~/.openclaw/workspace --min-cluster-size 4 --json
 ```
 
-Tokens like `ko`, `ops`, `data`, `info`, `v1`, `v2` are excluded as too
-generic. Archived skills are excluded. Reported as advisory only — the PRD
-explicitly rules out automatic merging.
+Each cluster carries a `signal` field plus the shared `token` and the
+member `skill_ids`. Tokens like `ko`, `ops`, `data`, `info`, `v1`, `v2`
+plus an extended English/Korean stopword list of common verbs are
+excluded. Archived skills are excluded. Reported as advisory only — the
+PRD explicitly rules out automatic merging.
+
+### `helm skill-lifecycle ledger`
+
+Print lifecycle events joined with rows from
+`<workspace>/.openclaw/task-ledger.jsonl` by `task_id`. When a runner
+event carries a `task_id`, the matching ledger row contributes
+`task_name`, `task_status`, `exit_code`, `started_at`, `finished_at`,
+and `profile` to the event line.
+
+```bash
+helm skill-lifecycle ledger --path ~/.openclaw/workspace
+helm skill-lifecycle ledger --path ~/.openclaw/workspace --skill car
+helm skill-lifecycle ledger --path ~/.openclaw/workspace --limit 50 --json
+```
+
+Useful for tracing a skill's recent runs end-to-end without manually
+correlating event timestamps to the task ledger.
+
+### `helm skill-lifecycle observe`
+
+Poll every tracked SKILL.md and emit `skill_patched` (mtime advance) or
+`skill_viewed` (atime advance) events. The first invocation per skill
+baselines its timestamps silently — events fire only on the second and
+subsequent observations.
+
+```bash
+helm skill-lifecycle observe --path ~/.openclaw/workspace
+helm skill-lifecycle observe --path ~/.openclaw/workspace --dry-run --json
+```
+
+Caveat: macOS APFS and many Linux mounts defer or disable atime updates.
+Where atime is unreliable, `skill_viewed` events from `observe` will
+under-report. The mtime path remains accurate for actual edits. For an
+atime-independent view signal, use `helm skill-lifecycle view <skill>`.
+
+### `helm skill-lifecycle view`
+
+Manually record a `skill_viewed` event. Useful for callers that opened a
+SKILL.md and want to record the view explicitly, independent of
+filesystem atime semantics.
+
+```bash
+helm skill-lifecycle view --path ~/.openclaw/workspace car
+```
+
+### Persisting negative claims
+
+`helm skill-lifecycle negative-claims --persist` writes detected claims
+into per-skill metadata using the PRD-specified shape:
+
+```json
+{
+  "claim_id": "sha256:...",
+  "text": "...",
+  "keyword": "...",
+  "skill_md": "skills/<name>/SKILL.md",
+  "line_no": 42,
+  "detected_at": "2026-05-03T...",
+  "last_revalidated_at": null,
+  "ttl_days": 30,
+  "confidence": 0.6,
+  "status": "needs_review"
+}
+```
+
+Re-runs are idempotent — they preserve manually edited `status` /
+`last_revalidated_at` / `confidence` fields by keying on `claim_id`.
 
 ## Configuration
 
@@ -228,6 +306,8 @@ The log is append-only.
 | `skill_used` | `helm profile run --skill <name>` start | `use_count`, `last_used_at` |
 | `skill_success` | `run_with_profile` exit code 0 | `last_successful_apply_at` |
 | `skill_failure` | `run_with_profile` non-zero exit or timeout | none |
+| `skill_viewed` | `view` (manual) or `observe` (atime advance) | `view_count`, `last_viewed_at` |
+| `skill_patched` | `observe` (mtime advance) | `patch_count`, `last_patched_at` |
 | `skill_promoted` | `helm skill-approve` (skill_capture promote) | `patch_count`, `last_patched_at` |
 | `skill_rejected` | `helm skill-reject` | none |
 | `skill_pinned` / `skill_unpinned` | `pin` / `unpin` | none |

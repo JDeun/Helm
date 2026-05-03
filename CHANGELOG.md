@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## [0.7.1] — 2026-05-03
+
+### Added
+
+- **skill-lifecycle ledger**: new `helm skill-lifecycle ledger` joins lifecycle events with `task-ledger.jsonl` rows by `task_id`, surfacing `task_name` / `task_status` / `exit_code` per event. Useful for tracing a skill's recent runs end-to-end.
+- **skill-lifecycle observe**: new `helm skill-lifecycle observe` polls SKILL.md `mtime`/`atime` and records `skill_patched` / `skill_viewed` events when timestamps advance. First run baselines silently. macOS APFS atime caveat documented.
+- **skill-lifecycle view**: new `helm skill-lifecycle view <skill>` records a `skill_viewed` event manually — atime-independent, useful when filesystem atime tracking is unreliable.
+- **skill-lifecycle negative-claims --persist**: detected claims are now written into per-skill `negative_claims` metadata using the PRD-specified shape (`claim_id` / `text` / `keyword` / `detected_at` / `last_revalidated_at` / `ttl_days` / `confidence` / `status`). Idempotent: re-running keeps existing entries by `claim_id`, so manually-edited `status` fields ("still_valid", "resolved") survive future runs.
+- **skill-lifecycle umbrella**: now emits three signal types — `name_token` (existing), `description_token` (Jaccard-style on SKILL.md frontmatter description), and `downstream_share` (skills referencing the same downstream skill in backticks). Each cluster carries a `signal` field. Description-token clusters cap at ~25% of skills to filter generic words; expanded English/Korean stopword list filters common verbs.
+- **report**: now includes `## Pin Candidates` (active unpinned skills with `use_count >= 3`) and `## Recommended Actions` (action items derived from never-used / archive / pin / umbrella / negative-claim findings).
+
+### Changed
+
+- **briefing dedup gate** (workspace `scripts/briefing_dedup_check.py`): also searches `~/.openclaw/memory/main.sqlite` (`chunks_fts` FTS5) and `~/.openclaw/workspace/.openclaw/task-ledger.jsonl` (last 7 days). New flags `--ledger-lookback-days N`, `--no-memory`, `--no-ledger`. Verdicts now include a `sources` breakdown (`obsidian_notes` / `obsidian_web` / `memory` / `task_ledger`); `existing_notes` retained for back-compat. Placeholder hosts (`example.com`, `localhost`, `0.0.0.0`, etc.) are filtered out of URL needles to prevent false positives.
+- **eligibility report** (workspace `scripts/skill_eligibility_report.py`): now reads lifecycle metadata and shows `state` / `pinned` / `use_count` / `last_used_at` / `source` per skill, plus an aggregate summary. New `--json` mode. Falls back gracefully when the lifecycle layer is not initialized.
+
+### Tests
+
+- 55 lifecycle test cases (12 added since 0.7.0) covering pin candidates, recommended actions, persisted negative claims (idempotency + status preservation), umbrella signal richness (description / downstream / generic-token filtering), task-ledger correlation, observer (baseline / mtime advance / dry-run / uninitialized), and the new manual `view` event path.
+- Full suite: 364 tests passing.
+
 ## [0.7.0] — 2026-05-03
 
 ### Added

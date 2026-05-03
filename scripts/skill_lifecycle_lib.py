@@ -422,12 +422,24 @@ def compute_summary(
     least_recently_used.sort(key=lambda x: (x[1] or 0.0), reverse=True)
     archive_candidates.sort(key=lambda x: (x[1] or 0.0), reverse=True)
 
+    pin_candidates: list[tuple[str, int]] = []
+    for skill_id, entry in skills.items():
+        if entry.get("state") in {"archived", "missing"}:
+            continue
+        if entry.get("pinned"):
+            continue
+        use_count = int(entry.get("use_count", 0) or 0)
+        if use_count >= 3:
+            pin_candidates.append((skill_id, use_count))
+    pin_candidates.sort(key=lambda x: x[1], reverse=True)
+
     summary: dict[str, Any] = {
         "total": len(skills),
         "counts": counts,
         "never_used": never_used[:top_n],
         "least_recently_used": least_recently_used[:top_n],
         "archive_candidates": archive_candidates[:top_n],
+        "pin_candidates": pin_candidates[:top_n],
         "umbrella_candidates": [],
         "negative_claim_candidates": [],
     }
@@ -449,7 +461,48 @@ def compute_summary(
             for c in detect_negative_claims(paths)
         ]
 
+    summary["recommended_actions"] = _build_recommended_actions(summary)
     return summary
+
+
+def _build_recommended_actions(summary: dict[str, Any]) -> list[dict[str, str]]:
+    actions: list[dict[str, str]] = []
+    if summary["never_used"]:
+        n = len(summary["never_used"])
+        actions.append({
+            "kind": "review_never_used",
+            "detail": f"{n} skills never used since registration; consider archive or pin",
+            "command": "helm skill-lifecycle status",
+        })
+    if summary["archive_candidates"]:
+        n = len(summary["archive_candidates"])
+        actions.append({
+            "kind": "review_archive_candidates",
+            "detail": f"{n} skills idle past policy threshold; review for archival",
+            "command": "helm skill-lifecycle stale --dry-run",
+        })
+    if summary["pin_candidates"]:
+        n = len(summary["pin_candidates"])
+        actions.append({
+            "kind": "consider_pinning",
+            "detail": f"{n} actively used skills are not pinned; pin to protect from auto-stale",
+            "command": "helm skill-lifecycle pin <skill>",
+        })
+    if summary["umbrella_candidates"]:
+        n = len(summary["umbrella_candidates"])
+        actions.append({
+            "kind": "review_umbrella",
+            "detail": f"{n} shared-token clusters surfaced; consider an umbrella router",
+            "command": "helm skill-lifecycle umbrella",
+        })
+    if summary["negative_claim_candidates"]:
+        n = len(summary["negative_claim_candidates"])
+        actions.append({
+            "kind": "review_negative_claims",
+            "detail": f"{n} negative-claim candidate lines; triage before they mislead future runs",
+            "command": "helm skill-lifecycle negative-claims",
+        })
+    return actions
 
 
 def render_report_markdown(usage: dict[str, Any], summary: dict[str, Any]) -> str:
@@ -484,6 +537,15 @@ def render_report_markdown(usage: dict[str, Any], summary: dict[str, Any]) -> st
     _block("Least Recently Used", summary["least_recently_used"], "days since last use")
     _block("Archive Candidates", summary["archive_candidates"], "days idle")
 
+    pin_rows = summary.get("pin_candidates") or []
+    lines.append("## Pin Candidates")
+    if not pin_rows:
+        lines.append("- (none)")
+    else:
+        for skill_id, use_count in pin_rows:
+            lines.append(f"- {skill_id} ({use_count} uses)")
+    lines.append("")
+
     lines.append("## Umbrella Candidates")
     umbrella = summary.get("umbrella_candidates") or []
     if not umbrella:
@@ -508,6 +570,17 @@ def render_report_markdown(usage: dict[str, Any], summary: dict[str, Any]) -> st
             lines.append(f"- `{claim['skill_id']}` {claim['skill_md']}:{claim['line_no']} [{claim['keyword']}]")
             lines.append(f"  > {claim['text']}")
         lines.append("")
+
+    actions = summary.get("recommended_actions") or []
+    lines.append("## Recommended Actions")
+    if not actions:
+        lines.append("- (none)")
+    else:
+        for action in actions:
+            lines.append(f"- **{action['kind']}** — {action['detail']}")
+            if action.get("command"):
+                lines.append(f"  - run: `{action['command']}`")
+    lines.append("")
 
     return "\n".join(lines)
 
@@ -832,6 +905,67 @@ def _hash_claim(skill_id: str, line_no: int, text: str) -> str:
     return f"sha256:{digest[:16]}"
 
 
+DEFAULT_CLAIM_TTL_DAYS = 30
+DEFAULT_CLAIM_CONFIDENCE = 0.6
+DEFAULT_CLAIM_STATUS = "needs_review"
+
+
+def persist_negative_claims(
+    paths: LifecyclePaths,
+    *,
+    ttl_days: int = DEFAULT_CLAIM_TTL_DAYS,
+    confidence: float = DEFAULT_CLAIM_CONFIDENCE,
+) -> dict[str, int]:
+    """Persist detected negative claims into per-skill metadata.
+
+    Stable claim_ids prevent duplicate writes across re-runs. Returns a
+    summary {"added": N, "kept": M, "removed_stale": K} describing what
+    changed in usage.json. Existing claims that no longer match (e.g., line
+    edited away) are left in place with their existing status — only new
+    claims are inserted, so manual `last_revalidated_at` / `status` edits
+    are preserved.
+    """
+
+    if not paths.usage_path.exists():
+        return {"added": 0, "kept": 0, "removed_stale": 0}
+
+    usage = load_usage(paths)
+    candidates = detect_negative_claims(paths)
+    grouped: dict[str, list[ClaimCandidate]] = {}
+    for c in candidates:
+        grouped.setdefault(c.skill_id, []).append(c)
+
+    now = utc_now_iso()
+    added = 0
+    kept = 0
+    for skill_id, claims in grouped.items():
+        entry = usage.get("skills", {}).get(skill_id)
+        if entry is None:
+            continue
+        existing = entry.get("negative_claims") or []
+        existing_ids = {c.get("claim_id") for c in existing if isinstance(c, dict)}
+        for claim in claims:
+            if claim.claim_id in existing_ids:
+                kept += 1
+                continue
+            existing.append({
+                "claim_id": claim.claim_id,
+                "text": claim.text,
+                "keyword": claim.keyword,
+                "skill_md": claim.skill_md,
+                "line_no": claim.line_no,
+                "detected_at": now,
+                "last_revalidated_at": None,
+                "ttl_days": ttl_days,
+                "confidence": confidence,
+                "status": DEFAULT_CLAIM_STATUS,
+            })
+            added += 1
+        entry["negative_claims"] = existing
+    save_usage(paths, usage)
+    return {"added": added, "kept": kept, "removed_stale": 0}
+
+
 def detect_negative_claims(paths: LifecyclePaths) -> list[ClaimCandidate]:
     if not paths.skills_root.exists():
         return []
@@ -871,6 +1005,7 @@ def detect_negative_claims(paths: LifecyclePaths) -> list[ClaimCandidate]:
 class UmbrellaCluster:
     token: str
     skill_ids: tuple[str, ...]
+    signal: str = "name_token"
 
 
 _UMBRELLA_STOP_TOKENS = {
@@ -884,17 +1019,45 @@ _UMBRELLA_STOP_TOKENS = {
     "info",
 }
 
+_DESCRIPTION_STOP_WORDS = {
+    "the", "a", "an", "and", "or", "for", "to", "of", "in", "on", "at", "by",
+    "with", "from", "as", "is", "are", "be", "use", "used", "using", "user",
+    "this", "that", "these", "those", "it", "its", "into", "when", "where",
+    "what", "which", "how", "should", "must", "can", "will", "do", "does",
+    "not", "no", "yes", "any", "all", "some", "more", "most", "less", "than",
+    "but", "also", "if", "so", "such", "via",
+    # Common action verbs that appear across many SKILL.md descriptions
+    "need", "needs", "needed", "want", "wants", "wanted",
+    "make", "makes", "made", "making", "get", "gets", "getting",
+    "find", "finds", "finding", "show", "shows", "showing",
+    "give", "gives", "giving", "take", "takes", "taking",
+    "ask", "asks", "asking", "say", "says", "saying", "tell", "tells",
+    "run", "runs", "running", "call", "calls", "calling",
+    "add", "adds", "adding", "set", "sets", "setting",
+    "skill", "skills", "task", "tasks", "tool", "tools", "agent", "agents",
+    # Korean stop fragments (filter shorter forms by length already)
+    "있다", "없다", "한다", "된다", "있을", "없을", "또는", "그리고",
+    "사용", "필요", "관련", "처리", "기반", "포함", "제공",
+}
 
-def detect_umbrella_candidates(paths: LifecyclePaths, *, min_cluster_size: int = 3) -> list[UmbrellaCluster]:
-    if not paths.skills_root.exists():
-        return []
-    skill_tokens: dict[str, set[str]] = {}
-    for item in iter_skills(paths):
-        if item.is_archived:
+
+def _tokenize_description(text: str) -> set[str]:
+    tokens: set[str] = set()
+    for raw in re.findall(r"[A-Za-z가-힣]+", text):
+        lowered = raw.lower()
+        if len(lowered) < 4:
             continue
-        tokens = {t for t in re.split(r"[-_]", item.skill_id) if len(t) >= 3 and t.lower() not in _UMBRELLA_STOP_TOKENS}
-        skill_tokens[item.skill_id] = {t.lower() for t in tokens}
+        if lowered in _DESCRIPTION_STOP_WORDS:
+            continue
+        tokens.add(lowered)
+    return tokens
 
+
+def _detect_umbrella_by_name_token(
+    skill_tokens: dict[str, set[str]],
+    *,
+    min_cluster_size: int,
+) -> list[UmbrellaCluster]:
     token_to_skills: dict[str, set[str]] = {}
     for skill_id, tokens in skill_tokens.items():
         for token in tokens:
@@ -904,7 +1067,138 @@ def detect_umbrella_candidates(paths: LifecyclePaths, *, min_cluster_size: int =
     for token, skills in sorted(token_to_skills.items(), key=lambda kv: (-len(kv[1]), kv[0])):
         if len(skills) < min_cluster_size:
             continue
-        clusters.append(UmbrellaCluster(token=token, skill_ids=tuple(sorted(skills))))
+        clusters.append(
+            UmbrellaCluster(
+                token=token,
+                skill_ids=tuple(sorted(skills)),
+                signal="name_token",
+            )
+        )
+    return clusters
+
+
+def _detect_umbrella_by_description(
+    skill_descriptions: dict[str, str],
+    *,
+    min_cluster_size: int,
+    max_clusters: int = 15,
+) -> list[UmbrellaCluster]:
+    if not skill_descriptions:
+        return []
+    skill_tokens: dict[str, set[str]] = {
+        sid: _tokenize_description(desc) for sid, desc in skill_descriptions.items() if desc
+    }
+    token_to_skills: dict[str, set[str]] = {}
+    for skill_id, tokens in skill_tokens.items():
+        for token in tokens:
+            token_to_skills.setdefault(token, set()).add(skill_id)
+
+    total = len(skill_descriptions) or 1
+    # Tokens shared by more than ~25% of skills are too generic to be useful
+    # as umbrella clusters — they tell you "many skills mention this" rather
+    # than "this group could share a router".
+    too_generic_threshold = max(min_cluster_size + 1, (total // 4) + 1)
+    clusters: list[UmbrellaCluster] = []
+    for token, skills in sorted(token_to_skills.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        if len(skills) < min_cluster_size:
+            continue
+        if len(skills) >= too_generic_threshold:
+            continue
+        clusters.append(
+            UmbrellaCluster(
+                token=token,
+                skill_ids=tuple(sorted(skills)),
+                signal="description_token",
+            )
+        )
+        if len(clusters) >= max_clusters:
+            break
+    return clusters
+
+
+def _detect_umbrella_by_downstream_share(
+    skill_downstreams: dict[str, set[str]],
+    *,
+    min_cluster_size: int,
+    min_shared: int = 2,
+) -> list[UmbrellaCluster]:
+    if not skill_downstreams:
+        return []
+    downstream_to_skills: dict[str, set[str]] = {}
+    for skill_id, downstream in skill_downstreams.items():
+        for d in downstream:
+            downstream_to_skills.setdefault(d, set()).add(skill_id)
+
+    clusters: list[UmbrellaCluster] = []
+    seen_groupings: set[tuple[str, ...]] = set()
+    for downstream, skills in sorted(downstream_to_skills.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        if len(skills) < min_cluster_size:
+            continue
+        key = tuple(sorted(skills))
+        if key in seen_groupings:
+            continue
+        seen_groupings.add(key)
+        clusters.append(
+            UmbrellaCluster(
+                token=downstream,
+                skill_ids=key,
+                signal="downstream_share",
+            )
+        )
+    return clusters
+
+
+def _scan_skill_meta(paths: LifecyclePaths) -> tuple[
+    dict[str, set[str]],
+    dict[str, str],
+    dict[str, set[str]],
+]:
+    """Return (name_tokens, descriptions, downstream_refs) for active skills."""
+    name_tokens: dict[str, set[str]] = {}
+    descriptions: dict[str, str] = {}
+    downstream_refs: dict[str, set[str]] = {}
+
+    skill_ids: set[str] = set()
+    payloads: dict[str, str] = {}
+    for item in iter_skills(paths):
+        if item.is_archived:
+            continue
+        skill_ids.add(item.skill_id)
+        try:
+            text = item.skill_md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        payloads[item.skill_id] = text
+        tokens = {
+            t.lower()
+            for t in re.split(r"[-_]", item.skill_id)
+            if len(t) >= 3 and t.lower() not in _UMBRELLA_STOP_TOKENS
+        }
+        name_tokens[item.skill_id] = tokens
+        frontmatter = _parse_frontmatter(item.skill_md)
+        descriptions[item.skill_id] = frontmatter.get("description", "")
+
+    backtick_re = re.compile(r"`([a-z][a-z0-9-]{2,})`")
+    for skill_id, text in payloads.items():
+        refs: set[str] = set()
+        for match in backtick_re.findall(text):
+            if match in skill_ids and match != skill_id:
+                refs.add(match)
+        if refs:
+            downstream_refs[skill_id] = refs
+
+    return name_tokens, descriptions, downstream_refs
+
+
+def detect_umbrella_candidates(paths: LifecyclePaths, *, min_cluster_size: int = 3) -> list[UmbrellaCluster]:
+    if not paths.skills_root.exists():
+        return []
+    name_tokens, descriptions, downstream_refs = _scan_skill_meta(paths)
+
+    clusters: list[UmbrellaCluster] = []
+    clusters.extend(_detect_umbrella_by_name_token(name_tokens, min_cluster_size=min_cluster_size))
+    clusters.extend(_detect_umbrella_by_description(descriptions, min_cluster_size=min_cluster_size))
+    clusters.extend(_detect_umbrella_by_downstream_share(downstream_refs, min_cluster_size=min_cluster_size))
     return clusters
 
 
@@ -927,3 +1221,156 @@ def read_events(paths: LifecyclePaths, *, skill_id: str | None = None, limit: in
     if limit is not None and limit >= 0:
         rows = rows[-limit:]
     return rows
+
+
+def _task_ledger_path(workspace: Path) -> Path:
+    return workspace / ".openclaw" / "task-ledger.jsonl"
+
+
+def read_task_ledger_index(workspace: Path) -> dict[str, dict[str, Any]]:
+    """Return the latest task-ledger row per task_id keyed by task_id.
+
+    The ledger writes multiple rows per task (queued -> running -> finished).
+    We keep the last row written per task_id, which holds final status.
+    Fail-soft: returns {} if the ledger is missing or unreadable.
+    """
+
+    ledger = _task_ledger_path(workspace)
+    if not ledger.exists():
+        return {}
+    index: dict[str, dict[str, Any]] = {}
+    try:
+        with ledger.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                task_id = row.get("task_id")
+                if isinstance(task_id, str) and task_id:
+                    index[task_id] = row
+    except OSError:
+        return {}
+    return index
+
+
+@dataclass
+class ObserveResult:
+    baseline: list[str]
+    viewed: list[str]
+    patched: list[str]
+    total_observed: int
+
+
+def observe(paths: LifecyclePaths, *, dry_run: bool = False) -> ObserveResult:
+    """Record skill_viewed / skill_patched events by polling SKILL.md stat.
+
+    Compares the current mtime and atime of each tracked SKILL.md against the
+    last observation stored in usage.json. mtime advance -> skill_patched
+    (patch_count, last_patched_at). atime advance -> skill_viewed
+    (view_count, last_viewed_at). On first observation, baseline timestamps
+    are recorded without emitting events.
+
+    Caveat: macOS APFS and many Linux mounts defer or disable atime updates.
+    Where atime tracking is unreliable, skill_viewed will under-report; the
+    mtime path remains accurate for actual edits.
+    """
+
+    if not paths.usage_path.exists():
+        return ObserveResult(baseline=[], viewed=[], patched=[], total_observed=0)
+
+    usage = load_usage(paths)
+    skills_index = usage.get("skills", {})
+    baseline: list[str] = []
+    viewed: list[str] = []
+    patched: list[str] = []
+    total = 0
+
+    for skill_id, entry in skills_index.items():
+        if entry.get("state") in {"missing"}:
+            continue
+        relative = entry.get("path") or ""
+        skill_md = paths.workspace / relative
+        if not skill_md.exists():
+            continue
+        try:
+            stat = skill_md.stat()
+        except OSError:
+            continue
+        total += 1
+        current_mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(timespec="seconds")
+        current_atime = datetime.fromtimestamp(stat.st_atime, tz=timezone.utc).isoformat(timespec="seconds")
+        last_mtime = entry.get("last_mtime_seen")
+        last_atime = entry.get("last_atime_seen")
+
+        if last_mtime is None and last_atime is None:
+            baseline.append(skill_id)
+            if not dry_run:
+                entry["last_mtime_seen"] = current_mtime
+                entry["last_atime_seen"] = current_atime
+            continue
+
+        mtime_advanced = last_mtime is not None and current_mtime > last_mtime
+        atime_advanced = last_atime is not None and current_atime > last_atime
+
+        if mtime_advanced:
+            patched.append(skill_id)
+            if not dry_run:
+                entry["patch_count"] = int(entry.get("patch_count", 0) or 0) + 1
+                entry["last_patched_at"] = current_mtime
+                entry["last_mtime_seen"] = current_mtime
+        if atime_advanced:
+            viewed.append(skill_id)
+            if not dry_run:
+                entry["view_count"] = int(entry.get("view_count", 0) or 0) + 1
+                entry["last_viewed_at"] = current_atime
+                entry["last_atime_seen"] = current_atime
+
+        if not (mtime_advanced or atime_advanced) and not dry_run:
+            # Refresh baseline pointer even when no change so future observations
+            # do not flag a one-time stat oddity as advancement.
+            entry["last_mtime_seen"] = current_mtime
+            entry["last_atime_seen"] = current_atime
+
+    if not dry_run:
+        save_usage(paths, usage)
+        for skill_id in patched:
+            append_event(paths, {"event": "skill_patched", "skill_id": skill_id, "source": "observer"})
+        for skill_id in viewed:
+            append_event(paths, {"event": "skill_viewed", "skill_id": skill_id, "source": "observer"})
+
+    return ObserveResult(
+        baseline=baseline,
+        viewed=viewed,
+        patched=patched,
+        total_observed=total,
+    )
+
+
+def correlate_events_with_ledger(
+    paths: LifecyclePaths,
+    *,
+    skill_id: str | None = None,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
+    """Return events joined with their task-ledger row when task_id is set."""
+
+    events = read_events(paths, skill_id=skill_id, limit=limit)
+    ledger = read_task_ledger_index(paths.workspace)
+    enriched: list[dict[str, Any]] = []
+    for event in events:
+        merged: dict[str, Any] = dict(event)
+        task_id = event.get("task_id")
+        if task_id and task_id in ledger:
+            row = ledger[task_id]
+            merged["task_name"] = row.get("task_name")
+            merged["task_status"] = row.get("status")
+            merged["task_started_at"] = row.get("started_at")
+            merged["task_finished_at"] = row.get("finished_at")
+            merged["task_exit_code"] = row.get("exit_code")
+            merged["task_profile"] = row.get("profile")
+        enriched.append(merged)
+    return enriched

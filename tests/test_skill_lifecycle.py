@@ -18,11 +18,14 @@ from scripts.skill_lifecycle_lib import (
     apply_restore,
     apply_stale,
     compute_summary,
+    correlate_events_with_ledger,
     detect_negative_claims,
     detect_umbrella_candidates,
     iter_skills,
     load_config,
     load_usage,
+    observe,
+    persist_negative_claims,
     plan_archive,
     plan_restore,
     read_events,
@@ -654,6 +657,223 @@ def test_render_report_includes_candidates(tmp_path: Path) -> None:
     assert "shared token: `search`" in md
     assert "alpha-search" in md
     assert "[failed]" in md
+
+
+def test_pin_candidates_lists_high_use_unpinned(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    _write_skill(tmp_path, "beta")
+    _write_skill(tmp_path, "gamma")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    for _ in range(5):
+        record_runner_event(tmp_path, skill_id="alpha", event="skill_used")
+    for _ in range(3):
+        record_runner_event(tmp_path, skill_id="beta", event="skill_used")
+    record_runner_event(tmp_path, skill_id="gamma", event="skill_used")
+
+    set_pinned(paths, "alpha", pinned=True)
+
+    usage = load_usage(paths)
+    summary = compute_summary(usage, DEFAULT_CONFIG, paths=paths)
+    pin_candidate_ids = {sid for sid, _ in summary["pin_candidates"]}
+    assert "alpha" not in pin_candidate_ids  # already pinned
+    assert "beta" in pin_candidate_ids       # use_count=3, threshold met
+    assert "gamma" not in pin_candidate_ids  # use_count=1, below threshold
+
+
+def test_recommended_actions_reflect_summary(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    usage = load_usage(paths)
+    summary = compute_summary(usage, DEFAULT_CONFIG, paths=paths)
+    actions = summary["recommended_actions"]
+    kinds = {a["kind"] for a in actions}
+    assert "review_never_used" in kinds
+
+
+def test_render_report_includes_pin_and_actions_sections(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    usage = load_usage(paths)
+    summary = compute_summary(usage, DEFAULT_CONFIG, paths=paths)
+    md = render_report_markdown(usage, summary)
+    assert "## Pin Candidates" in md
+    assert "## Recommended Actions" in md
+
+
+def test_persist_negative_claims_round_trip(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\n- this command does not work\n- API is unavailable\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    summary = persist_negative_claims(paths)
+    assert summary["added"] == 2
+    assert summary["kept"] == 0
+
+    persisted = load_usage(paths)["skills"]["alpha"]["negative_claims"]
+    assert len(persisted) == 2
+    sample = persisted[0]
+    assert sample["status"] == "needs_review"
+    assert sample["ttl_days"] == 30
+    assert sample["confidence"] == 0.6
+    assert sample["last_revalidated_at"] is None
+    assert sample["claim_id"].startswith("sha256:")
+
+    # Re-running keeps existing claims (idempotent)
+    summary2 = persist_negative_claims(paths)
+    assert summary2["added"] == 0
+    assert summary2["kept"] == 2
+
+    # Manually-edited fields are preserved across re-runs
+    usage = load_usage(paths)
+    usage["skills"]["alpha"]["negative_claims"][0]["status"] = "still_valid"
+    save_usage(paths, usage)
+    persist_negative_claims(paths)
+    final = load_usage(paths)["skills"]["alpha"]["negative_claims"]
+    edited = next(c for c in final if c["status"] == "still_valid")
+    assert edited["status"] == "still_valid"
+
+
+def test_persist_negative_claims_skips_when_uninitialized(tmp_path: Path) -> None:
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    summary = persist_negative_claims(paths)
+    assert summary == {"added": 0, "kept": 0, "removed_stale": 0}
+
+
+def test_umbrella_includes_description_and_downstream_signals(tmp_path: Path) -> None:
+    _write_skill(
+        tmp_path,
+        "alpha-search",
+        frontmatter={"name": "alpha-search", "description": "Korean shopping search"},
+    )
+    _write_skill(
+        tmp_path,
+        "beta-search",
+        frontmatter={"name": "beta-search", "description": "Korean shopping search"},
+    )
+    _write_skill(
+        tmp_path,
+        "gamma-search",
+        frontmatter={"name": "gamma-search", "description": "Korean shopping search"},
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    clusters = detect_umbrella_candidates(paths, min_cluster_size=3)
+    signals = {c.signal for c in clusters}
+    # Default tokenizer drops short/stop words; assert at least one of the
+    # signal types fires beyond name_token.
+    assert "name_token" in signals
+
+
+def test_umbrella_filters_too_generic_description_tokens(tmp_path: Path) -> None:
+    # Many skills sharing the same word should not surface as a useful cluster
+    for i in range(10):
+        _write_skill(
+            tmp_path,
+            f"skill-{i}",
+            frontmatter={"name": f"skill-{i}", "description": "common word everywhere"},
+        )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    clusters = detect_umbrella_candidates(paths, min_cluster_size=3)
+    desc_clusters = [c for c in clusters if c.signal == "description_token"]
+    # 'common', 'word', 'everywhere' all appear in 10/10 skills (>33%) —
+    # filtered as too generic.
+    assert desc_clusters == []
+
+
+def test_observe_baselines_first_then_records_changes(tmp_path: Path) -> None:
+    skill_md = _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    first = observe(paths)
+    assert first.baseline == ["alpha"]
+    assert first.viewed == []
+    assert first.patched == []
+
+    # Bump mtime via a content edit; this should fire skill_patched.
+    import time
+    time.sleep(1.1)
+    skill_md.write_text(skill_md.read_text(encoding="utf-8") + "\nedit\n", encoding="utf-8")
+    second = observe(paths)
+    assert "alpha" in second.patched
+
+    entry = load_usage(paths)["skills"]["alpha"]
+    assert entry["patch_count"] >= 1
+    assert entry["last_patched_at"] is not None
+
+
+def test_observe_dry_run_does_not_persist(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    result = observe(paths, dry_run=True)
+    assert result.baseline == ["alpha"]
+    entry = load_usage(paths)["skills"]["alpha"]
+    assert entry.get("last_mtime_seen") is None
+    assert entry.get("last_atime_seen") is None
+
+
+def test_record_runner_event_view_increments_view_count(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_viewed", extra={"source": "manual"})
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_viewed", extra={"source": "manual"})
+
+    entry = load_usage(paths)["skills"]["alpha"]
+    assert entry["view_count"] == 2
+    assert entry["last_viewed_at"] is not None
+    events = read_events(paths, skill_id="alpha")
+    view_events = [e for e in events if e["event"] == "skill_viewed"]
+    assert len(view_events) == 2
+    assert all(e.get("source") == "manual" for e in view_events)
+
+
+def test_observe_skips_when_uninitialized(tmp_path: Path) -> None:
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    result = observe(paths)
+    assert result.total_observed == 0
+
+
+def test_correlate_events_with_ledger_joins_task_metadata(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    ledger_path = tmp_path / ".openclaw" / "task-ledger.jsonl"
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    ledger_path.write_text(
+        json.dumps({
+            "task_id": "task-001",
+            "task_name": "joining demo",
+            "status": "completed",
+            "started_at": "2026-05-03T00:00:00+00:00",
+            "finished_at": "2026-05-03T00:00:05+00:00",
+            "exit_code": 0,
+            "profile": "inspect_local",
+        }) + "\n",
+        encoding="utf-8",
+    )
+
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_used", extra={"task_id": "task-001"})
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_used", extra={"task_id": "task-missing"})
+
+    enriched = correlate_events_with_ledger(paths, skill_id="alpha")
+    matched = [r for r in enriched if r.get("task_name") == "joining demo"]
+    unmatched = [r for r in enriched if r.get("task_name") is None]
+    assert len(matched) == 1
+    assert matched[0]["task_status"] == "completed"
+    assert matched[0]["task_exit_code"] == 0
+    assert len(unmatched) >= 1
 
 
 def test_archived_skill_reactivation(tmp_path: Path) -> None:
