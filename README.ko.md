@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 AI agent workspace를 위한 로컬 운영 레이어입니다. 명령 전 profile, 위험 작업 전 checkpoint, chat이 사라진 뒤에도 남는 durable task history를 제공합니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.6.7</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.7.0</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -228,12 +228,13 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md)
 - [`docs/releases/0.6.7.md`](docs/releases/0.6.7.md)
 - [`docs/releases/0.6.6.md`](docs/releases/0.6.6.md)
 
 ## 현재 상태
 
-Helm v0.6.7은 public project polish에 집중합니다. PyPI 설치 경로, landing page 링크, 3분 데모 GIF를 보강해 처음 보는 사람이 더 빨리 평가할 수 있게 했습니다.
+Helm v0.7.0에는 skill-lifecycle layer가 추가됩니다. 사용 이력 추적, 기본 dry-run인 archive / restore, stale / negative-claim / umbrella 후보 탐지를 `SKILL.md` 수정 없이 제공합니다. 자세한 내용은 [`docs/skill-lifecycle.md`](docs/skill-lifecycle.md) 참고.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 

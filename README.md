@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.6.7</strong></p>
+<p align="center"><strong>Current release: v0.7.0</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -228,12 +228,13 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md)
 - [`docs/releases/0.6.7.md`](docs/releases/0.6.7.md)
 - [`docs/releases/0.6.6.md`](docs/releases/0.6.6.md)
 
 ## Status
 
-Helm v0.6.7 focuses on public project polish: PyPI install visibility, landing-page links, and a three-minute demo GIF for faster first-time evaluation.
+Helm v0.7.0 adds a skill-lifecycle layer: usage tracking, dry-run-by-default archive / restore, and stale / negative-claim / umbrella candidate detection — all without modifying `SKILL.md`. See [`docs/skill-lifecycle.md`](docs/skill-lifecycle.md).
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

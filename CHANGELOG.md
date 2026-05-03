@@ -2,14 +2,27 @@
 
 ## Unreleased
 
+## [0.7.0] — 2026-05-03
+
 ### Added
 
-- **skill-lifecycle (M1)**: read-only sidecar telemetry layer. New CLI `helm skill-lifecycle scan|status|report` reconciles `<workspace>/.openclaw/skill-lifecycle/usage.json` with skills on disk, classifies source (workspace/bundled/hub), detects archived skills under `skills/.archive/`, and renders markdown or JSON reports. Never modifies `SKILL.md`; mutating commands land in M2.
-- **skill-lifecycle (M2)**: mutating commands `pin`, `unpin`, `stale`, `archive`, `restore`, `events`. All file-moving commands default to dry-run and require `--apply` to act. Archive refuses pinned skills, protected sources (bundled/hub), already-archived/missing skills, and target collisions; restore refuses live-target collisions. Each transition appends one line to `events.jsonl`.
-- **skill-lifecycle (M3)**: runner integration. `run_with_profile.py` emits `skill_used` (start), `skill_success` (exit 0), and `skill_failure` (non-zero / timeout) events when invoked with `--skill <name>`, updating `use_count`, `last_used_at`, and `last_successful_apply_at` accordingly. `skill_capture.promote-draft` emits `skill_promoted` (increments `patch_count`); `helm skill-reject` emits `skill_rejected`. All hooks are fail-soft: if the lifecycle layer has not been initialized for a workspace, runners skip event emission silently.
-- **skill-lifecycle (M4)**: candidate detection. New `helm skill-lifecycle negative-claims` scans every SKILL.md for English and Korean negative-claim keywords (`does not work`, `unavailable`, `not installed`, `not supported`, `failed`, `안 됨`, `없음`, `불가`, `실패`, `지원하지 않음`), skipping fenced code blocks, and emits stable `claim_id` hashes. New `helm skill-lifecycle umbrella` clusters active skill ids by shared name token to surface consolidation candidates (with stop-token filtering for `ko`, `ops`, `data`, etc.). Both feeds also flow into the markdown / JSON `report` output. Detection is advisory only — no SKILL.md is modified, no merges are applied.
-- **docs**: added `docs/skill-lifecycle.md` covering layout, commands, configuration, source classification, and event log schema.
-- **tests**: added `tests/test_skill_lifecycle.py` with 28 cases covering scan registration, idempotency, dry-run, missing/archived detection, source classification, report rendering, pin/unpin, stale candidate selection (with pinned/protected exclusion), archive→restore roundtrip, archive guards, and event log filtering.
+- **skill-lifecycle**: new sidecar telemetry and curation layer for skills installed in a Helm or OpenClaw workspace. State, usage counters, and event log live under `<workspace>/.openclaw/skill-lifecycle/` (`usage.json`, `events.jsonl`, `config.json`); archived skills move to `<workspace>/skills/.archive/<skill>/`. `SKILL.md` is never modified by lifecycle operations.
+- **skill-lifecycle CLI**: 11 new subcommands under `helm skill-lifecycle`:
+  - read-only — `scan`, `status`, `report`
+  - mutating — `pin`, `unpin`, `stale`, `archive`, `restore` (all dry-run by default; `--apply` to act)
+  - inspection — `events`, `negative-claims`, `umbrella`
+- **runner integration**: `run_with_profile.py` emits `skill_used` (start), `skill_success` (exit 0), `skill_failure` (non-zero / timeout) when invoked with `--skill <name>`, updating `use_count`, `last_used_at`, and `last_successful_apply_at`. `skill_capture.promote-draft` emits `skill_promoted` (increments `patch_count`); `helm skill-reject` emits `skill_rejected`. All hooks are fail-soft — if the lifecycle layer has not been initialized for a workspace, runners skip event emission silently.
+- **candidate detection**: `negative-claims` scans every SKILL.md for English and Korean negative-claim keywords (`does not work`, `unavailable`, `not installed`, `not supported`, `failed`, `안 됨`, `없음`, `불가`, `실패`, `지원하지 않음`), skipping fenced code blocks, and emits stable `claim_id` hashes. `umbrella` clusters active skill ids by shared name token (with stop-token filtering for `ko`, `ops`, `data`, `info`, `v1`, `v2`, etc.). Both feeds flow into the markdown / JSON `report` output. Detection is advisory only — no SKILL.md is modified, no merges are applied.
+- **safety**: archive refuses pinned skills, protected sources (bundled/hub by default via `protect_sources` config), already-archived/missing skills, and target collisions. Restore refuses live-target collisions. Each transition appends one JSONL line to `events.jsonl`.
+
+### Docs
+
+- new `docs/skill-lifecycle.md` covering layout, commands, configuration, source classification, runner integration, and the event log schema.
+- new `docs/releases/0.7.0.md` release note.
+
+### Tests
+
+- added `tests/test_skill_lifecycle.py` with 43 cases covering scan registration / idempotency / dry-run, missing and archived detection, source classification, report rendering, pin / unpin, stale candidate selection (with pinned and protected-source exclusion), archive → restore roundtrip, archive guards, runner-event recording (`use_count`, `last_used_at`, `last_successful_apply_at`, `patch_count`, fail-soft on uninitialized workspace), negative-claim keyword detection (English + Korean, with code-fence skipping), and umbrella token clustering.
 
 ## [0.6.7] — 2026-04-27
 
