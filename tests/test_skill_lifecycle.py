@@ -24,6 +24,7 @@ from scripts.skill_lifecycle_lib import (
     plan_archive,
     plan_restore,
     read_events,
+    record_runner_event,
     render_report_json,
     render_report_markdown,
     save_config,
@@ -441,6 +442,84 @@ def test_read_events_filters_by_skill_and_limit(tmp_path: Path) -> None:
     last_one = read_events(paths, limit=1)
     assert len(last_one) == 1
     assert last_one[0]["event"] == "skill_success"
+
+
+def test_record_runner_event_increments_use_count(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    ok = record_runner_event(tmp_path, skill_id="alpha", event="skill_used", extra={"task_id": "t1"})
+    assert ok is True
+    entry = load_usage(paths)["skills"]["alpha"]
+    assert entry["use_count"] == 1
+    assert entry["last_used_at"] is not None
+
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_used")
+    assert load_usage(paths)["skills"]["alpha"]["use_count"] == 2
+
+    events = read_events(paths, skill_id="alpha")
+    used_events = [e for e in events if e["event"] == "skill_used"]
+    assert len(used_events) == 2
+    assert used_events[0].get("task_id") == "t1"
+
+
+def test_record_runner_event_success_sets_last_successful(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_success")
+    entry = load_usage(paths)["skills"]["alpha"]
+    assert entry["last_successful_apply_at"] is not None
+    # success does not increment use_count (use is recorded by skill_used)
+    assert entry["use_count"] == 0
+
+
+def test_record_runner_event_failure_does_not_set_success_ts(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_failure", extra={"reason": "timeout"})
+    entry = load_usage(paths)["skills"]["alpha"]
+    assert entry["last_successful_apply_at"] is None
+    events = read_events(paths, skill_id="alpha")
+    failure = next(e for e in events if e["event"] == "skill_failure")
+    assert failure.get("reason") == "timeout"
+
+
+def test_record_runner_event_promoted_increments_patch_count(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_promoted")
+    entry = load_usage(paths)["skills"]["alpha"]
+    assert entry["patch_count"] == 1
+    assert entry["last_patched_at"] is not None
+
+
+def test_record_runner_event_skips_when_not_initialized(tmp_path: Path) -> None:
+    # No scan, no usage.json
+    ok = record_runner_event(tmp_path, skill_id="alpha", event="skill_used")
+    assert ok is False
+
+
+def test_record_runner_event_skips_unknown_skill(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    ok = record_runner_event(tmp_path, skill_id="ghost", event="skill_used")
+    assert ok is False
+
+
+def test_record_runner_event_handles_missing_skill_id(tmp_path: Path) -> None:
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    assert record_runner_event(tmp_path, skill_id=None, event="skill_used") is False
+    assert record_runner_event(tmp_path, skill_id="", event="skill_used") is False
 
 
 def test_archived_skill_reactivation(tmp_path: Path) -> None:

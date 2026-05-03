@@ -698,6 +698,64 @@ def apply_restore(paths: LifecyclePaths, plan: RestorePlan) -> dict[str, Any]:
     return entry
 
 
+_COUNTER_BY_EVENT = {
+    "skill_used": "use_count",
+    "skill_viewed": "view_count",
+    "skill_promoted": "patch_count",
+}
+
+_TIMESTAMP_BY_EVENT = {
+    "skill_used": "last_used_at",
+    "skill_viewed": "last_viewed_at",
+    "skill_success": "last_successful_apply_at",
+    "skill_promoted": "last_patched_at",
+}
+
+
+def record_runner_event(
+    workspace: Path,
+    *,
+    skill_id: str | None,
+    event: str,
+    extra: dict[str, Any] | None = None,
+) -> bool:
+    """Update lifecycle counters/timestamps and append the event.
+
+    Fail-soft: returns False on any error so callers in execution paths do not
+    break when lifecycle metadata is unavailable. Skips silently when
+    skill_id is empty or when usage.json has not yet been initialized.
+    """
+
+    if not skill_id:
+        return False
+    paths = LifecyclePaths.for_workspace(workspace)
+    if not paths.usage_path.exists():
+        # Lifecycle layer not initialized for this workspace; do not bootstrap
+        # implicitly from a runner — that should be an explicit `scan`.
+        return False
+
+    try:
+        usage = load_usage(paths)
+        entry = usage.get("skills", {}).get(skill_id)
+        if entry is None:
+            return False
+        now = utc_now_iso()
+        counter_key = _COUNTER_BY_EVENT.get(event)
+        if counter_key:
+            entry[counter_key] = int(entry.get(counter_key, 0) or 0) + 1
+        ts_key = _TIMESTAMP_BY_EVENT.get(event)
+        if ts_key:
+            entry[ts_key] = now
+        save_usage(paths, usage)
+        payload: dict[str, Any] = {"event": event, "skill_id": skill_id}
+        if extra:
+            payload.update(extra)
+        append_event(paths, payload)
+        return True
+    except Exception:
+        return False
+
+
 def read_events(paths: LifecyclePaths, *, skill_id: str | None = None, limit: int | None = None) -> list[dict[str, Any]]:
     if not paths.events_path.exists():
         return []

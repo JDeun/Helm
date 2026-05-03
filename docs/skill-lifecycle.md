@@ -8,8 +8,8 @@ This is a conservative lifecycle layer. It records observations and surfaces
 candidates; it never auto-deletes a skill, and the only state mutations it
 performs are explicit (`archive`, `pin`, `stale --apply`).
 
-> Status: M2 (read-only `scan`/`status`/`report` plus mutating `pin`/`unpin`,
-> `stale`, `archive`, `restore`, `events`). Runner integration lands in M3.
+> Status: M3 (read-only commands + mutating commands + runner integration).
+> Negative claim and umbrella candidate detection land in M4.
 
 ## Why
 
@@ -182,11 +182,32 @@ Every state-changing operation appends one JSONL line to `events.jsonl`:
 
 ```json
 {"ts":"2026-05-03T05:48:31+00:00","event":"skill_registered","skill_id":"car","source":"workspace"}
-{"ts":"2026-05-03T05:48:31+00:00","event":"skill_missing","skill_id":"old"}
+{"ts":"2026-05-03T06:26:32+00:00","event":"skill_used","skill_id":"car","profile":"inspect_local","task_id":"..."}
+{"ts":"2026-05-03T06:26:32+00:00","event":"skill_success","skill_id":"car","exit_code":0,"task_id":"..."}
 ```
 
-The log is append-only. Future milestones add `skill_used`, `skill_success`,
-`skill_failure`, `skill_archived`, `skill_restored`, `skill_pinned`, etc.
+The log is append-only.
+
+### Recorded events
+
+| Event | Emitted by | Counter / timestamp updated |
+|-------|------------|------------------------------|
+| `skill_registered` | `scan` (first time) | none |
+| `skill_missing` | `scan` (skill vanished) | `last_reviewed_at` |
+| `skill_used` | `helm profile run --skill <name>` start | `use_count`, `last_used_at` |
+| `skill_success` | `run_with_profile` exit code 0 | `last_successful_apply_at` |
+| `skill_failure` | `run_with_profile` non-zero exit or timeout | none |
+| `skill_promoted` | `helm skill-approve` (skill_capture promote) | `patch_count`, `last_patched_at` |
+| `skill_rejected` | `helm skill-reject` | none |
+| `skill_pinned` / `skill_unpinned` | `pin` / `unpin` | none |
+| `skill_stale` | `stale --apply` | `last_reviewed_at` |
+| `skill_archived` | `archive --apply` | `archived_at` |
+| `skill_restored` | `restore --apply` | `reactivated_at` |
+
+Runner integration is fail-soft: if `usage.json` does not exist for the
+workspace yet, runners skip emitting events. Initialize the lifecycle layer
+once with `helm skill-lifecycle scan --path <workspace>` to start collecting
+data.
 
 ## What this does not change
 
@@ -203,9 +224,14 @@ directly, it can read `usage.json` — the schema is stable from M1.
 
 ## Roadmap
 
-- M3: runner integration — `run_with_profile.py` and `skill_capture.py` emit
-  `skill_used`, `skill_success`, `skill_failure`, `skill_promoted`,
-  `skill_rejected` events
 - M4: `negative-claims` subcommand + umbrella candidate detection
 - M5+ (out of band): runtime-side hooks if the agent runtime adopts the
   schema natively
+
+## Known gaps
+
+- A workspace may carry its own copy of `scripts/skill_capture.py` predating
+  Helm. Direct `python3 .../skill_capture.py promote-draft ...` invocations
+  on that local copy do not emit `skill_promoted`. The packaged path
+  (`helm skill-approve`) does emit. Migrate workflows to the packaged
+  command if you want full lifecycle coverage.

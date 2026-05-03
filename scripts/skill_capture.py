@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 
 from helm_workspace import get_workspace_layout
 from scripts.skill_manifest_lib import load_skill_policies as load_manifest_policies
+from scripts.skill_lifecycle_lib import record_runner_event
 
 
 WORKSPACE = get_workspace_layout().root
@@ -444,6 +445,12 @@ def cmd_promote_draft(args: argparse.Namespace) -> int:
 
     shutil.copytree(root, target)
     payload["promoted_to"] = str(target)
+    record_runner_event(
+        WORKSPACE,
+        skill_id=args.name,
+        event="skill_promoted",
+        extra={"source": str(root), "target": str(target)},
+    )
     print(json.dumps(payload, indent=2, ensure_ascii=False))
     return 0
 

@@ -12,6 +12,7 @@ from commands import (
     run_script,
     target_root,
 )
+from scripts.skill_lifecycle_lib import record_runner_event
 
 
 def write_json_file(path: Path, payload: dict) -> None:
@@ -94,6 +95,12 @@ def cmd_skill_reject(args: argparse.Namespace) -> int:
         "reason": args.reason,
     }
     write_json_file(draft_root / "meta" / "rejection.json", payload)
+    record_runner_event(
+        root,
+        skill_id=args.name,
+        event="skill_rejected",
+        extra={"reason": args.reason},
+    )
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0

@@ -28,6 +28,7 @@ from scripts.skill_manifest_lib import (
     manifest_quality_audit,
     validate_contract_manifest,
 )
+from scripts.skill_lifecycle_lib import record_runner_event
 
 
 EXIT_GUARD_REQUIRE_APPROVAL = 24
@@ -558,6 +559,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     task["status"] = "running"
     task["started_execution_at"] = utc_now_iso()
     append_ledger(task)
+    record_runner_event(
+        WORKSPACE,
+        skill_id=task.get("skill"),
+        event="skill_used",
+        extra={"task_id": task["task_id"], "profile": task["profile"]},
+    )
 
     writes_allowed = config.get("writes_allowed", True)
     network_allowed = config.get("network_allowed", True)
@@ -595,6 +602,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         task["failure_stage"] = "execution"
         task["failure_reason"] = f"command timed out after {timeout_seconds}s"
         finalize_task(task)
+        record_runner_event(
+            WORKSPACE,
+            skill_id=task.get("skill"),
+            event="skill_failure",
+            extra={"task_id": task["task_id"], "reason": "timeout"},
+        )
         print(
             f"TIMEOUT: command exceeded {timeout_seconds}s limit: {shlex.join(command)}",
             file=sys.stderr,
@@ -605,6 +618,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     task["exit_code"] = result.returncode
     task["status"] = "completed" if result.returncode == 0 else "failed"
     finalize_task(task)
+    record_runner_event(
+        WORKSPACE,
+        skill_id=task.get("skill"),
+        event="skill_success" if result.returncode == 0 else "skill_failure",
+        extra={"task_id": task["task_id"], "exit_code": result.returncode},
+    )
     return result.returncode
 
 
