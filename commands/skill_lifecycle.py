@@ -9,14 +9,24 @@ from pathlib import Path
 
 from commands import target_root
 from scripts.skill_lifecycle_lib import (
+    LifecycleError,
     LifecyclePaths,
+    apply_archive,
+    apply_restore,
+    apply_stale,
     compute_summary,
     load_config,
     load_usage,
+    plan_archive,
+    plan_restore,
+    read_events,
     render_report_json,
     render_report_markdown,
     save_config,
+    save_usage,
     scan,
+    set_pinned,
+    stale_candidates,
 )
 
 
@@ -130,4 +140,127 @@ def cmd_skill_lifecycle_report(args: argparse.Namespace) -> int:
         print(f"wrote report: {out_path}", file=sys.stderr)
     else:
         print(rendered)
+    return 0
+
+
+def cmd_skill_lifecycle_pin(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    try:
+        set_pinned(paths, args.skill, pinned=True)
+    except LifecycleError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"pinned: {args.skill}")
+    return 0
+
+
+def cmd_skill_lifecycle_unpin(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    try:
+        set_pinned(paths, args.skill, pinned=False)
+    except LifecycleError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"unpinned: {args.skill}")
+    return 0
+
+
+def cmd_skill_lifecycle_stale(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    config = _ensure_config(paths, write=args.apply)
+    usage = load_usage(paths)
+    candidates = stale_candidates(usage, config)
+
+    if args.json:
+        payload = {
+            "workspace": str(paths.workspace),
+            "apply": args.apply,
+            "candidates": [
+                {
+                    "skill_id": p.skill_id,
+                    "from_state": p.from_state,
+                    "to_state": p.to_state,
+                    "reason": p.reason,
+                }
+                for p in candidates
+            ],
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        label = "[apply]" if args.apply else "[dry-run]"
+        if not candidates:
+            print(f"{label} no stale candidates")
+        else:
+            print(f"{label} stale candidates: {len(candidates)}")
+            for preview in candidates:
+                print(f"  {preview.skill_id}: {preview.from_state} -> {preview.to_state} ({preview.reason})")
+
+    if args.apply and candidates:
+        applied = apply_stale(paths, candidates)
+        if not args.json:
+            print(f"applied stale: {len(applied)}")
+    return 0
+
+
+def cmd_skill_lifecycle_archive(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    config = _ensure_config(paths, write=args.apply)
+    try:
+        plan = plan_archive(paths, args.skill, config)
+    except LifecycleError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    label = "[apply]" if args.apply else "[dry-run]"
+    print(f"{label} archive {plan.skill_id}")
+    print(f"  from: {plan.source_dir}")
+    print(f"  to:   {plan.target_dir}")
+
+    if args.apply:
+        apply_archive(paths, plan)
+        print("archived")
+    return 0
+
+
+def cmd_skill_lifecycle_restore(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=args.apply)
+    try:
+        plan = plan_restore(paths, args.skill)
+    except LifecycleError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    label = "[apply]" if args.apply else "[dry-run]"
+    print(f"{label} restore {plan.skill_id}")
+    print(f"  from: {plan.source_dir}")
+    print(f"  to:   {plan.target_dir}")
+
+    if args.apply:
+        apply_restore(paths, plan)
+        print("restored")
+    return 0
+
+
+def cmd_skill_lifecycle_events(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    rows = read_events(paths, skill_id=args.skill, limit=args.limit)
+
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+
+    if not rows:
+        print("(no events)")
+        return 0
+    for row in rows:
+        ts = row.get("ts", "?")
+        event = row.get("event", "?")
+        skill_id = row.get("skill_id", "")
+        extra_keys = [k for k in row.keys() if k not in {"ts", "event", "skill_id"}]
+        extras = " ".join(f"{k}={row[k]}" for k in extra_keys)
+        print(f"{ts} {event} {skill_id} {extras}".rstrip())
     return 0

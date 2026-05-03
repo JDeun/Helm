@@ -11,16 +11,26 @@ if str(ROOT) not in sys.path:
 
 from scripts.skill_lifecycle_lib import (
     DEFAULT_CONFIG,
+    LifecycleError,
     LifecyclePaths,
     append_event,
+    apply_archive,
+    apply_restore,
+    apply_stale,
     compute_summary,
     iter_skills,
     load_config,
     load_usage,
+    plan_archive,
+    plan_restore,
+    read_events,
     render_report_json,
     render_report_markdown,
     save_config,
+    save_usage,
     scan,
+    set_pinned,
+    stale_candidates,
 )
 
 
@@ -216,6 +226,221 @@ def test_atomic_write_uses_tmp_then_rename(tmp_path: Path) -> None:
     # No leftover .tmp file from atomic write
     leftover = list(paths.lifecycle_root.glob("*.tmp"))
     assert leftover == []
+
+
+def _set_first_seen(paths: LifecyclePaths, skill_id: str, days_ago: int) -> None:
+    from datetime import datetime, timedelta, timezone
+    usage = load_usage(paths)
+    when = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat(timespec="seconds")
+    usage["skills"][skill_id]["first_seen_at"] = when
+    save_usage(paths, usage)
+
+
+def _set_last_used(paths: LifecyclePaths, skill_id: str, days_ago: int) -> None:
+    from datetime import datetime, timedelta, timezone
+    usage = load_usage(paths)
+    when = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat(timespec="seconds")
+    usage["skills"][skill_id]["last_used_at"] = when
+    save_usage(paths, usage)
+
+
+def test_set_pinned_round_trip(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    set_pinned(paths, "alpha", pinned=True)
+    assert load_usage(paths)["skills"]["alpha"]["pinned"] is True
+
+    set_pinned(paths, "alpha", pinned=False)
+    assert load_usage(paths)["skills"]["alpha"]["pinned"] is False
+
+    events = [json.loads(line) for line in paths.events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    event_types = [e["event"] for e in events]
+    assert "skill_pinned" in event_types
+    assert "skill_unpinned" in event_types
+
+
+def test_set_pinned_unknown_skill_raises(tmp_path: Path) -> None:
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    try:
+        set_pinned(paths, "nope", pinned=True)
+    except LifecycleError as exc:
+        assert "unknown skill" in str(exc)
+    else:
+        raise AssertionError("expected LifecycleError")
+
+
+def test_stale_candidates_excludes_pinned_and_protected(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    _write_skill(tmp_path, "beta")
+    bundled = tmp_path / "skills" / "gamma"
+    bundled.mkdir(parents=True)
+    (bundled / "SKILL.md").write_text("---\nname: gamma\n---\n", encoding="utf-8")
+    (bundled / ".bundled").write_text("", encoding="utf-8")
+
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    _set_first_seen(paths, "alpha", 90)
+    _set_first_seen(paths, "beta", 90)
+    _set_first_seen(paths, "gamma", 90)
+    set_pinned(paths, "beta", pinned=True)
+
+    usage = load_usage(paths)
+    candidates = stale_candidates(usage, DEFAULT_CONFIG)
+    skill_ids = {c.skill_id for c in candidates}
+    assert "alpha" in skill_ids
+    assert "beta" not in skill_ids  # pinned
+    assert "gamma" not in skill_ids  # protected source
+
+
+def test_stale_uses_last_used_when_present(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    _set_first_seen(paths, "alpha", 200)
+    _set_last_used(paths, "alpha", 5)
+
+    usage = load_usage(paths)
+    candidates = stale_candidates(usage, DEFAULT_CONFIG)
+    assert candidates == []
+
+    _set_last_used(paths, "alpha", 60)
+    usage = load_usage(paths)
+    candidates = stale_candidates(usage, DEFAULT_CONFIG)
+    assert any(c.skill_id == "alpha" for c in candidates)
+
+
+def test_apply_stale_transitions_state(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    _set_first_seen(paths, "alpha", 90)
+
+    usage = load_usage(paths)
+    candidates = stale_candidates(usage, DEFAULT_CONFIG)
+    applied = apply_stale(paths, candidates)
+    assert applied == ["alpha"]
+    assert load_usage(paths)["skills"]["alpha"]["state"] == "stale"
+    events = read_events(paths, skill_id="alpha")
+    assert any(e["event"] == "skill_stale" for e in events)
+
+
+def test_archive_moves_skill_and_updates_metadata(tmp_path: Path) -> None:
+    skill_md = _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    plan = plan_archive(paths, "alpha", DEFAULT_CONFIG)
+    apply_archive(paths, plan)
+
+    assert not (tmp_path / "skills" / "alpha").exists()
+    archived_md = tmp_path / "skills" / ".archive" / "alpha" / "SKILL.md"
+    assert archived_md.exists()
+    entry = load_usage(paths)["skills"]["alpha"]
+    assert entry["state"] == "archived"
+    assert entry["archive_path"] == "skills/.archive/alpha/SKILL.md"
+    assert entry["archived_at"] is not None
+    events = read_events(paths, skill_id="alpha")
+    assert any(e["event"] == "skill_archived" for e in events)
+
+
+def test_archive_rejects_pinned(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    set_pinned(paths, "alpha", pinned=True)
+    try:
+        plan_archive(paths, "alpha", DEFAULT_CONFIG)
+    except LifecycleError as exc:
+        assert "pinned" in str(exc)
+    else:
+        raise AssertionError("expected LifecycleError")
+
+
+def test_archive_rejects_bundled_source(tmp_path: Path) -> None:
+    bundled = tmp_path / "skills" / "alpha"
+    bundled.mkdir(parents=True)
+    (bundled / "SKILL.md").write_text("---\nname: alpha\n---\n", encoding="utf-8")
+    (bundled / ".bundled").write_text("", encoding="utf-8")
+
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    try:
+        plan_archive(paths, "alpha", DEFAULT_CONFIG)
+    except LifecycleError as exc:
+        assert "protected source" in str(exc)
+    else:
+        raise AssertionError("expected LifecycleError")
+
+
+def test_archive_rejects_target_collision(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    archive_dir = tmp_path / "skills" / ".archive" / "alpha"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "SKILL.md").write_text("---\nname: alpha-stub\n---\n", encoding="utf-8")
+
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    try:
+        plan_archive(paths, "alpha", DEFAULT_CONFIG)
+    except LifecycleError as exc:
+        assert "archive target" in str(exc)
+    else:
+        raise AssertionError("expected LifecycleError")
+
+
+def test_archive_then_restore_roundtrip(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha", body="payload\n")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    apply_archive(paths, plan_archive(paths, "alpha", DEFAULT_CONFIG))
+    assert load_usage(paths)["skills"]["alpha"]["state"] == "archived"
+
+    apply_restore(paths, plan_restore(paths, "alpha"))
+    assert (tmp_path / "skills" / "alpha" / "SKILL.md").exists()
+    assert not (tmp_path / "skills" / ".archive" / "alpha").exists()
+    entry = load_usage(paths)["skills"]["alpha"]
+    assert entry["state"] == "active"
+    assert entry["archive_path"] is None
+    assert entry["archived_at"] is None
+    assert entry["reactivated_at"] is not None
+
+
+def test_restore_rejects_target_collision(tmp_path: Path) -> None:
+    archive_dir = tmp_path / "skills" / ".archive" / "alpha"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "SKILL.md").write_text("---\nname: alpha\n---\n", encoding="utf-8")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    # New live skill at the same name (shouldn't normally happen, but guard)
+    live_dir = tmp_path / "skills" / "alpha"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text("---\nname: alpha\n---\n", encoding="utf-8")
+    try:
+        plan_restore(paths, "alpha")
+    except LifecycleError as exc:
+        # Either collision or "not archived" depending on which scan saw first
+        assert "exists" in str(exc) or "not archived" in str(exc)
+    else:
+        raise AssertionError("expected LifecycleError")
+
+
+def test_read_events_filters_by_skill_and_limit(tmp_path: Path) -> None:
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    append_event(paths, {"event": "skill_used", "skill_id": "alpha"})
+    append_event(paths, {"event": "skill_used", "skill_id": "beta"})
+    append_event(paths, {"event": "skill_success", "skill_id": "alpha"})
+
+    alpha_events = read_events(paths, skill_id="alpha")
+    assert len(alpha_events) == 2
+    assert all(e["skill_id"] == "alpha" for e in alpha_events)
+
+    last_one = read_events(paths, limit=1)
+    assert len(last_one) == 1
+    assert last_one[0]["event"] == "skill_success"
 
 
 def test_archived_skill_reactivation(tmp_path: Path) -> None:

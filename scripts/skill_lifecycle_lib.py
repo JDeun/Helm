@@ -17,12 +17,17 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from scripts.state_io import append_jsonl_atomic
+
+
+class LifecycleError(Exception):
+    """Raised when a lifecycle operation is rejected for a safety reason."""
 
 
 SCHEMA_VERSION = 1
@@ -470,3 +475,245 @@ def render_report_json(usage: dict[str, Any], summary: dict[str, Any]) -> str:
         "skills": usage.get("skills", {}),
     }
     return json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)
+
+
+def _require_skill(usage: dict[str, Any], skill_id: str) -> dict[str, Any]:
+    skills = usage.get("skills", {})
+    entry = skills.get(skill_id)
+    if entry is None:
+        raise LifecycleError(f"unknown skill: {skill_id}")
+    return entry
+
+
+def set_pinned(paths: LifecyclePaths, skill_id: str, *, pinned: bool) -> dict[str, Any]:
+    usage = load_usage(paths)
+    entry = _require_skill(usage, skill_id)
+    if bool(entry.get("pinned")) == pinned:
+        return entry
+    entry["pinned"] = pinned
+    save_usage(paths, usage)
+    append_event(
+        paths,
+        {
+            "event": "skill_pinned" if pinned else "skill_unpinned",
+            "skill_id": skill_id,
+        },
+    )
+    return entry
+
+
+@dataclass
+class TransitionPreview:
+    skill_id: str
+    from_state: str
+    to_state: str
+    reason: str
+
+
+def stale_candidates(usage: dict[str, Any], config: dict[str, Any]) -> list[TransitionPreview]:
+    now = datetime.now(timezone.utc)
+    stale_after = float(config.get("stale_after_days", 45))
+    never_used_after = float(config.get("never_used_stale_after_days", 30))
+    protect = set(config.get("protect_sources", []))
+
+    candidates: list[TransitionPreview] = []
+    for skill_id, entry in usage.get("skills", {}).items():
+        if entry.get("state") != "active":
+            continue
+        if entry.get("pinned"):
+            continue
+        if entry.get("source") in protect:
+            continue
+        last_used = entry.get("last_used_at")
+        if last_used is None:
+            age = _days_since(entry.get("first_seen_at"), now) or 0.0
+            if age >= never_used_after:
+                candidates.append(
+                    TransitionPreview(
+                        skill_id=skill_id,
+                        from_state="active",
+                        to_state="stale",
+                        reason=f"never used and {age:.0f}d since first seen",
+                    )
+                )
+        else:
+            idle = _days_since(last_used, now) or 0.0
+            if idle >= stale_after:
+                candidates.append(
+                    TransitionPreview(
+                        skill_id=skill_id,
+                        from_state="active",
+                        to_state="stale",
+                        reason=f"{idle:.0f}d idle since last use",
+                    )
+                )
+    return candidates
+
+
+def apply_stale(paths: LifecyclePaths, candidates: list[TransitionPreview]) -> list[str]:
+    if not candidates:
+        return []
+    usage = load_usage(paths)
+    applied: list[str] = []
+    now = utc_now_iso()
+    for preview in candidates:
+        entry = usage["skills"].get(preview.skill_id)
+        if entry is None or entry.get("state") != preview.from_state:
+            continue
+        if entry.get("pinned"):
+            continue
+        entry["state"] = preview.to_state
+        entry["last_reviewed_at"] = now
+        applied.append(preview.skill_id)
+    if applied:
+        save_usage(paths, usage)
+        for skill_id in applied:
+            append_event(
+                paths,
+                {
+                    "event": "skill_stale",
+                    "skill_id": skill_id,
+                    "reason": "policy",
+                },
+            )
+    return applied
+
+
+@dataclass
+class ArchivePlan:
+    skill_id: str
+    source_dir: Path
+    target_dir: Path
+    relative_archive_path: str
+
+
+def plan_archive(paths: LifecyclePaths, skill_id: str, config: dict[str, Any]) -> ArchivePlan:
+    usage = load_usage(paths)
+    entry = _require_skill(usage, skill_id)
+
+    if entry.get("state") == "archived":
+        raise LifecycleError(f"already archived: {skill_id}")
+    if entry.get("state") == "missing":
+        raise LifecycleError(f"cannot archive a missing skill: {skill_id}")
+    if entry.get("pinned"):
+        raise LifecycleError(f"pinned skill cannot be archived: {skill_id}")
+    protect = set(config.get("protect_sources", []))
+    if entry.get("source") in protect:
+        raise LifecycleError(f"protected source ({entry.get('source')}); refusing to archive: {skill_id}")
+
+    source_md = paths.workspace / entry["path"]
+    source_dir = source_md.parent
+    if not source_dir.exists():
+        raise LifecycleError(f"skill directory missing on disk: {source_dir}")
+
+    target_dir = paths.archive_root / source_dir.name
+    if target_dir.exists():
+        raise LifecycleError(f"archive target already exists: {target_dir}")
+
+    relative_archive = (target_dir / "SKILL.md").relative_to(paths.workspace).as_posix()
+    return ArchivePlan(
+        skill_id=skill_id,
+        source_dir=source_dir,
+        target_dir=target_dir,
+        relative_archive_path=relative_archive,
+    )
+
+
+def apply_archive(paths: LifecyclePaths, plan: ArchivePlan) -> dict[str, Any]:
+    plan.target_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(plan.source_dir), str(plan.target_dir))
+
+    usage = load_usage(paths)
+    entry = _require_skill(usage, plan.skill_id)
+    entry["state"] = "archived"
+    entry["archived_at"] = utc_now_iso()
+    entry["archive_path"] = plan.relative_archive_path
+    save_usage(paths, usage)
+    append_event(
+        paths,
+        {
+            "event": "skill_archived",
+            "skill_id": plan.skill_id,
+            "from_path": entry["path"],
+            "archive_path": plan.relative_archive_path,
+        },
+    )
+    return entry
+
+
+@dataclass
+class RestorePlan:
+    skill_id: str
+    source_dir: Path
+    target_dir: Path
+    relative_path: str
+
+
+def plan_restore(paths: LifecyclePaths, skill_id: str) -> RestorePlan:
+    usage = load_usage(paths)
+    entry = _require_skill(usage, skill_id)
+    if entry.get("state") != "archived":
+        raise LifecycleError(f"not archived: {skill_id}")
+
+    archive_rel = entry.get("archive_path")
+    if not archive_rel:
+        raise LifecycleError(f"missing archive_path metadata: {skill_id}")
+    source_md = paths.workspace / archive_rel
+    source_dir = source_md.parent
+    if not source_dir.exists():
+        raise LifecycleError(f"archived directory missing on disk: {source_dir}")
+
+    original_md = paths.workspace / entry.get("path", "")
+    target_dir = original_md.parent
+    if target_dir.exists():
+        raise LifecycleError(f"restore target already exists: {target_dir}")
+
+    return RestorePlan(
+        skill_id=skill_id,
+        source_dir=source_dir,
+        target_dir=target_dir,
+        relative_path=entry["path"],
+    )
+
+
+def apply_restore(paths: LifecyclePaths, plan: RestorePlan) -> dict[str, Any]:
+    plan.target_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(plan.source_dir), str(plan.target_dir))
+
+    usage = load_usage(paths)
+    entry = _require_skill(usage, plan.skill_id)
+    entry["state"] = "active"
+    entry["archive_path"] = None
+    entry["archived_at"] = None
+    entry["reactivated_at"] = utc_now_iso()
+    save_usage(paths, usage)
+    append_event(
+        paths,
+        {
+            "event": "skill_restored",
+            "skill_id": plan.skill_id,
+            "to_path": plan.relative_path,
+        },
+    )
+    return entry
+
+
+def read_events(paths: LifecyclePaths, *, skill_id: str | None = None, limit: int | None = None) -> list[dict[str, Any]]:
+    if not paths.events_path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    with paths.events_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if skill_id and entry.get("skill_id") != skill_id:
+                continue
+            rows.append(entry)
+    if limit is not None and limit >= 0:
+        rows = rows[-limit:]
+    return rows

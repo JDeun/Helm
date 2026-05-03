@@ -8,8 +8,8 @@ This is a conservative lifecycle layer. It records observations and surfaces
 candidates; it never auto-deletes a skill, and the only state mutations it
 performs are explicit (`archive`, `pin`, `stale --apply`).
 
-> Status: M1 (read-only: `scan`, `status`, `report`). Mutating commands and
-> runner integration land in later milestones.
+> Status: M2 (read-only `scan`/`status`/`report` plus mutating `pin`/`unpin`,
+> `stale`, `archive`, `restore`, `events`). Runner integration lands in M3.
 
 ## Why
 
@@ -89,6 +89,58 @@ helm skill-lifecycle report --path ~/.openclaw/workspace --format markdown --out
 helm skill-lifecycle report --path ~/.openclaw/workspace --format json
 ```
 
+### `helm skill-lifecycle pin / unpin`
+
+Mark a skill as protected from auto stale/archive transitions.
+
+```bash
+helm skill-lifecycle pin   --path ~/.openclaw/workspace household-ledger-ko
+helm skill-lifecycle unpin --path ~/.openclaw/workspace household-ledger-ko
+```
+
+### `helm skill-lifecycle stale`
+
+Print or apply stale-state transitions per `config.json`. Defaults to dry-run.
+
+```bash
+helm skill-lifecycle stale --path ~/.openclaw/workspace            # dry-run
+helm skill-lifecycle stale --path ~/.openclaw/workspace --apply    # transition active -> stale
+helm skill-lifecycle stale --path ~/.openclaw/workspace --json
+```
+
+Pinned skills and skills whose `source` is in `protect_sources` are excluded.
+
+### `helm skill-lifecycle archive / restore`
+
+Move a skill into or out of `<workspace>/skills/.archive/`. Defaults to
+dry-run; `--apply` performs the actual move.
+
+```bash
+helm skill-lifecycle archive --path ~/.openclaw/workspace old-skill            # dry-run preview
+helm skill-lifecycle archive --path ~/.openclaw/workspace old-skill --apply    # move
+helm skill-lifecycle restore --path ~/.openclaw/workspace old-skill --apply
+```
+
+`archive` refuses to act when:
+
+- the skill is `pinned`
+- the skill's `source` is in `protect_sources` (e.g. bundled / hub)
+- the archive target directory already exists
+- the skill is already archived or marked missing
+
+`restore` refuses to act when the live target directory already exists.
+
+### `helm skill-lifecycle events`
+
+Print the lifecycle event log, optionally filtered by skill or limited to
+the last N entries.
+
+```bash
+helm skill-lifecycle events --path ~/.openclaw/workspace
+helm skill-lifecycle events --path ~/.openclaw/workspace --skill car
+helm skill-lifecycle events --path ~/.openclaw/workspace --limit 20 --json
+```
+
 ## Configuration
 
 `config.json` is created on the first non-dry-run scan with these defaults:
@@ -151,7 +203,6 @@ directly, it can read `usage.json` — the schema is stable from M1.
 
 ## Roadmap
 
-- M2: `pin`, `unpin`, `stale`, `archive`, `restore`, `events --skill <name>`
 - M3: runner integration — `run_with_profile.py` and `skill_capture.py` emit
   `skill_used`, `skill_success`, `skill_failure`, `skill_promoted`,
   `skill_rejected` events

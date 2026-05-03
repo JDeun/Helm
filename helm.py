@@ -33,9 +33,15 @@ from commands.ops import cmd_ops
 from commands.profile import cmd_profile
 from commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_skill_reject, cmd_skill_review
 from commands.skill_lifecycle import (
+    cmd_skill_lifecycle_archive,
+    cmd_skill_lifecycle_events,
+    cmd_skill_lifecycle_pin,
     cmd_skill_lifecycle_report,
+    cmd_skill_lifecycle_restore,
     cmd_skill_lifecycle_scan,
+    cmd_skill_lifecycle_stale,
     cmd_skill_lifecycle_status,
+    cmd_skill_lifecycle_unpin,
 )
 from commands.status import (
     build_status_payload,
@@ -292,6 +298,41 @@ def build_parser() -> argparse.ArgumentParser:
     sl_report.add_argument("--format", choices=["markdown", "json"], default="markdown")
     sl_report.add_argument("--out", help="Write the report to this file instead of stdout.")
     sl_report.set_defaults(func=cmd_skill_lifecycle_report)
+
+    sl_pin = skill_lifecycle_subparsers.add_parser("pin", help="Mark a skill as pinned (protected from auto stale/archive).")
+    sl_pin.add_argument("--path", help="Workspace path to target.")
+    sl_pin.add_argument("skill", help="Skill id to pin.")
+    sl_pin.set_defaults(func=cmd_skill_lifecycle_pin)
+
+    sl_unpin = skill_lifecycle_subparsers.add_parser("unpin", help="Remove the pinned flag from a skill.")
+    sl_unpin.add_argument("--path", help="Workspace path to target.")
+    sl_unpin.add_argument("skill", help="Skill id to unpin.")
+    sl_unpin.set_defaults(func=cmd_skill_lifecycle_unpin)
+
+    sl_stale = skill_lifecycle_subparsers.add_parser("stale", help="List or apply stale-state transitions per policy.")
+    sl_stale.add_argument("--path", help="Workspace path to target.")
+    sl_stale.add_argument("--apply", action="store_true", help="Apply transitions. Defaults to dry-run.")
+    sl_stale.add_argument("--json", action="store_true")
+    sl_stale.set_defaults(func=cmd_skill_lifecycle_stale)
+
+    sl_archive = skill_lifecycle_subparsers.add_parser("archive", help="Move a skill into skills/.archive/ (defaults to dry-run).")
+    sl_archive.add_argument("--path", help="Workspace path to target.")
+    sl_archive.add_argument("--apply", action="store_true", help="Apply the archive move. Defaults to dry-run.")
+    sl_archive.add_argument("skill", help="Skill id to archive.")
+    sl_archive.set_defaults(func=cmd_skill_lifecycle_archive)
+
+    sl_restore = skill_lifecycle_subparsers.add_parser("restore", help="Move a skill out of skills/.archive/ back to skills/ (defaults to dry-run).")
+    sl_restore.add_argument("--path", help="Workspace path to target.")
+    sl_restore.add_argument("--apply", action="store_true", help="Apply the restore move. Defaults to dry-run.")
+    sl_restore.add_argument("skill", help="Skill id to restore.")
+    sl_restore.set_defaults(func=cmd_skill_lifecycle_restore)
+
+    sl_events = skill_lifecycle_subparsers.add_parser("events", help="Print the lifecycle event log.")
+    sl_events.add_argument("--path", help="Workspace path to target.")
+    sl_events.add_argument("--skill", help="Filter by skill id.")
+    sl_events.add_argument("--limit", type=int, default=None, help="Show only the last N events.")
+    sl_events.add_argument("--json", action="store_true")
+    sl_events.set_defaults(func=cmd_skill_lifecycle_events)
 
     ops = subparsers.add_parser("ops", help="Inspect daily, task, and command reports.")
     ops.add_argument("--path", help="Workspace path to target.")
