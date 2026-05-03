@@ -378,7 +378,12 @@ def _days_since(value: str | None, now: datetime) -> float | None:
     return (now - parsed).total_seconds() / 86400.0
 
 
-def compute_summary(usage: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+def compute_summary(
+    usage: dict[str, Any],
+    config: dict[str, Any],
+    *,
+    paths: LifecyclePaths | None = None,
+) -> dict[str, Any]:
     skills = usage.get("skills", {})
     counts = {"active": 0, "stale": 0, "archived": 0, "missing": 0, "pinned": 0}
     for entry in skills.values():
@@ -417,13 +422,34 @@ def compute_summary(usage: dict[str, Any], config: dict[str, Any]) -> dict[str, 
     least_recently_used.sort(key=lambda x: (x[1] or 0.0), reverse=True)
     archive_candidates.sort(key=lambda x: (x[1] or 0.0), reverse=True)
 
-    return {
+    summary: dict[str, Any] = {
         "total": len(skills),
         "counts": counts,
         "never_used": never_used[:top_n],
         "least_recently_used": least_recently_used[:top_n],
         "archive_candidates": archive_candidates[:top_n],
+        "umbrella_candidates": [],
+        "negative_claim_candidates": [],
     }
+
+    if paths is not None:
+        summary["umbrella_candidates"] = [
+            {"token": cluster.token, "skill_ids": list(cluster.skill_ids)}
+            for cluster in detect_umbrella_candidates(paths)
+        ]
+        summary["negative_claim_candidates"] = [
+            {
+                "claim_id": c.claim_id,
+                "skill_id": c.skill_id,
+                "skill_md": c.skill_md,
+                "line_no": c.line_no,
+                "keyword": c.keyword,
+                "text": c.text,
+            }
+            for c in detect_negative_claims(paths)
+        ]
+
+    return summary
 
 
 def render_report_markdown(usage: dict[str, Any], summary: dict[str, Any]) -> str:
@@ -459,11 +485,29 @@ def render_report_markdown(usage: dict[str, Any], summary: dict[str, Any]) -> st
     _block("Archive Candidates", summary["archive_candidates"], "days idle")
 
     lines.append("## Umbrella Candidates")
-    lines.append("- (M4 — pending implementation)")
+    umbrella = summary.get("umbrella_candidates") or []
+    if not umbrella:
+        lines.append("- (none)")
+    else:
+        for cluster in umbrella:
+            token = cluster["token"]
+            skills = cluster["skill_ids"]
+            lines.append(f"### shared token: `{token}` ({len(skills)} skills)")
+            for skill_id in skills:
+                lines.append(f"- {skill_id}")
+            lines.append("")
     lines.append("")
+
     lines.append("## Negative Claim Revalidation Candidates")
-    lines.append("- (M4 — pending implementation)")
-    lines.append("")
+    claims = summary.get("negative_claim_candidates") or []
+    if not claims:
+        lines.append("- (none)")
+        lines.append("")
+    else:
+        for claim in claims:
+            lines.append(f"- `{claim['skill_id']}` {claim['skill_md']}:{claim['line_no']} [{claim['keyword']}]")
+            lines.append(f"  > {claim['text']}")
+        lines.append("")
 
     return "\n".join(lines)
 
@@ -754,6 +798,114 @@ def record_runner_event(
         return True
     except Exception:
         return False
+
+
+NEGATIVE_CLAIM_KEYWORDS: tuple[str, ...] = (
+    "does not work",
+    "doesn't work",
+    "unavailable",
+    "not installed",
+    "not supported",
+    "failed",
+    "안 됨",
+    "없음",
+    "불가",
+    "실패",
+    "지원하지 않음",
+)
+
+
+@dataclass(frozen=True)
+class ClaimCandidate:
+    skill_id: str
+    skill_md: str
+    line_no: int
+    text: str
+    keyword: str
+    claim_id: str
+
+
+def _hash_claim(skill_id: str, line_no: int, text: str) -> str:
+    import hashlib
+
+    digest = hashlib.sha256(f"{skill_id}|{line_no}|{text}".encode("utf-8")).hexdigest()
+    return f"sha256:{digest[:16]}"
+
+
+def detect_negative_claims(paths: LifecyclePaths) -> list[ClaimCandidate]:
+    if not paths.skills_root.exists():
+        return []
+    candidates: list[ClaimCandidate] = []
+    for item in iter_skills(paths):
+        try:
+            text = item.skill_md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        in_fence = False
+        for line_no, raw in enumerate(text.splitlines(), start=1):
+            stripped = raw.strip()
+            if stripped.startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            lowered = stripped.lower()
+            for keyword in NEGATIVE_CLAIM_KEYWORDS:
+                needle = keyword.lower()
+                if needle in lowered:
+                    candidates.append(
+                        ClaimCandidate(
+                            skill_id=item.skill_id,
+                            skill_md=item.skill_md.relative_to(paths.workspace).as_posix(),
+                            line_no=line_no,
+                            text=stripped[:240],
+                            keyword=keyword,
+                            claim_id=_hash_claim(item.skill_id, line_no, stripped),
+                        )
+                    )
+                    break
+    return candidates
+
+
+@dataclass(frozen=True)
+class UmbrellaCluster:
+    token: str
+    skill_ids: tuple[str, ...]
+
+
+_UMBRELLA_STOP_TOKENS = {
+    "ko",
+    "ops",
+    "and",
+    "the",
+    "v1",
+    "v2",
+    "data",
+    "info",
+}
+
+
+def detect_umbrella_candidates(paths: LifecyclePaths, *, min_cluster_size: int = 3) -> list[UmbrellaCluster]:
+    if not paths.skills_root.exists():
+        return []
+    skill_tokens: dict[str, set[str]] = {}
+    for item in iter_skills(paths):
+        if item.is_archived:
+            continue
+        tokens = {t for t in re.split(r"[-_]", item.skill_id) if len(t) >= 3 and t.lower() not in _UMBRELLA_STOP_TOKENS}
+        skill_tokens[item.skill_id] = {t.lower() for t in tokens}
+
+    token_to_skills: dict[str, set[str]] = {}
+    for skill_id, tokens in skill_tokens.items():
+        for token in tokens:
+            token_to_skills.setdefault(token, set()).add(skill_id)
+
+    clusters: list[UmbrellaCluster] = []
+    for token, skills in sorted(token_to_skills.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        if len(skills) < min_cluster_size:
+            continue
+        clusters.append(UmbrellaCluster(token=token, skill_ids=tuple(sorted(skills))))
+    return clusters
 
 
 def read_events(paths: LifecyclePaths, *, skill_id: str | None = None, limit: int | None = None) -> list[dict[str, Any]]:

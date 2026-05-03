@@ -18,6 +18,8 @@ from scripts.skill_lifecycle_lib import (
     apply_restore,
     apply_stale,
     compute_summary,
+    detect_negative_claims,
+    detect_umbrella_candidates,
     iter_skills,
     load_config,
     load_usage,
@@ -520,6 +522,138 @@ def test_record_runner_event_handles_missing_skill_id(tmp_path: Path) -> None:
     scan(paths)
     assert record_runner_event(tmp_path, skill_id=None, event="skill_used") is False
     assert record_runner_event(tmp_path, skill_id="", event="skill_used") is False
+
+
+def test_detect_negative_claims_finds_keywords(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: alpha\n"
+        "---\n\n"
+        "Notes:\n"
+        "- this command does not work right now\n"
+        "- API is unavailable until further notice\n"
+        "- 이 도구는 안 됨\n"
+        "- 일반 텍스트는 그대로 둔다\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    candidates = detect_negative_claims(paths)
+    keywords = sorted({c.keyword for c in candidates})
+    assert "does not work" in keywords
+    assert "unavailable" in keywords
+    assert "안 됨" in keywords
+    assert all(c.skill_id == "alpha" for c in candidates)
+    assert all(c.claim_id.startswith("sha256:") for c in candidates)
+
+
+def test_detect_negative_claims_skips_code_fences(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\n"
+        "```\n"
+        "this command failed in a code block — should be skipped\n"
+        "```\n"
+        "real prose: this is unavailable today\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    candidates = detect_negative_claims(paths)
+    keywords = {c.keyword for c in candidates}
+    assert "unavailable" in keywords
+    # the "failed" inside the fence must be skipped
+    assert all(c.line_no >= 7 for c in candidates)
+
+
+def test_detect_negative_claims_returns_empty_for_clean_skill(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\nA clean description with no negatives.\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    assert detect_negative_claims(paths) == []
+
+
+def test_detect_umbrella_candidates_clusters_by_shared_token(tmp_path: Path) -> None:
+    for name in ("alpha-search", "beta-search", "gamma-search", "lonely"):
+        skill_dir = tmp_path / "skills" / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nname: {name}\n---\n", encoding="utf-8"
+        )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    clusters = detect_umbrella_candidates(paths, min_cluster_size=3)
+    assert len(clusters) == 1
+    assert clusters[0].token == "search"
+    assert "alpha-search" in clusters[0].skill_ids
+    assert "lonely" not in clusters[0].skill_ids
+
+
+def test_detect_umbrella_candidates_respects_min_cluster_size(tmp_path: Path) -> None:
+    for name in ("alpha-search", "beta-search"):
+        skill_dir = tmp_path / "skills" / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    assert detect_umbrella_candidates(paths, min_cluster_size=3) == []
+    clusters = detect_umbrella_candidates(paths, min_cluster_size=2)
+    assert len(clusters) == 1
+    assert clusters[0].token == "search"
+
+
+def test_detect_umbrella_skips_archived(tmp_path: Path) -> None:
+    for name in ("alpha-search", "beta-search"):
+        skill_dir = tmp_path / "skills" / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
+    archived = tmp_path / "skills" / ".archive" / "gamma-search"
+    archived.mkdir(parents=True)
+    (archived / "SKILL.md").write_text("---\nname: gamma-search\n---\n", encoding="utf-8")
+
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    clusters = detect_umbrella_candidates(paths, min_cluster_size=2)
+    assert len(clusters) == 1
+    assert "gamma-search" not in clusters[0].skill_ids
+
+
+def test_compute_summary_with_paths_includes_candidates(tmp_path: Path) -> None:
+    for name in ("alpha-search", "beta-search", "gamma-search"):
+        skill_dir = tmp_path / "skills" / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nname: {name}\n---\n\nthis tool is unavailable today\n",
+            encoding="utf-8",
+        )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    usage = load_usage(paths)
+    summary = compute_summary(usage, DEFAULT_CONFIG, paths=paths)
+    assert summary["umbrella_candidates"]
+    assert summary["umbrella_candidates"][0]["token"] == "search"
+    assert summary["negative_claim_candidates"]
+    assert summary["negative_claim_candidates"][0]["keyword"] == "unavailable"
+
+
+def test_render_report_includes_candidates(tmp_path: Path) -> None:
+    for name in ("alpha-search", "beta-search", "gamma-search"):
+        skill_dir = tmp_path / "skills" / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nname: {name}\n---\n\nthis tool failed twice\n",
+            encoding="utf-8",
+        )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    usage = load_usage(paths)
+    summary = compute_summary(usage, DEFAULT_CONFIG, paths=paths)
+    md = render_report_markdown(usage, summary)
+    assert "shared token: `search`" in md
+    assert "alpha-search" in md
+    assert "[failed]" in md
 
 
 def test_archived_skill_reactivation(tmp_path: Path) -> None:

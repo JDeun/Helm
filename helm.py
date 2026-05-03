@@ -35,12 +35,14 @@ from commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_ski
 from commands.skill_lifecycle import (
     cmd_skill_lifecycle_archive,
     cmd_skill_lifecycle_events,
+    cmd_skill_lifecycle_negative_claims,
     cmd_skill_lifecycle_pin,
     cmd_skill_lifecycle_report,
     cmd_skill_lifecycle_restore,
     cmd_skill_lifecycle_scan,
     cmd_skill_lifecycle_stale,
     cmd_skill_lifecycle_status,
+    cmd_skill_lifecycle_umbrella,
     cmd_skill_lifecycle_unpin,
 )
 from commands.status import (
@@ -333,6 +335,17 @@ def build_parser() -> argparse.ArgumentParser:
     sl_events.add_argument("--limit", type=int, default=None, help="Show only the last N events.")
     sl_events.add_argument("--json", action="store_true")
     sl_events.set_defaults(func=cmd_skill_lifecycle_events)
+
+    sl_neg = skill_lifecycle_subparsers.add_parser("negative-claims", help="Scan SKILL.md for negative claim candidates.")
+    sl_neg.add_argument("--path", help="Workspace path to target.")
+    sl_neg.add_argument("--json", action="store_true")
+    sl_neg.set_defaults(func=cmd_skill_lifecycle_negative_claims)
+
+    sl_umb = skill_lifecycle_subparsers.add_parser("umbrella", help="Surface umbrella consolidation candidates.")
+    sl_umb.add_argument("--path", help="Workspace path to target.")
+    sl_umb.add_argument("--min-cluster-size", type=int, default=3, help="Minimum number of skills sharing a token to count as a cluster.")
+    sl_umb.add_argument("--json", action="store_true")
+    sl_umb.set_defaults(func=cmd_skill_lifecycle_umbrella)
 
     ops = subparsers.add_parser("ops", help="Inspect daily, task, and command reports.")
     ops.add_argument("--path", help="Workspace path to target.")

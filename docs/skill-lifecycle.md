@@ -8,8 +8,8 @@ This is a conservative lifecycle layer. It records observations and surfaces
 candidates; it never auto-deletes a skill, and the only state mutations it
 performs are explicit (`archive`, `pin`, `stale --apply`).
 
-> Status: M3 (read-only commands + mutating commands + runner integration).
-> Negative claim and umbrella candidate detection land in M4.
+> Status: M4 (read-only + mutating + runner integration + negative-claim and
+> umbrella candidate detection).
 
 ## Why
 
@@ -141,6 +141,37 @@ helm skill-lifecycle events --path ~/.openclaw/workspace --skill car
 helm skill-lifecycle events --path ~/.openclaw/workspace --limit 20 --json
 ```
 
+### `helm skill-lifecycle negative-claims`
+
+Scan every active and archived `SKILL.md` for lines that look like negative
+claims and may need re-validation. Detects English and Korean phrasing
+(`does not work`, `doesn't work`, `unavailable`, `not installed`,
+`not supported`, `failed`, `안 됨`, `없음`, `불가`, `실패`, `지원하지 않음`).
+Lines inside fenced code blocks are skipped.
+
+```bash
+helm skill-lifecycle negative-claims --path ~/.openclaw/workspace
+helm skill-lifecycle negative-claims --path ~/.openclaw/workspace --json
+```
+
+This produces candidates only — no SKILL.md is modified. The list is
+expected to include false positives (e.g. "if X fails, do Y" describes
+graceful handling, not a stale claim). Treat the output as a review queue.
+
+### `helm skill-lifecycle umbrella`
+
+Surface umbrella consolidation candidates by clustering active skill ids
+that share a meaningful name token.
+
+```bash
+helm skill-lifecycle umbrella --path ~/.openclaw/workspace
+helm skill-lifecycle umbrella --path ~/.openclaw/workspace --min-cluster-size 4 --json
+```
+
+Tokens like `ko`, `ops`, `data`, `info`, `v1`, `v2` are excluded as too
+generic. Archived skills are excluded. Reported as advisory only — the PRD
+explicitly rules out automatic merging.
+
 ## Configuration
 
 `config.json` is created on the first non-dry-run scan with these defaults:
@@ -224,9 +255,9 @@ directly, it can read `usage.json` — the schema is stable from M1.
 
 ## Roadmap
 
-- M4: `negative-claims` subcommand + umbrella candidate detection
 - M5+ (out of band): runtime-side hooks if the agent runtime adopts the
-  schema natively
+  schema natively; automatic negative-claim re-validation guarded by an
+  allowlist of safe probe commands.
 
 ## Known gaps
 

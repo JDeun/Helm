@@ -15,6 +15,8 @@ from scripts.skill_lifecycle_lib import (
     apply_restore,
     apply_stale,
     compute_summary,
+    detect_negative_claims,
+    detect_umbrella_candidates,
     load_config,
     load_usage,
     plan_archive,
@@ -83,7 +85,7 @@ def cmd_skill_lifecycle_status(args: argparse.Namespace) -> int:
     paths = _paths_for(args)
     config = _ensure_config(paths, write=False)
     usage = load_usage(paths)
-    summary = compute_summary(usage, config)
+    summary = compute_summary(usage, config, paths=paths)
 
     if args.json:
         payload = {
@@ -126,7 +128,7 @@ def cmd_skill_lifecycle_report(args: argparse.Namespace) -> int:
     paths = _paths_for(args)
     config = _ensure_config(paths, write=False)
     usage = load_usage(paths)
-    summary = compute_summary(usage, config)
+    summary = compute_summary(usage, config, paths=paths)
 
     if args.format == "json":
         rendered = render_report_json(usage, summary)
@@ -241,6 +243,59 @@ def cmd_skill_lifecycle_restore(args: argparse.Namespace) -> int:
     if args.apply:
         apply_restore(paths, plan)
         print("restored")
+    return 0
+
+
+def cmd_skill_lifecycle_negative_claims(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    candidates = detect_negative_claims(paths)
+
+    if args.json:
+        payload = [
+            {
+                "claim_id": c.claim_id,
+                "skill_id": c.skill_id,
+                "skill_md": c.skill_md,
+                "line_no": c.line_no,
+                "keyword": c.keyword,
+                "text": c.text,
+            }
+            for c in candidates
+        ]
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    if not candidates:
+        print("(no negative-claim candidates)")
+        return 0
+
+    print(f"negative-claim candidates: {len(candidates)}")
+    for claim in candidates:
+        print(f"  {claim.skill_id} ({claim.skill_md}:{claim.line_no}) [{claim.keyword}]")
+        print(f"    > {claim.text}")
+    return 0
+
+
+def cmd_skill_lifecycle_umbrella(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    clusters = detect_umbrella_candidates(paths, min_cluster_size=args.min_cluster_size)
+
+    if args.json:
+        payload = [{"token": c.token, "skill_ids": list(c.skill_ids)} for c in clusters]
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    if not clusters:
+        print("(no umbrella candidates)")
+        return 0
+
+    print(f"umbrella candidate clusters: {len(clusters)}")
+    for cluster in clusters:
+        print(f"  shared token `{cluster.token}` ({len(cluster.skill_ids)} skills)")
+        for skill_id in cluster.skill_ids:
+            print(f"    - {skill_id}")
     return 0
 
 
