@@ -637,6 +637,7 @@ def test_compute_summary_with_paths_includes_candidates(tmp_path: Path) -> None:
     usage = load_usage(paths)
     summary = compute_summary(usage, DEFAULT_CONFIG, paths=paths)
     assert summary["umbrella_candidates"]
+    assert summary["umbrella_candidates"][0]["signal"] == "name_token"
     assert summary["umbrella_candidates"][0]["token"] == "search"
     assert summary["negative_claim_candidates"]
     assert summary["negative_claim_candidates"][0]["keyword"] == "unavailable"
@@ -655,7 +656,7 @@ def test_render_report_includes_candidates(tmp_path: Path) -> None:
     usage = load_usage(paths)
     summary = compute_summary(usage, DEFAULT_CONFIG, paths=paths)
     md = render_report_markdown(usage, summary)
-    assert "shared token: `search`" in md
+    assert "name_token: `search`" in md
     assert "alpha-search" in md
     assert "[failed]" in md
 

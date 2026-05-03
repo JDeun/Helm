@@ -446,7 +446,11 @@ def compute_summary(
 
     if paths is not None:
         summary["umbrella_candidates"] = [
-            {"token": cluster.token, "skill_ids": list(cluster.skill_ids)}
+            {
+                "signal": cluster.signal,
+                "token": cluster.token,
+                "skill_ids": list(cluster.skill_ids),
+            }
             for cluster in detect_umbrella_candidates(paths)
         ]
         summary["negative_claim_candidates"] = [
@@ -552,9 +556,10 @@ def render_report_markdown(usage: dict[str, Any], summary: dict[str, Any]) -> st
         lines.append("- (none)")
     else:
         for cluster in umbrella:
+            signal = cluster.get("signal", "name_token")
             token = cluster["token"]
             skills = cluster["skill_ids"]
-            lines.append(f"### shared token: `{token}` ({len(skills)} skills)")
+            lines.append(f"### {signal}: `{token}` ({len(skills)} skills)")
             for skill_id in skills:
                 lines.append(f"- {skill_id}")
             lines.append("")

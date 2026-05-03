@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## [0.7.3] — 2026-05-03
+
+### Changed
+
+- **umbrella summary fidelity**: `compute_summary(..., paths=...)` now preserves each umbrella candidate's `signal` (`name_token`, `description_token`, `downstream_share`, `execution_profile`) instead of returning only `token` and `skill_ids`. This removes ambiguity when the same token is surfaced by multiple signals.
+- **markdown report labels**: the `## Umbrella Candidates` section now prints the signal type in each cluster heading, matching JSON output and the standalone `helm skill-lifecycle umbrella --json` command.
+- **workspace hook validation**: verified the OpenClaw workspace runner path records `skill_used` and `skill_success` events against the same lifecycle sidecar files used by Helm.
+- **dedup gate noise reduction**: tightened the workspace briefing dedup checker so URL and filename-slug matches act as high-specificity Obsidian signals, reducing hub/index note noise while preserving the Gemini Embedding 2 duplicate catch.
+
+### Packaging
+
+- bumped package metadata to `0.7.3`.
+- smoke-tested the installed console script via `helm skill-lifecycle scan --path ~/.openclaw/workspace --dry-run --json`.
+
+### Tests
+
+- 60 lifecycle test cases passing.
+- Full suite: 369 tests passing.
+
 ## [0.7.2] — 2026-05-03
 
 ### Added
