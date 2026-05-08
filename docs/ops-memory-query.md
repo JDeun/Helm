@@ -96,7 +96,7 @@ helm context --path ~/.helm/workspace --adapter openclaw-main --include notes ta
 - `--adapter` restricts the query to one registered context source.
 - `--latest-tasks` is useful when you want one row per task instead of queued/running/completed transitions.
 - `--since` accepts simple lexical timestamps such as `2026-04-12` or full ISO-like prefixes.
-- `--explain-ranking` adds ranking metadata with query score, adapter priority, source priority, and timestamp. This is a debugging surface, not a stable scoring contract.
+- `--explain-ranking` adds ranking metadata with field scores, temporal boost, graph boost, adapter priority, source priority, and total score. This is a debugging surface, not a stable scoring contract.
 - `--summary` prints adapter/source/kind counts before the detailed rows.
 - This is read-only. It does not mutate memory, ontology, or task state.
 
@@ -112,14 +112,22 @@ The useful pattern from Hindsight is multi-strategy recall:
 - operational search across task ledgers, command logs, checkpoints, and memory review queues
 - result fusion with visible evidence and a token budget
 
-Current Helm behavior is simpler: it gathers matching rows from each source and sorts by query hits, adapter priority, source priority, timestamp, and title. `--explain-ranking` makes that visible so future changes can be evaluated instead of hidden behind a black-box score.
+Current Helm behavior is still intentionally lightweight, but it now uses inspectable field-aware scoring:
+
+- title matches count more than excerpt matches
+- excerpt matches count more than metadata matches
+- recent timestamped rows receive a small temporal boost
+- entity graph expansion receives a small graph boost
+- adapter and source priorities remain visible
+
+`--explain-ranking` makes these components visible so future changes can be evaluated instead of hidden behind a black-box score.
 
 Implementation should move in small steps:
 
-1. Keep the current exact/token scorer inspectable.
-2. Add source-specific scoring metadata and tests before changing ranking behavior.
+1. Keep the exact/token scorer inspectable.
+2. Use source-specific scoring metadata and tests before changing ranking behavior.
 3. Extend temporal and entity-centered modes using existing timestamps and ontology JSONL.
-4. Add graph-neighborhood expansion only after entity IDs are stable enough in fixtures.
+4. Keep graph-neighborhood expansion shallow and evidence-visible.
 5. Consider BM25/RRF only after the simpler scoring surfaces have measurable gaps.
 
 Do not retain private OpenClaw memory into a third-party memory backend as part of this roadmap. If an external backend is evaluated, use public-safe or tokenized fixtures first.

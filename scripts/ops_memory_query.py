@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -187,6 +188,46 @@ def latest_tasks(entries: list[dict]) -> list[dict]:
     return list(by_task.values())
 
 
+def parse_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    raw = value
+    if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+        raw = f"{raw}T00:00:00+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def dedupe_results(results: list[SearchResult]) -> list[SearchResult]:
+    deduped: list[SearchResult] = []
+    seen: set[tuple] = set()
+    for item in results:
+        key = (
+            item.adapter,
+            item.source,
+            item.kind,
+            item.timestamp,
+            item.title,
+            item.excerpt,
+            item.metadata.get("path"),
+            item.metadata.get("line"),
+            item.metadata.get("task_id"),
+            item.metadata.get("entity_id"),
+            item.metadata.get("from"),
+            item.metadata.get("to"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
 def text_files_under(root: Path) -> list[Path]:
     if not root.exists():
         return []
@@ -309,6 +350,62 @@ def load_ontology_results(source: ContextSource, args: argparse.Namespace) -> It
         )
 
 
+def load_ontology_graph_neighbors(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
+    if not args.entity:
+        return
+    entities = {
+        str(entity.get("id")): entity
+        for entity in read_jsonl(source.ontology_root / "entities.jsonl")
+        if entity.get("id")
+    }
+    yielded_entities: set[str] = set()
+    for relation in read_jsonl(source.ontology_root / "relations.jsonl"):
+        relation_from = str(relation.get("from") or "")
+        relation_to = str(relation.get("to") or "")
+        if args.entity not in {relation_from, relation_to}:
+            continue
+        metadata = {
+            "from": relation.get("from"),
+            "to": relation.get("to"),
+            "relation_type": relation.get("relation_type"),
+            "graph_expansion": True,
+            "graph_seed": args.entity,
+        }
+        yield result_for(
+            source,
+            "ontology",
+            "graph-relation",
+            None,
+            f"{relation.get('from')} {relation.get('relation_type')} {relation.get('to')}",
+            json.dumps(relation.get("properties", {}), ensure_ascii=False),
+            metadata,
+        )
+        for neighbor_id in (relation_from, relation_to):
+            if neighbor_id == args.entity or neighbor_id in yielded_entities:
+                continue
+            entity = entities.get(neighbor_id)
+            if not entity:
+                continue
+            yielded_entities.add(neighbor_id)
+            properties = entity.get("properties", {})
+            yield result_for(
+                source,
+                "ontology",
+                "graph-neighbor",
+                properties.get("captured_at") or properties.get("acquired_date"),
+                f"{entity.get('id')} ({entity.get('type')})",
+                properties.get("notes") or properties.get("description") or json.dumps(entity, ensure_ascii=False),
+                {
+                    "entity_id": entity.get("id"),
+                    "entity_type": entity.get("type"),
+                    "name": properties.get("name"),
+                    "status": properties.get("status"),
+                    "graph_expansion": True,
+                    "graph_seed": args.entity,
+                },
+            )
+
+
 def load_task_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
     entries = read_jsonl(source.state_root / "task-ledger.jsonl")
     if args.latest_tasks:
@@ -428,24 +525,53 @@ def collect_results(args: argparse.Namespace) -> list[SearchResult]:
             if area not in selected:
                 continue
             results.extend(loaders[area](source, args))
+        if "ontology" in selected and args.entity:
+            results.extend(load_ontology_graph_neighbors(source, args))
 
+    results = dedupe_results(results)
     query_blob = args.query.casefold() if args.query else None
+    query_terms = [term for term in (query_blob or "").split() if len(term) >= 2]
 
-    def query_score(item: SearchResult) -> int:
+    def count_hits(blob: str, *, exact_weight: int, token_weight: int) -> int:
         if not query_blob:
             return 0
-        haystacks = [
-            item.title.casefold(),
-            item.excerpt.casefold(),
-            json.dumps(item.metadata, ensure_ascii=False).casefold(),
-        ]
-        exact_hits = sum(blob.count(query_blob) for blob in haystacks)
-        token_hits = 0
-        for token in query_blob.split():
-            if len(token) < 2:
-                continue
-            token_hits += sum(blob.count(token) for blob in haystacks)
-        return exact_hits * 10 + token_hits
+        exact_hits = blob.count(query_blob)
+        token_hits = sum(blob.count(token) for token in query_terms)
+        return exact_hits * exact_weight + token_hits * token_weight
+
+    def field_scores(item: SearchResult) -> dict:
+        title = item.title.casefold()
+        excerpt = item.excerpt.casefold()
+        metadata = json.dumps(item.metadata, ensure_ascii=False).casefold()
+        return {
+            "title": count_hits(title, exact_weight=24, token_weight=4),
+            "excerpt": count_hits(excerpt, exact_weight=12, token_weight=2),
+            "metadata": count_hits(metadata, exact_weight=6, token_weight=1),
+        }
+
+    def query_score(item: SearchResult) -> int:
+        scores = field_scores(item)
+        return scores["title"] + scores["excerpt"] + scores["metadata"]
+
+    def temporal_boost(item: SearchResult) -> int:
+        timestamp = parse_timestamp(item.timestamp)
+        if timestamp is None:
+            return 0
+        days_old = max(0, (datetime.now(timezone.utc) - timestamp).days)
+        if days_old <= 7:
+            return 10
+        if days_old <= 30:
+            return 6
+        if days_old <= 90:
+            return 3
+        return 1
+
+    def graph_boost(item: SearchResult) -> int:
+        if item.metadata.get("graph_expansion"):
+            return 8
+        if args.entity and item.source == "ontology":
+            return 6
+        return 0
 
     def source_priority(item: SearchResult) -> int:
         return {
@@ -465,28 +591,38 @@ def collect_results(args: argparse.Namespace) -> list[SearchResult]:
         return 0
 
     def ranking_breakdown(item: SearchResult) -> dict:
+        fields = field_scores(item)
+        query_total = fields["title"] + fields["excerpt"] + fields["metadata"]
         return {
-            "query_score": query_score(item),
+            "query_score": query_total,
+            "field_scores": fields,
+            "temporal_boost": temporal_boost(item),
+            "graph_boost": graph_boost(item),
             "adapter_priority": adapter_priority(item),
             "source_priority": source_priority(item),
+            "total_score": query_total + temporal_boost(item) + graph_boost(item) + adapter_priority(item) + source_priority(item),
             "timestamp": item.timestamp,
         }
 
-    if args.explain_ranking:
-        for item in results:
-            item.metadata["ranking"] = ranking_breakdown(item)
+    for item in results:
+        item.metadata["ranking"] = ranking_breakdown(item)
 
     results.sort(
         key=lambda item: (
-            item.metadata.get("ranking", {}).get("query_score", query_score(item)),
-            item.metadata.get("ranking", {}).get("adapter_priority", adapter_priority(item)),
-            item.metadata.get("ranking", {}).get("source_priority", source_priority(item)),
+            item.metadata["ranking"]["total_score"],
+            item.metadata["ranking"]["query_score"],
+            item.metadata["ranking"]["temporal_boost"],
+            item.metadata["ranking"]["graph_boost"],
             item.timestamp or "",
             item.title,
         ),
         reverse=not args.ascending,
     )
-    return results[: args.limit]
+    limited = results[: args.limit]
+    if not args.explain_ranking:
+        for item in limited:
+            item.metadata.pop("ranking", None)
+    return limited
 
 
 def summarize_results(results: list[SearchResult]) -> dict:

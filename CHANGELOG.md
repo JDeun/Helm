@@ -7,6 +7,7 @@
 - **privacy boundary primitive**: added `helm privacy scan|tokenize|restore` for local-first reversible tokenization, non-recoverable secret redaction, workspace-local vault storage, and tokenize/restore audit events.
 - **privacy boundary docs**: added `docs/privacy-boundary.md` and linked privacy preflight guidance from execution profiles, memory operations, and the OpenClaw integration boundary.
 - **context ranking explainability**: added `helm context --explain-ranking` and new retrieval presets (`decisions`, `timeline`, `entity`, `reflect-candidates`) as the first Hindsight-inspired query-layer step.
+- **field-aware context ranking**: upgraded `helm context` ranking with title/excerpt/metadata score components, recency boost, and shallow ontology graph expansion for entity-centered queries.
 - **memory learning layers**: documented the distinction between raw facts, episodes, observations, and operating rules so future reflection-style reports keep evidence visible.
 
 ## [0.7.3] — 2026-05-03

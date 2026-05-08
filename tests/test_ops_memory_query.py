@@ -71,4 +71,65 @@ def test_cli_explain_ranking_includes_score_breakdown() -> None:
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
         assert payload[0]["metadata"]["ranking"]["query_score"] > 0
+        assert payload[0]["metadata"]["ranking"]["field_scores"]["excerpt"] > 0
         assert payload[0]["metadata"]["ranking"]["source_priority"] > 0
+
+
+def test_entity_mode_expands_one_hop_ontology_neighbors() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        workspace = Path(tmpdir)
+        ontology = workspace / "memory" / "ontology"
+        ontology.mkdir(parents=True)
+        (workspace / ".helm").mkdir()
+        (workspace / ".helm" / "context_sources.json").write_text('{"sources": []}\n', encoding="utf-8")
+        (ontology / "entities.jsonl").write_text(
+            "\n".join(
+                [
+                    json.dumps({"id": "project_helm", "type": "project", "properties": {"name": "Helm"}}),
+                    json.dumps({"id": "concept_memory", "type": "concept", "properties": {"name": "Memory"}}),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (ontology / "relations.jsonl").write_text(
+            json.dumps(
+                {
+                    "from": "project_helm",
+                    "to": "concept_memory",
+                    "relation_type": "uses",
+                    "properties": {"notes": "Helm uses memory context."},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        env = os.environ.copy()
+        env["HELM_WORKSPACE"] = str(workspace)
+        env["PYTHONPATH"] = str(REPO_ROOT)
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "ops_memory_query.py"),
+                "--mode",
+                "entity",
+                "--entity",
+                "project_helm",
+                "--explain-ranking",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        kinds = {item["kind"] for item in payload}
+        assert "graph-relation" in kinds
+        assert "graph-neighbor" in kinds
+        graph_items = [item for item in payload if item["metadata"].get("graph_expansion")]
+        assert graph_items
+        assert all(item["metadata"]["ranking"]["graph_boost"] > 0 for item in graph_items)
