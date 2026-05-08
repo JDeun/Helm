@@ -209,6 +209,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 
 - [`docs/execution-profiles.md`](docs/execution-profiles.md)
 - [`docs/memory-operations-policy.md`](docs/memory-operations-policy.md)
+- [`docs/privacy-boundary.md`](docs/privacy-boundary.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)

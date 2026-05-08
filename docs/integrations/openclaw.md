@@ -38,3 +38,19 @@ Promote to Helm only when a pattern is:
 - covered by tests when it affects runtime behavior
 
 Do not move private OpenClaw memory or personal automations into Helm core.
+
+## Privacy boundary
+
+OpenClaw may dogfood stronger privacy filtering than public Helm ships.
+
+The reusable part that belongs in Helm is the boundary primitive:
+
+- scan private text before external tool, subagent, API, report, or remote handoff boundaries
+- tokenize recoverable values into stable labels
+- keep the raw mapping in a local vault
+- audit tokenize and restore events
+- redact secrets instead of storing them as recoverable labels
+
+The private part that stays in OpenClaw is the real vault, personal detector tuning, restore authorization, and any raw private memory.
+
+For the public primitive, see [Privacy Boundary](../privacy-boundary.md).

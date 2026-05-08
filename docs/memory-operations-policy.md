@@ -147,6 +147,23 @@ Helm should be able to answer:
 - whether it may be promoted into team-visible policy
 - whether it should be filtered during sync or reporting
 
+## Privacy Boundary
+
+Durable memory should not become the first place private raw values are discovered.
+
+Before a memory operation promotes, exports, or shares context outside a private runtime, Helm recommends a privacy preflight:
+
+- scan text for private spans
+- tokenize recoverable values into stable labels when identity continuity matters
+- redact secrets rather than storing them in a recoverable vault
+- write tokenized text into durable logs, checkpoints, review queues, and public-safe reports
+- keep raw mappings in a local vault outside public fixtures and documentation
+- audit restore events separately from normal memory writes
+
+This matters because task ledgers, command logs, state snapshots, crystallized sessions, and documentation exports can all become durable surfaces.
+
+See [Privacy Boundary](./privacy-boundary.md).
+
 ## Relationship To Finalization
 
 Finalization should not directly mutate every layer.

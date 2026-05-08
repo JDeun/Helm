@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **privacy boundary primitive**: added `helm privacy scan|tokenize|restore` for local-first reversible tokenization, non-recoverable secret redaction, workspace-local vault storage, and tokenize/restore audit events.
+- **privacy boundary docs**: added `docs/privacy-boundary.md` and linked privacy preflight guidance from execution profiles, memory operations, and the OpenClaw integration boundary.
+
 ## [0.7.3] — 2026-05-03
 
 ### Changed

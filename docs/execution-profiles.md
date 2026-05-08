@@ -7,6 +7,7 @@ This workspace uses a small execution-profile layer so shell actions are chosen 
 - `inspect_local`
   - Use for read-only inspection, diagnostics, and state review.
   - Default for `rg`, `sed`, `git status`, config reads, and log checks.
+  - Privacy preflight is usually unnecessary unless the inspection output will be exported or handed off.
 
 - `workspace_edit`
   - Use for normal local edits inside the workspace.
@@ -19,10 +20,12 @@ This workspace uses a small execution-profile layer so shell actions are chosen 
 - `service_ops`
   - Use for local scripts that also touch live services or APIs.
   - Examples: calendar writes, Sheets writes, meeting-recording pipeline, outbound delivery hooks.
+  - Run privacy preflight when user/private context is passed to an external API.
 
 - `remote_handoff`
   - Use when the operation belongs on a remote host, SSH target, node-specific runtime, or container.
   - Do not pretend this is a normal local shell step. State the target and handoff explicitly.
+  - Run privacy preflight before sending context to the remote target.
 
 ## Decision Rule
 
@@ -65,6 +68,24 @@ The preferred ledger shape is:
 - final state such as `completed`, `failed`, or `handoff_required`
 
 That lifecycle keeps timestamp audits, failure review, and rollback reasoning aligned across shell-backed and conversation-backed execution.
+
+## Privacy Preflight
+
+Execution profiles should make private-data boundary decisions explicit.
+
+Use `helm privacy scan` for a no-write check and `helm privacy tokenize` when private text must cross a boundary in recoverable form. The default vault and audit log live under the workspace state directory.
+
+Recommended defaults:
+
+- `inspect_local`: no preflight unless output will be exported or shared
+- `workspace_edit`: scan before writing user/private context into durable docs or fixtures
+- `risky_edit`: scan checkpoint/state material when it may contain raw private context
+- `service_ops`: tokenize user/private context before external API calls when the raw value is not required
+- `remote_handoff`: tokenize context before handoff; restore only on the authorized local boundary
+
+Secrets such as API keys, passwords, access tokens, and refresh tokens should be redacted instead of stored as recoverable vault entries.
+
+See [Privacy Boundary](./privacy-boundary.md).
 
 ## Helpers
 

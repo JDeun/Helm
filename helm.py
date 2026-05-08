@@ -30,6 +30,7 @@ from commands.harness import cmd_harness
 from commands.health import cmd_health
 from commands.memory import cmd_memory
 from commands.ops import cmd_ops
+from commands.privacy import cmd_privacy
 from commands.profile import cmd_profile
 from commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_skill_reject, cmd_skill_review
 from commands.skill_lifecycle import (
@@ -391,6 +392,11 @@ def build_parser() -> argparse.ArgumentParser:
     memory.add_argument("args", nargs=argparse.REMAINDER)
     memory.set_defaults(func=cmd_memory)
 
+    privacy = subparsers.add_parser("privacy", help="Scan, tokenize, and restore private text at agent/tool boundaries.")
+    privacy.add_argument("--path", help="Workspace path to target.")
+    privacy.add_argument("args", nargs=argparse.REMAINDER)
+    privacy.set_defaults(func=cmd_privacy)
+
     health = subparsers.add_parser("health", help="Probe runtime model health and choose fallback candidates.")
     health.add_argument("--path", help="Workspace path to target.")
     health.add_argument("args", nargs=argparse.REMAINDER)
@@ -452,6 +458,7 @@ def main(argv: list[str] | None = None) -> int:
         "skill": cmd_skill,
         "ops": cmd_ops,
         "memory": cmd_memory,
+        "privacy": cmd_privacy,
         "health": cmd_health,
         "harness": cmd_harness,
     }
