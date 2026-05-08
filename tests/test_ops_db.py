@@ -5,6 +5,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -94,6 +96,8 @@ def test_verify_index_reports_no_drift(tmp_path: Path) -> None:
 
 
 def test_sqlite_failure_does_not_delete_jsonl(tmp_path: Path) -> None:
+    import scripts.ops_db as ops_db_mod
+    ops_db_mod._INDEX_FAILURE_WARNED = False
     state_root = tmp_path / ".helm"
     state_root.mkdir()
     ledger = state_root / "task-ledger.jsonl"
@@ -102,9 +106,11 @@ def test_sqlite_failure_does_not_delete_jsonl(tmp_path: Path) -> None:
     db = db_path_for_state_root(state_root)
     db.mkdir(parents=True)
     # index_task_entry should not raise and should not delete JSONL
-    index_task_entry(state_root=state_root, entry={"task_id": "task-002"}, source_file="task-ledger.jsonl")
+    with pytest.warns(UserWarning, match="SQLite indexing failed"):
+        index_task_entry(state_root=state_root, entry={"task_id": "task-002"}, source_file="task-ledger.jsonl")
     assert ledger.exists()
     assert ledger.read_text(encoding="utf-8").strip() == '{"task_id": "task-001"}'
+    ops_db_mod._INDEX_FAILURE_WARNED = False
 
 
 def test_db_path_for_state_root(tmp_path: Path) -> None:

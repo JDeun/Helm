@@ -86,13 +86,14 @@ def test_bash_lc_inner_command_is_detected():
 def test_guard_policy_malformed_falls_back_to_builtin(tmp_path):
     bad_policy = tmp_path / "bad_policy.json"
     bad_policy.write_text("{ this is not valid json }", encoding="utf-8")
-    decision = evaluate_command_guard(
-        command=["rm", "-rf", "/"],
-        selected_profile="risky_edit",
-        profiles=PROFILES,
-        workspace=Path("/tmp/test-workspace"),
-        policy_path=bad_policy,
-    )
+    with pytest.warns(UserWarning, match="Malformed guard policy"):
+        decision = evaluate_command_guard(
+            command=["rm", "-rf", "/"],
+            selected_profile="risky_edit",
+            profiles=PROFILES,
+            workspace=Path("/tmp/test-workspace"),
+            policy_path=bad_policy,
+        )
     assert decision.action == "deny"
 
 
@@ -259,26 +260,28 @@ def test_rm_recursive_force_long_form_normalized():
 def test_malformed_policy_uses_fail_closed(tmp_path):
     bad_policy = tmp_path / "bad.json"
     bad_policy.write_text("{ broken json !!!", encoding="utf-8")
-    decision = evaluate_command_guard(
-        command=["ls"],
-        selected_profile="inspect_local",
-        profiles=PROFILES,
-        workspace=Path("/tmp/test"),
-        policy_path=bad_policy,
-    )
+    with pytest.warns(UserWarning, match="Malformed guard policy"):
+        decision = evaluate_command_guard(
+            command=["ls"],
+            selected_profile="inspect_local",
+            profiles=PROFILES,
+            workspace=Path("/tmp/test"),
+            policy_path=bad_policy,
+        )
     assert decision.action == "require_approval"
 
 
 def test_unknown_policy_version_uses_fail_closed(tmp_path):
     policy = tmp_path / "future.json"
     policy.write_text(json.dumps({"version": 999, "absolute_deny": [], "require_approval": []}), encoding="utf-8")
-    decision = evaluate_command_guard(
-        command=["ls"],
-        selected_profile="inspect_local",
-        profiles=PROFILES,
-        workspace=Path("/tmp/test"),
-        policy_path=policy,
-    )
+    with pytest.warns(UserWarning, match="Unknown guard policy version"):
+        decision = evaluate_command_guard(
+            command=["ls"],
+            selected_profile="inspect_local",
+            profiles=PROFILES,
+            workspace=Path("/tmp/test"),
+            policy_path=policy,
+        )
     assert decision.action == "require_approval"
 
 
