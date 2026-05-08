@@ -123,12 +123,16 @@ helm dashboard --path ~/.helm/workspace
 - **Checkpoint**: rollback이 필요할 수 있는 작업 전에 복구 지점을 눈에 보이게 남깁니다.
 - **Audit trail**: 어떤 명령이 어떤 profile과 guard decision 아래 어떤 task로 실행됐는지 기록합니다.
 - **File-backed memory**: 다음 실행이 chat history가 아니라 파일에 남은 durable state에서 이어지게 합니다.
+- **Context retrieval**: notes, memory, ontology, tasks, commands, checkpoints를 하나의 inspectable query surface로 정렬합니다.
+- **Privacy boundary**: private text가 tool, API, report, remote handoff 경계를 넘기 전에 scan/tokenize합니다.
 
 | 반복 에이전트 운영 문제 | Helm이 더하는 것 |
 | --- | --- |
 | 에이전트가 이전 작업을 잊음 | notes, memory, tasks, commands, checkpoints 기반 context hydration |
 | risky edit가 너무 빠르게 진행됨 | profile, command guard, checkpoint discipline |
 | 나중에 실행 이유를 설명하기 어려움 | task ledger, command log, status, dashboard, report |
+| private context가 tool로 새어 나갈 수 있음 | local vault와 audit event를 쓰는 `helm privacy` scan/tokenize/restore |
+| retrieval ranking이 black box처럼 보임 | field, recency, graph, adapter, source score를 보여주는 `helm context --explain-ranking` |
 | skill 규칙이 프롬프트에만 남음 | `SKILL.md` guidance와 `contract.json` 실행 정책 |
 | model fallback이 즉흥적으로 결정됨 | file-backed health check와 fallback selection |
 | 운영 상태가 흩어짐 | workspace layout, adopted sources, SQLite query index |
@@ -171,6 +175,22 @@ helm checkpoint list --path ~/.helm/workspace
 helm report --path ~/.helm/workspace --format markdown
 ```
 
+durable context를 ranking 설명과 함께 조회.
+
+```bash
+helm context --path ~/.helm/workspace --mode decisions --explain-ranking --json
+helm context --path ~/.helm/workspace --mode timeline --since 2026-05-01
+helm context --path ~/.helm/workspace --mode entity --entity project_helm
+helm context --path ~/.helm/workspace --mode reflect-candidates
+```
+
+privacy boundary preflight 실행.
+
+```bash
+helm privacy --path ~/.helm/workspace scan --text "Contact alice@example.com" --json
+helm privacy --path ~/.helm/workspace tokenize --scope task-123 --text "Contact alice@example.com"
+```
+
 model health 확인.
 
 ```bash
@@ -209,6 +229,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 
 - [`docs/execution-profiles.md`](docs/execution-profiles.md)
 - [`docs/memory-operations-policy.md`](docs/memory-operations-policy.md)
+- [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
 - [`docs/privacy-boundary.md`](docs/privacy-boundary.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)

@@ -123,12 +123,16 @@ Core ideas:
 - **Checkpoint**: preserves a visible recovery point before work that may need rollback.
 - **Audit trail**: records what ran, under which profile, with what guard decision, and what task it belonged to.
 - **File-backed memory**: keeps reusable context in files so later runs resume from durable state instead of chat history.
+- **Context retrieval**: ranks notes, memory, ontology, tasks, commands, and checkpoints through one inspectable query surface.
+- **Privacy boundary**: scans and tokenizes private text before it crosses tool, API, report, or remote handoff boundaries.
 
 | Repeated-agent problem | Helm adds |
 | --- | --- |
 | The agent forgets prior work | Context hydration from notes, memory, tasks, commands, and checkpoints |
 | Risky edits happen too fast | Profiles, command guard, and checkpoint discipline |
 | Runs are hard to explain later | Task ledger, command log, status, dashboard, and reports |
+| Private context may leak into tools | `helm privacy` scan/tokenize/restore with local vault and audit events |
+| Retrieval feels like a black box | `helm context --explain-ranking` with field, recency, graph, adapter, and source scores |
 | Skill rules live in prompts | `SKILL.md` guidance plus `contract.json` execution policy |
 | Model fallback is ad hoc | File-backed health checks and fallback selection |
 | Operational state is scattered | Workspace layout, adopted sources, and SQLite query index |
@@ -171,6 +175,22 @@ helm checkpoint list --path ~/.helm/workspace
 helm report --path ~/.helm/workspace --format markdown
 ```
 
+Query durable context with inspectable ranking.
+
+```bash
+helm context --path ~/.helm/workspace --mode decisions --explain-ranking --json
+helm context --path ~/.helm/workspace --mode timeline --since 2026-05-01
+helm context --path ~/.helm/workspace --mode entity --entity project_helm
+helm context --path ~/.helm/workspace --mode reflect-candidates
+```
+
+Run a privacy boundary preflight.
+
+```bash
+helm privacy --path ~/.helm/workspace scan --text "Contact alice@example.com" --json
+helm privacy --path ~/.helm/workspace tokenize --scope task-123 --text "Contact alice@example.com"
+```
+
 Probe model health.
 
 ```bash
@@ -209,6 +229,7 @@ Core concepts:
 
 - [`docs/execution-profiles.md`](docs/execution-profiles.md)
 - [`docs/memory-operations-policy.md`](docs/memory-operations-policy.md)
+- [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
 - [`docs/privacy-boundary.md`](docs/privacy-boundary.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
