@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.8.0] — 2026-05-08
+
 ### Added
 
 - **privacy boundary primitive**: added `helm privacy scan|tokenize|restore` for local-first reversible tokenization, non-recoverable secret redaction, workspace-local vault storage, and tokenize/restore audit events.
@@ -9,6 +11,15 @@
 - **context ranking explainability**: added `helm context --explain-ranking` and new retrieval presets (`decisions`, `timeline`, `entity`, `reflect-candidates`) as the first Hindsight-inspired query-layer step.
 - **field-aware context ranking**: upgraded `helm context` ranking with title/excerpt/metadata score components, recency boost, and shallow ontology graph expansion for entity-centered queries.
 - **memory learning layers**: documented the distinction between raw facts, episodes, observations, and operating rules so future reflection-style reports keep evidence visible.
+- **negative-claim revalidation workflow**: added `helm skill-lifecycle revalidate-claim` for manual claim review and allowlisted `probe_command` execution. Safe probes update claim status, persist probe output, and append lifecycle events.
+
+### Changed
+
+- **skill lifecycle docs**: documented `negative_claim_safe_probe_prefixes`, manual claim revalidation, and safe probe execution.
+
+### Tests
+
+- Full suite: 379 tests passing.
 
 ## [0.7.3] — 2026-05-03
 

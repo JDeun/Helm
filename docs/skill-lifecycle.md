@@ -234,7 +234,8 @@ helm skill-lifecycle view --path ~/.openclaw/workspace car
 ### `helm skill-lifecycle revalidation-due`
 
 Surface persisted negative claims whose TTL window has elapsed and need
-re-checking.
+re-checking. If a claim carries a `probe_command`, the output also includes
+whether that command currently matches the configured safe-probe allowlist.
 
 ```bash
 helm skill-lifecycle revalidation-due --path ~/.openclaw/workspace
@@ -251,6 +252,42 @@ A claim is "due for revalidation" when:
 
 Each result includes the `skill_id`, the TTL `anchor`, and how many days
 overdue the claim is.
+
+### `helm skill-lifecycle revalidate-claim`
+
+Record the outcome of a negative-claim review, or run a claim-specific safe
+probe command. Manual recording is explicit:
+
+```bash
+helm skill-lifecycle revalidate-claim --path ~/.openclaw/workspace \
+  --skill old-skill \
+  --claim-id sha256:abc123 \
+  --status resolved \
+  --note "command now exists"
+```
+
+Probe execution is intentionally locked down. A persisted claim must include
+`probe_command`, and the command must match one of the configured
+`negative_claim_safe_probe_prefixes`. A successful probe (`exit_code=0`)
+marks the claim `resolved`; a failed or timed-out probe marks it
+`still_valid`.
+
+```json
+{
+  "negative_claim_safe_probe_prefixes": [
+    ["python3", "scripts/model_provider_probe.py"],
+    ["openclaw", "health"]
+  ]
+}
+```
+
+```bash
+helm skill-lifecycle revalidate-claim --path ~/.openclaw/workspace \
+  --skill old-skill \
+  --claim-id sha256:abc123 \
+  --probe-command "python3 scripts/model_provider_probe.py --check browser" \
+  --probe
+```
 
 ### `helm curator <subcommand>`
 
@@ -302,6 +339,7 @@ Re-runs are idempotent — they preserve manually edited `status` /
   "hide_stale_from_prompt": false,
   "protect_sources": ["bundled", "hub"],
   "negative_claim_ttl_days": 30,
+  "negative_claim_safe_probe_prefixes": [],
   "report_top_n": 20
 }
 ```
@@ -372,8 +410,7 @@ directly, it can read `usage.json` — the schema is stable from M1.
 ## Roadmap
 
 - M5+ (out of band): runtime-side hooks if the agent runtime adopts the
-  schema natively; automatic negative-claim re-validation guarded by an
-  allowlist of safe probe commands.
+  schema natively; richer automatic probe suggestion for negative claims.
 
 ## Known gaps
 

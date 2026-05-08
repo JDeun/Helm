@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 AI agent workspace를 위한 로컬 운영 레이어입니다. 명령 전 profile, 위험 작업 전 checkpoint, chat이 사라진 뒤에도 남는 durable task history를 제공합니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.7.3</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.8.0</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -191,6 +191,18 @@ helm privacy --path ~/.helm/workspace scan --text "Contact alice@example.com" --
 helm privacy --path ~/.helm/workspace tokenize --scope task-123 --text "Contact alice@example.com"
 ```
 
+skill instruction 안의 오래된 negative claim 검토.
+
+```bash
+helm skill-lifecycle negative-claims --path ~/.helm/workspace --persist
+helm skill-lifecycle revalidation-due --path ~/.helm/workspace
+helm skill-lifecycle revalidate-claim --path ~/.helm/workspace \
+  --skill old-skill \
+  --claim-id sha256:abc123 \
+  --status resolved \
+  --note "command now exists"
+```
+
 model health 확인.
 
 ```bash
@@ -250,6 +262,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md)
 - [`docs/releases/0.7.3.md`](docs/releases/0.7.3.md)
 - [`docs/releases/0.7.2.md`](docs/releases/0.7.2.md)
 - [`docs/releases/0.7.1.md`](docs/releases/0.7.1.md)
@@ -259,7 +272,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 
 ## 현재 상태
 
-Helm v0.7.3은 skill-lifecycle reporting 표면을 더 정확하게 다듬습니다. umbrella 후보 summary JSON과 report에 signal type을 보존하고, user install 후 packaged `helm` CLI smoke를 통과했으며, OpenClaw workspace hook 경로도 end-to-end로 검증했습니다. 자세한 내용은 [`docs/skill-lifecycle.md`](docs/skill-lifecycle.md) 참고.
+Helm v0.8.0은 privacy boundary tokenization, explainable context ranking, 그리고 skill lifecycle negative claim을 더 안전하게 재검증하는 workflow를 추가합니다. 자세한 내용은 [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md) 참고.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 

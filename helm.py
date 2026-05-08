@@ -41,6 +41,7 @@ from commands.skill_lifecycle import (
     cmd_skill_lifecycle_observe,
     cmd_skill_lifecycle_pin,
     cmd_skill_lifecycle_report,
+    cmd_skill_lifecycle_revalidate_claim,
     cmd_skill_lifecycle_restore,
     cmd_skill_lifecycle_revalidation_due,
     cmd_skill_lifecycle_scan,
@@ -381,6 +382,33 @@ def build_parser() -> argparse.ArgumentParser:
     sl_revalidate.add_argument("--path", help="Workspace path to target.")
     sl_revalidate.add_argument("--json", action="store_true")
     sl_revalidate.set_defaults(func=cmd_skill_lifecycle_revalidation_due)
+
+    sl_revalidate_claim = skill_lifecycle_subparsers.add_parser(
+        "revalidate-claim",
+        help="Record or run a safe probe for a persisted negative claim.",
+    )
+    sl_revalidate_claim.add_argument("--path", help="Workspace path to target.")
+    sl_revalidate_claim.add_argument("--skill", required=True, help="Skill id containing the claim.")
+    sl_revalidate_claim.add_argument("--claim-id", required=True, help="Persisted claim_id to update.")
+    sl_revalidate_claim.add_argument(
+        "--status",
+        choices=["needs_review", "still_valid", "resolved"],
+        default="needs_review",
+        help="Manual revalidation status when --probe is not used.",
+    )
+    sl_revalidate_claim.add_argument("--note", help="Optional manual revalidation note.")
+    sl_revalidate_claim.add_argument(
+        "--probe-command",
+        help="Attach or replace the claim's probe_command before recording or running it.",
+    )
+    sl_revalidate_claim.add_argument(
+        "--probe",
+        action="store_true",
+        help="Run the claim's probe_command if it matches negative_claim_safe_probe_prefixes.",
+    )
+    sl_revalidate_claim.add_argument("--timeout", type=int, default=30, help="Probe timeout in seconds.")
+    sl_revalidate_claim.add_argument("--json", action="store_true")
+    sl_revalidate_claim.set_defaults(func=cmd_skill_lifecycle_revalidate_claim)
 
     ops = subparsers.add_parser("ops", help="Inspect daily, task, and command reports.")
     ops.add_argument("--path", help="Workspace path to target.")

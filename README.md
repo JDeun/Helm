@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.7.3</strong></p>
+<p align="center"><strong>Current release: v0.8.0</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -191,6 +191,18 @@ helm privacy --path ~/.helm/workspace scan --text "Contact alice@example.com" --
 helm privacy --path ~/.helm/workspace tokenize --scope task-123 --text "Contact alice@example.com"
 ```
 
+Review stale negative claims in skill instructions.
+
+```bash
+helm skill-lifecycle negative-claims --path ~/.helm/workspace --persist
+helm skill-lifecycle revalidation-due --path ~/.helm/workspace
+helm skill-lifecycle revalidate-claim --path ~/.helm/workspace \
+  --skill old-skill \
+  --claim-id sha256:abc123 \
+  --status resolved \
+  --note "command now exists"
+```
+
 Probe model health.
 
 ```bash
@@ -250,6 +262,7 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md)
 - [`docs/releases/0.7.3.md`](docs/releases/0.7.3.md)
 - [`docs/releases/0.7.2.md`](docs/releases/0.7.2.md)
 - [`docs/releases/0.7.1.md`](docs/releases/0.7.1.md)
@@ -259,7 +272,7 @@ Release details:
 
 ## Status
 
-Helm v0.7.3 tightens the skill-lifecycle reporting surface: umbrella candidates now preserve their signal type in summary JSON and reports, the packaged `helm` CLI was smoke-tested after user install, and the OpenClaw workspace hook path was verified end-to-end. See [`docs/skill-lifecycle.md`](docs/skill-lifecycle.md).
+Helm v0.8.0 adds privacy boundary tokenization, explainable context ranking, and a safer negative-claim revalidation workflow for skill lifecycle maintenance. See [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md).
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

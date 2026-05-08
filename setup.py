@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name="helm-agent-ops",
-    version="0.7.3",
+    version="0.8.0",
     description="Stability-first operations CLI for long-lived agent workspaces.",
     py_modules=["helm", "helm_workspace", "helm_context"],
     packages=["scripts", "commands", "references"],

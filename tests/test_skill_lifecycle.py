@@ -33,11 +33,14 @@ from scripts.skill_lifecycle_lib import (
     render_report_json,
     render_report_markdown,
     revalidation_due_claims,
+    run_negative_claim_probe,
     save_config,
     save_usage,
     scan,
+    set_negative_claim_probe_command,
     set_pinned,
     stale_candidates,
+    update_negative_claim_revalidation,
 )
 
 
@@ -965,6 +968,106 @@ def test_revalidation_due_skips_resolved(tmp_path: Path) -> None:
     save_usage(paths, usage)
 
     assert revalidation_due_claims(paths) == []
+
+
+def test_update_negative_claim_revalidation_records_manual_status(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\n- this command does not work\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    persist_negative_claims(paths, ttl_days=30)
+    claim_id = load_usage(paths)["skills"]["alpha"]["negative_claims"][0]["claim_id"]
+
+    claim = update_negative_claim_revalidation(
+        paths,
+        skill_id="alpha",
+        claim_id=claim_id,
+        status="resolved",
+        note="manual probe succeeded",
+    )
+
+    assert claim["status"] == "resolved"
+    assert claim["last_revalidated_at"] is not None
+    assert claim["revalidation_note"] == "manual probe succeeded"
+    events = read_events(paths, skill_id="alpha")
+    assert events[-1]["event"] == "negative_claim_revalidated"
+    assert events[-1]["claim_id"] == claim_id
+
+
+def test_run_negative_claim_probe_requires_allowlist(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\n- this command does not work\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    persist_negative_claims(paths, ttl_days=30)
+    usage = load_usage(paths)
+    claim = usage["skills"]["alpha"]["negative_claims"][0]
+    claim["probe_command"] = "python3 --version"
+    save_usage(paths, usage)
+
+    try:
+        run_negative_claim_probe(paths, skill_id="alpha", claim_id=claim["claim_id"])
+    except LifecycleError as exc:
+        assert "allowlisted" in str(exc)
+    else:
+        raise AssertionError("expected allowlist rejection")
+
+
+def test_set_negative_claim_probe_command_persists_command(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\n- this command does not work\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    persist_negative_claims(paths, ttl_days=30)
+    claim_id = load_usage(paths)["skills"]["alpha"]["negative_claims"][0]["claim_id"]
+
+    updated = set_negative_claim_probe_command(
+        paths,
+        skill_id="alpha",
+        claim_id=claim_id,
+        command="python3 --version",
+    )
+
+    assert updated["probe_command"] == "python3 --version"
+    events = read_events(paths, skill_id="alpha")
+    assert events[-1]["event"] == "negative_claim_probe_set"
+
+
+def test_run_negative_claim_probe_updates_status_from_exit_code(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n\n- this command does not work\n",
+        encoding="utf-8",
+    )
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+    config = load_config(paths)
+    config["negative_claim_safe_probe_prefixes"] = [["python3", "--version"]]
+    save_config(paths, config)
+    persist_negative_claims(paths, ttl_days=30)
+    usage = load_usage(paths)
+    claim = usage["skills"]["alpha"]["negative_claims"][0]
+    claim["probe_command"] = "python3 --version"
+    save_usage(paths, usage)
+
+    updated = run_negative_claim_probe(paths, skill_id="alpha", claim_id=claim["claim_id"])
+
+    assert updated["status"] == "resolved"
+    assert updated["last_probe"]["exit_code"] == 0
+    assert updated["last_revalidated_at"] is not None
 
 
 def test_archive_plan_includes_file_summary(tmp_path: Path) -> None:

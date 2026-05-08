@@ -17,7 +17,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -43,6 +45,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "hide_stale_from_prompt": False,
     "protect_sources": ["bundled", "hub"],
     "negative_claim_ttl_days": 30,
+    "negative_claim_safe_probe_prefixes": [],
     "report_top_n": 20,
 }
 
@@ -982,9 +985,185 @@ def revalidation_due_claims(paths: LifecyclePaths) -> list[dict[str, Any]]:
                 merged["skill_id"] = skill_id
                 merged["anchor"] = anchor_key
                 merged["due_since_days"] = round(overdue_days, 1)
+                probe_command = claim.get("probe_command")
+                if isinstance(probe_command, str) and probe_command.strip():
+                    merged["probe_allowed"] = is_negative_claim_probe_allowed(
+                        load_config(paths),
+                        probe_command,
+                    )
                 due.append(merged)
     due.sort(key=lambda c: c["due_since_days"], reverse=True)
     return due
+
+
+def _argv_matches_prefix(argv: list[str], prefix: list[str]) -> bool:
+    return bool(prefix) and len(argv) >= len(prefix) and argv[: len(prefix)] == prefix
+
+
+def is_negative_claim_probe_allowed(config: dict[str, Any], command: str) -> bool:
+    """Return whether a negative-claim probe command is explicitly allowed.
+
+    Probe execution is opt-in. The command must be parseable without shell
+    semantics and match one configured argv prefix exactly.
+    """
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        return False
+    if not argv:
+        return False
+    prefixes = config.get("negative_claim_safe_probe_prefixes") or []
+    for raw in prefixes:
+        if isinstance(raw, str):
+            try:
+                prefix = shlex.split(raw)
+            except ValueError:
+                continue
+        elif isinstance(raw, list) and all(isinstance(part, str) for part in raw):
+            prefix = raw
+        else:
+            continue
+        if _argv_matches_prefix(argv, prefix):
+            return True
+    return False
+
+
+def _find_claim(usage: dict[str, Any], skill_id: str, claim_id: str) -> dict[str, Any]:
+    entry = usage.get("skills", {}).get(skill_id)
+    if entry is None:
+        raise LifecycleError(f"unknown skill: {skill_id}")
+    for claim in entry.get("negative_claims") or []:
+        if isinstance(claim, dict) and claim.get("claim_id") == claim_id:
+            return claim
+    raise LifecycleError(f"unknown claim for {skill_id}: {claim_id}")
+
+
+def update_negative_claim_revalidation(
+    paths: LifecyclePaths,
+    *,
+    skill_id: str,
+    claim_id: str,
+    status: str,
+    note: str | None = None,
+    probe_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Record a manual or probed negative-claim revalidation result."""
+    if status not in {"needs_review", "still_valid", "resolved"}:
+        raise LifecycleError(f"invalid claim status: {status}")
+    if not paths.usage_path.exists():
+        raise LifecycleError("lifecycle layer not initialized; run scan first")
+    usage = load_usage(paths)
+    claim = _find_claim(usage, skill_id, claim_id)
+    now = utc_now_iso()
+    claim["status"] = status
+    claim["last_revalidated_at"] = now
+    if note is not None:
+        claim["revalidation_note"] = note
+    if probe_result is not None:
+        claim["last_probe"] = probe_result
+    save_usage(paths, usage)
+    event = {
+        "event": "negative_claim_revalidated",
+        "skill_id": skill_id,
+        "claim_id": claim_id,
+        "status": status,
+    }
+    if probe_result is not None:
+        event["probe_exit_code"] = probe_result.get("exit_code")
+    append_event(paths, event)
+    return dict(claim)
+
+
+def set_negative_claim_probe_command(
+    paths: LifecyclePaths,
+    *,
+    skill_id: str,
+    claim_id: str,
+    command: str,
+) -> dict[str, Any]:
+    """Attach or replace a probe command on a persisted negative claim."""
+    if not command.strip():
+        raise LifecycleError("probe command cannot be empty")
+    try:
+        shlex.split(command)
+    except ValueError as exc:
+        raise LifecycleError(f"invalid probe command: {exc}") from exc
+    if not paths.usage_path.exists():
+        raise LifecycleError("lifecycle layer not initialized; run scan first")
+    usage = load_usage(paths)
+    claim = _find_claim(usage, skill_id, claim_id)
+    claim["probe_command"] = command
+    save_usage(paths, usage)
+    append_event(paths, {
+        "event": "negative_claim_probe_set",
+        "skill_id": skill_id,
+        "claim_id": claim_id,
+    })
+    return dict(claim)
+
+
+def run_negative_claim_probe(
+    paths: LifecyclePaths,
+    *,
+    skill_id: str,
+    claim_id: str,
+    timeout_seconds: int = 30,
+) -> dict[str, Any]:
+    """Run an allowlisted probe command and update claim status.
+
+    The persisted claim must contain `probe_command`. Exit code 0 resolves
+    the negative claim; non-zero marks it `still_valid`.
+    """
+    if not paths.usage_path.exists():
+        raise LifecycleError("lifecycle layer not initialized; run scan first")
+    usage = load_usage(paths)
+    claim = _find_claim(usage, skill_id, claim_id)
+    command = claim.get("probe_command")
+    if not isinstance(command, str) or not command.strip():
+        raise LifecycleError(f"claim has no probe_command: {claim_id}")
+    config = load_config(paths)
+    if not is_negative_claim_probe_allowed(config, command):
+        raise LifecycleError(f"probe command is not allowlisted: {command}")
+    try:
+        argv = shlex.split(command)
+    except ValueError as exc:
+        raise LifecycleError(f"invalid probe command: {exc}") from exc
+    started_at = utc_now_iso()
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=str(paths.workspace),
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+        probe_result = {
+            "command": command,
+            "started_at": started_at,
+            "finished_at": utc_now_iso(),
+            "exit_code": result.returncode,
+            "stdout": result.stdout[-2000:],
+            "stderr": result.stderr[-2000:],
+        }
+    except subprocess.TimeoutExpired as exc:
+        probe_result = {
+            "command": command,
+            "started_at": started_at,
+            "finished_at": utc_now_iso(),
+            "exit_code": None,
+            "timeout_seconds": timeout_seconds,
+            "stdout": (exc.stdout or "")[-2000:] if isinstance(exc.stdout, str) else "",
+            "stderr": (exc.stderr or "")[-2000:] if isinstance(exc.stderr, str) else "",
+        }
+    status = "resolved" if probe_result.get("exit_code") == 0 else "still_valid"
+    return update_negative_claim_revalidation(
+        paths,
+        skill_id=skill_id,
+        claim_id=claim_id,
+        status=status,
+        note="probe command executed",
+        probe_result=probe_result,
+    )
 
 
 def persist_negative_claims(

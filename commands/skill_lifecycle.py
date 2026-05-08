@@ -30,11 +30,14 @@ from scripts.skill_lifecycle_lib import (
     render_report_json,
     render_report_markdown,
     revalidation_due_claims,
+    run_negative_claim_probe,
     save_config,
     save_usage,
     scan,
+    set_negative_claim_probe_command,
     set_pinned,
     stale_candidates,
+    update_negative_claim_revalidation,
 )
 
 
@@ -412,6 +415,47 @@ def cmd_skill_lifecycle_revalidation_due(args: argparse.Namespace) -> int:
         text = claim.get("text") or ""
         if text:
             print(f"    > {text}")
+    return 0
+
+
+def cmd_skill_lifecycle_revalidate_claim(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    try:
+        if args.probe_command:
+            set_negative_claim_probe_command(
+                paths,
+                skill_id=args.skill,
+                claim_id=args.claim_id,
+                command=args.probe_command,
+            )
+        if args.probe:
+            claim = run_negative_claim_probe(
+                paths,
+                skill_id=args.skill,
+                claim_id=args.claim_id,
+                timeout_seconds=args.timeout,
+            )
+        else:
+            claim = update_negative_claim_revalidation(
+                paths,
+                skill_id=args.skill,
+                claim_id=args.claim_id,
+                status=args.status,
+                note=args.note,
+            )
+    except LifecycleError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print(json.dumps(claim, indent=2, ensure_ascii=False))
+        return 0
+
+    print(f"revalidated: {args.skill} {args.claim_id} status={claim.get('status')}")
+    if claim.get("last_probe"):
+        probe = claim["last_probe"]
+        print(f"probe exit: {probe.get('exit_code')}")
     return 0
 
 
