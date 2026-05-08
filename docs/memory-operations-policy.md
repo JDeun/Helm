@@ -23,6 +23,21 @@ Meaning:
 
 Do not collapse these into one bucket called "memory".
 
+## Learning Layers
+
+Agent memory should distinguish evidence from synthesis.
+
+Helm's public model maps to four durable learning layers:
+
+- raw facts: source-backed claims from notes, memory files, ontology rows, tasks, commands, or checkpoints
+- episodes: bounded task/session records with question, action, result, lesson, and affected entities
+- observations: synthesized claims that explain a pattern across multiple facts or episodes
+- operating rules: durable procedural guidance strong enough to influence future routing, profiles, or policy
+
+Hindsight-style systems call out a similar separation between world facts, experiences, observations, and mental models. Helm should absorb the separation, not the vendor-specific storage model.
+
+Any observation or rule should keep visible evidence. A long-term conclusion without sources is a draft, not durable memory.
+
 ## Session Crystallization
 
 When a run looks durable, Helm should encourage a crystallized episode before broader promotion.

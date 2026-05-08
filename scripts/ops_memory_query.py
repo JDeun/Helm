@@ -49,6 +49,26 @@ MODE_PRESETS = {
         "include": ["tasks", "checkpoints"],
         "description": "Risky tasks and nearby checkpoints for recovery planning.",
     },
+    "decisions": {
+        "query": "decision",
+        "include": ["notes", "memory", "tasks"],
+        "description": "Technical decisions, trade-offs, and durable implementation choices.",
+    },
+    "timeline": {
+        "query": None,
+        "include": ["notes", "memory", "tasks", "commands", "checkpoints"],
+        "description": "Chronological context across notes, memory, tasks, commands, and checkpoints.",
+    },
+    "entity": {
+        "query": None,
+        "include": ["ontology", "memory", "tasks"],
+        "description": "Entity-centered context from ontology plus nearby memory and task records.",
+    },
+    "reflect-candidates": {
+        "query": None,
+        "include": ["tasks", "commands", "memory"],
+        "description": "Evidence candidates for later reflection: failures, repeated work, and durable memory pressure.",
+    },
 }
 
 
@@ -105,6 +125,8 @@ def apply_mode_defaults(args: argparse.Namespace) -> None:
         args.include = list(preset["include"])
     if args.mode == "failures":
         args.failed_only = True
+    if args.mode == "reflect-candidates":
+        args.latest_tasks = True
 
 
 def matches_query(blob: str, query: str | None) -> bool:
@@ -442,11 +464,23 @@ def collect_results(args: argparse.Namespace) -> list[SearchResult]:
             return 10
         return 0
 
+    def ranking_breakdown(item: SearchResult) -> dict:
+        return {
+            "query_score": query_score(item),
+            "adapter_priority": adapter_priority(item),
+            "source_priority": source_priority(item),
+            "timestamp": item.timestamp,
+        }
+
+    if args.explain_ranking:
+        for item in results:
+            item.metadata["ranking"] = ranking_breakdown(item)
+
     results.sort(
         key=lambda item: (
-            query_score(item),
-            adapter_priority(item),
-            source_priority(item),
+            item.metadata.get("ranking", {}).get("query_score", query_score(item)),
+            item.metadata.get("ranking", {}).get("adapter_priority", adapter_priority(item)),
+            item.metadata.get("ranking", {}).get("source_priority", source_priority(item)),
             item.timestamp or "",
             item.title,
         ),
@@ -497,6 +531,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--failed-only", action="store_true")
     parser.add_argument("--latest-tasks", action="store_true", help="Collapse task ledger entries to latest state per task_id.")
     parser.add_argument("--ascending", action="store_true", help="Sort oldest first instead of newest first.")
+    parser.add_argument("--explain-ranking", action="store_true", help="Attach ranking score components to each result's metadata.")
     parser.add_argument("--summary", action="store_true", help="Print adapter/source summary before detailed results.")
     parser.add_argument("--json", action="store_true")
     return parser
