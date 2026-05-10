@@ -14,6 +14,9 @@ from commands.checkpoint import (
     cmd_checkpoint_finalize,
     cmd_checkpoint_list,
     cmd_checkpoint_preview,
+    cmd_checkpoint_prune,
+    cmd_checkpoint_protect,
+    cmd_checkpoint_policy,
     cmd_checkpoint_recommend,
     cmd_checkpoint_restore,
     cmd_checkpoint_show,
@@ -39,12 +42,16 @@ from commands.skill_lifecycle import (
     cmd_skill_lifecycle_ledger,
     cmd_skill_lifecycle_negative_claims,
     cmd_skill_lifecycle_observe,
+    cmd_skill_lifecycle_outcome_candidates,
+    cmd_skill_lifecycle_outcome_report,
     cmd_skill_lifecycle_pin,
+    cmd_skill_lifecycle_promote_from_trajectory,
     cmd_skill_lifecycle_report,
     cmd_skill_lifecycle_revalidate_claim,
     cmd_skill_lifecycle_restore,
     cmd_skill_lifecycle_revalidation_due,
     cmd_skill_lifecycle_scan,
+    cmd_skill_lifecycle_selection_stats,
     cmd_skill_lifecycle_stale,
     cmd_skill_lifecycle_status,
     cmd_skill_lifecycle_umbrella,
@@ -61,6 +68,16 @@ from commands.status import (
     cmd_run_contract,
     cmd_status,
     format_report_markdown,
+)
+from commands.task import (
+    cmd_task_block,
+    cmd_task_complete,
+    cmd_task_doctor,
+    cmd_task_list,
+    cmd_task_mark_stale,
+    cmd_task_reclaim,
+    cmd_task_retry,
+    cmd_task_show,
 )
 from commands.validate import cmd_validate
 from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status, cmd_db_query
@@ -81,6 +98,29 @@ HELM_PRIMARY = "\033[38;2;230;236;244m"
 HELM_ACCENT = "\033[38;2;105;162;255m"
 HELM_MUTED = "\033[38;2;137;161;196m"
 ANSI_RESET = "\033[0m"
+
+
+def cmd_dci(args: argparse.Namespace) -> int:
+    forwarded: list[str] = []
+    forwarded.extend(args.query or [])
+    for item in args.include or []:
+        forwarded.extend(["--include", item])
+    if args.adapter:
+        forwarded.extend(["--adapter", args.adapter])
+    if args.mode:
+        forwarded.extend(["--mode", args.mode])
+    if args.since:
+        forwarded.extend(["--since", args.since])
+    if args.entity:
+        forwarded.extend(["--entity", args.entity])
+    if args.task_id:
+        forwarded.extend(["--task-id", args.task_id])
+    if args.limit is not None:
+        forwarded.extend(["--limit", str(args.limit)])
+    for flag in ("json", "summary", "failed_only", "latest_tasks", "explain_ranking"):
+        if getattr(args, flag):
+            forwarded.append("--" + flag.replace("_", "-"))
+    return cmd_context(argparse.Namespace(path=args.path, args=forwarded))
 
 
 def color_enabled() -> bool:
@@ -205,6 +245,23 @@ def build_parser() -> argparse.ArgumentParser:
     context.add_argument("args", nargs=argparse.REMAINDER)
     context.set_defaults(func=cmd_context)
 
+    dci = subparsers.add_parser("dci", help="Direct corpus interaction query alias with common options exposed.")
+    dci.add_argument("query", nargs="*")
+    dci.add_argument("--path", help="Workspace path to target.")
+    dci.add_argument("--include", action="append")
+    dci.add_argument("--adapter")
+    dci.add_argument("--mode")
+    dci.add_argument("--since")
+    dci.add_argument("--entity")
+    dci.add_argument("--task-id")
+    dci.add_argument("--limit", type=int)
+    dci.add_argument("--json", action="store_true")
+    dci.add_argument("--summary", action="store_true")
+    dci.add_argument("--failed-only", action="store_true")
+    dci.add_argument("--latest-tasks", action="store_true")
+    dci.add_argument("--explain-ranking", action="store_true")
+    dci.set_defaults(func=cmd_dci)
+
     checkpoint = subparsers.add_parser("checkpoint", help="Create, inspect, restore, and recommend checkpoints.")
     checkpoint_subparsers = checkpoint.add_subparsers(dest="checkpoint_command", required=True)
 
@@ -248,11 +305,93 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint_finalize.add_argument("--json", action="store_true")
     checkpoint_finalize.set_defaults(func=cmd_checkpoint_finalize)
 
+    checkpoint_prune = checkpoint_subparsers.add_parser("prune", help="Plan or apply checkpoint retention pruning.")
+    checkpoint_prune.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    checkpoint_prune.add_argument("--keep-recent", type=int, help="Always keep the newest N checkpoints. Defaults to checkpoint policy.")
+    checkpoint_prune.add_argument("--keep-days", type=int, help="Keep checkpoints newer than this many days. Defaults to checkpoint policy.")
+    checkpoint_prune.add_argument("--max-total-mb", type=int, help="Prune additional unprotected checkpoints until archives fit under this size. Defaults to checkpoint policy.")
+    checkpoint_prune.add_argument("--apply", action="store_true", help="Delete pruned checkpoint archives and update the index.")
+    checkpoint_prune.add_argument("--json", action="store_true")
+    checkpoint_prune.set_defaults(func=cmd_checkpoint_prune)
+
+    checkpoint_protect = checkpoint_subparsers.add_parser("protect", help="Pin or unpin a checkpoint for retention.")
+    checkpoint_protect.add_argument("checkpoint_id")
+    checkpoint_protect.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    checkpoint_protect.add_argument("--unprotect", action="store_true")
+    checkpoint_protect.set_defaults(func=cmd_checkpoint_protect)
+
+    checkpoint_policy_sub = checkpoint_subparsers.add_parser("policy", help="Show checkpoint retention policy defaults or references/checkpoint_policy.json.")
+    checkpoint_policy_sub.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    checkpoint_policy_sub.add_argument("--json", action="store_true")
+    checkpoint_policy_sub.set_defaults(func=cmd_checkpoint_policy)
+
     checkpoint_recommend = subparsers.add_parser("checkpoint-recommend", help="Recommend the checkpoint to use for a risky task.")
     checkpoint_recommend.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     checkpoint_recommend.add_argument("--task-id", help="Specific task id to inspect. Defaults to the latest risky task.")
     checkpoint_recommend.add_argument("--json", action="store_true")
     checkpoint_recommend.set_defaults(func=cmd_checkpoint_recommend)
+
+    task = subparsers.add_parser("task", help="Inspect and append task state transitions.")
+    task_subparsers = task.add_subparsers(dest="task_command", required=True)
+
+    task_list = task_subparsers.add_parser("list", help="List latest task states.")
+    task_list.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    task_list.add_argument("--status", help="Filter by task status.")
+    task_list.add_argument("--profile", help="Filter by execution profile.")
+    task_list.add_argument("--skill", help="Filter by skill id.")
+    task_list.add_argument("--limit", type=int, default=20)
+    task_list.add_argument("--json", action="store_true")
+    task_list.set_defaults(func=cmd_task_list)
+
+    task_show = task_subparsers.add_parser("show", help="Show the latest state for a task.")
+    task_show.add_argument("task_id")
+    task_show.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    task_show.add_argument("--json", action="store_true")
+    task_show.set_defaults(func=cmd_task_show)
+
+    task_block = task_subparsers.add_parser("block", help="Append a blocked state for a task.")
+    task_block.add_argument("task_id")
+    task_block.add_argument("--path", help="Workspace path to target. Defaults to the current directory.")
+    task_block.add_argument("--reason", required=True)
+    task_block.add_argument("--stage", default="manual")
+    task_block.add_argument("--next-action")
+    task_block.set_defaults(func=cmd_task_block)
+
+    task_complete = task_subparsers.add_parser("complete", help="Append a completed state with explicit evidence.")
+    task_complete.add_argument("task_id")
+    task_complete.add_argument("--path", help="Workspace path to target. Defaults to the current directory.")
+    task_complete.add_argument("--evidence", action="append", required=True)
+    task_complete.add_argument("--next-action")
+    task_complete.set_defaults(func=cmd_task_complete)
+
+    task_retry = task_subparsers.add_parser("retry", help="Create a ready retry task from an existing task.")
+    task_retry.add_argument("task_id")
+    task_retry.add_argument("--path", help="Workspace path to target. Defaults to the current directory.")
+    task_retry.add_argument("--reason")
+    task_retry.add_argument("--new-task-id")
+    task_retry.set_defaults(func=cmd_task_retry)
+
+    task_mark_stale = task_subparsers.add_parser("mark-stale", help="Append a stale state for a stuck active task.")
+    task_mark_stale.add_argument("task_id")
+    task_mark_stale.add_argument("--path", help="Workspace path to target. Defaults to the current directory.")
+    task_mark_stale.add_argument("--reason", required=True)
+    task_mark_stale.add_argument("--stage", default="stale")
+    task_mark_stale.add_argument("--next-action")
+    task_mark_stale.set_defaults(func=cmd_task_mark_stale)
+
+    task_reclaim = task_subparsers.add_parser("reclaim", help="Append a ready state for a stale or blocked task.")
+    task_reclaim.add_argument("task_id")
+    task_reclaim.add_argument("--path", help="Workspace path to target. Defaults to the current directory.")
+    task_reclaim.add_argument("--reason", required=True)
+    task_reclaim.add_argument("--owner-session-id")
+    task_reclaim.add_argument("--next-action")
+    task_reclaim.set_defaults(func=cmd_task_reclaim)
+
+    task_doctor = task_subparsers.add_parser("doctor", help="Detect stale or inconsistent task states.")
+    task_doctor.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    task_doctor.add_argument("--stale-minutes", type=int, default=120)
+    task_doctor.add_argument("--json", action="store_true")
+    task_doctor.set_defaults(func=cmd_task_doctor)
 
     skill = subparsers.add_parser("skill", help="Create and promote Helm skills.")
     skill.add_argument("--path", help="Workspace path to target.")
@@ -363,6 +502,37 @@ def build_parser() -> argparse.ArgumentParser:
     sl_ledger.add_argument("--limit", type=int, default=None, help="Show only the last N events.")
     sl_ledger.add_argument("--json", action="store_true")
     sl_ledger.set_defaults(func=cmd_skill_lifecycle_ledger)
+
+    sl_outcome_report = skill_lifecycle_subparsers.add_parser("outcome-report", help="Summarize skill outcome metadata v2.")
+    sl_outcome_report.add_argument("--path", help="Workspace path to target.")
+    sl_outcome_report.add_argument("--json", action="store_true")
+    sl_outcome_report.set_defaults(func=cmd_skill_lifecycle_outcome_report)
+
+    sl_outcome_candidates = skill_lifecycle_subparsers.add_parser("outcome-candidates", help="List skill outcome improvement candidates.")
+    sl_outcome_candidates.add_argument("--path", help="Workspace path to target.")
+    sl_outcome_candidates.add_argument("--limit", type=int, default=None)
+    sl_outcome_candidates.add_argument("--json", action="store_true")
+    sl_outcome_candidates.set_defaults(func=cmd_skill_lifecycle_outcome_candidates)
+
+    sl_selection_stats = skill_lifecycle_subparsers.add_parser("selection-stats", help="Summarize skill selection reasons and evidence quality.")
+    sl_selection_stats.add_argument("--path", help="Workspace path to target.")
+    sl_selection_stats.add_argument("--skill", help="Filter by skill id.")
+    sl_selection_stats.add_argument("--limit", type=int, default=None)
+    sl_selection_stats.add_argument("--json", action="store_true")
+    sl_selection_stats.set_defaults(func=cmd_skill_lifecycle_selection_stats)
+
+    sl_promote_from_trajectory = skill_lifecycle_subparsers.add_parser(
+        "promote-from-trajectory",
+        help="Create a review-only skill draft from an outcome trajectory candidate.",
+    )
+    sl_promote_from_trajectory.add_argument("--path", help="Workspace path to target.")
+    sl_promote_from_trajectory.add_argument("--task-id", help="Specific candidate task id. Defaults to latest candidate.")
+    sl_promote_from_trajectory.add_argument("--name", required=True, help="Draft skill slug.")
+    sl_promote_from_trajectory.add_argument("--description", required=True, help="One-line draft skill description.")
+    sl_promote_from_trajectory.add_argument("--limit", type=int, default=None)
+    sl_promote_from_trajectory.add_argument("--apply", action="store_true", help="Create the draft. Defaults to dry-run.")
+    sl_promote_from_trajectory.add_argument("--json", action="store_true")
+    sl_promote_from_trajectory.set_defaults(func=cmd_skill_lifecycle_promote_from_trajectory)
 
     sl_observe = skill_lifecycle_subparsers.add_parser("observe", help="Poll SKILL.md mtime/atime to record skill_patched and skill_viewed events.")
     sl_observe.add_argument("--path", help="Workspace path to target.")

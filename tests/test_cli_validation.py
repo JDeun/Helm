@@ -177,6 +177,548 @@ def test_dashboard_outputs_compact_sections() -> None:
         assert "Next actions" in result.stdout
 
 
+def test_task_list_and_show_latest_state() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        ledger = root / ".helm" / "task-ledger.jsonl"
+        ledger.write_text(
+            json.dumps(
+                {
+                    "task_id": "task-1",
+                    "task_name": "inspect repository",
+                    "status": "queued",
+                    "profile": "inspect_local",
+                    "started_at": "2026-05-10T00:00:00+00:00",
+                }
+            )
+            + "\n"
+            + json.dumps(
+                {
+                    "task_id": "task-1",
+                    "task_name": "inspect repository",
+                    "status": "completed",
+                    "profile": "inspect_local",
+                    "started_at": "2026-05-10T00:00:00+00:00",
+                    "finished_at": "2026-05-10T00:01:00+00:00",
+                    "exit_code": 0,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        listing = run_cli("task", "list", "--path", str(root), "--status", "completed")
+        show = run_cli("task", "show", "task-1", "--path", str(root))
+
+        assert listing.returncode == 0, listing.stderr
+        assert "task-1 status=completed" in listing.stdout
+        assert "evidence=1" in listing.stdout
+        assert show.returncode == 0, show.stderr
+        assert "completion_evidence=exit_code:0" in show.stdout
+
+
+def test_task_block_complete_and_retry_append_states() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        ledger = root / ".helm" / "task-ledger.jsonl"
+        ledger.write_text(
+            json.dumps(
+                {
+                    "task_id": "task-2",
+                    "task_name": "deploy preview",
+                    "status": "running",
+                    "profile": "service_ops",
+                    "started_at": "2026-05-10T00:00:00+00:00",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        blocked = run_cli(
+            "task",
+            "block",
+            "task-2",
+            "--path",
+            str(root),
+            "--reason",
+            "missing approval",
+            "--next-action",
+            "ask user",
+        )
+        completed = run_cli(
+            "task",
+            "complete",
+            "task-2",
+            "--path",
+            str(root),
+            "--evidence",
+            "provider:ok",
+        )
+        retried = run_cli(
+            "task",
+            "retry",
+            "task-2",
+            "--path",
+            str(root),
+            "--new-task-id",
+            "task-2-retry",
+            "--reason",
+            "rerun after approval",
+        )
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+
+        assert blocked.returncode == 0, blocked.stderr
+        assert completed.returncode == 0, completed.stderr
+        assert retried.returncode == 0, retried.stderr
+        assert rows[-3]["status"] == "blocked"
+        assert rows[-3]["blocked_reason"] == "missing approval"
+        assert rows[-3]["task_state_schema_version"] == 1
+        assert rows[-3]["heartbeat_at"] == rows[-3]["finished_at"]
+        assert rows[-2]["status"] == "completed"
+        assert rows[-2]["completion_evidence"] == ["provider:ok"]
+        assert rows[-2]["task_state_schema_version"] == 1
+        assert rows[-1]["status"] == "ready"
+        assert rows[-1]["task_id"] == "task-2-retry"
+        assert rows[-1]["parent_task_id"] == "task-2"
+        assert rows[-1]["retry_count"] == 1
+        assert rows[-1]["task_state_schema_version"] == 1
+        assert rows[-1]["heartbeat_at"] == rows[-1]["started_at"]
+
+
+def test_task_doctor_reports_stale_running_task() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        (root / ".helm" / "task-ledger.jsonl").write_text(
+            json.dumps(
+                {
+                    "task_id": "task-stale",
+                    "task_name": "long operation",
+                    "status": "running",
+                    "profile": "service_ops",
+                    "started_execution_at": "2026-01-01T00:00:00+00:00",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli("task", "doctor", "--path", str(root), "--stale-minutes", "1")
+
+        assert result.returncode == 1
+        assert "stale_active_task" in result.stdout
+        assert "task_id=task-stale" in result.stdout
+        assert "task mark-stale task-stale" in result.stdout
+
+
+def test_task_doctor_reports_dead_process_and_retry_limit() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        (root / ".helm" / "task-ledger.jsonl").write_text(
+            json.dumps(
+                {
+                    "task_id": "task-dead",
+                    "task_name": "detached operation",
+                    "status": "running",
+                    "profile": "service_ops",
+                    "started_at": "2026-05-10T00:00:00+00:00",
+                    "heartbeat_at": "2026-05-10T00:01:00+00:00",
+                    "pid": 99999999,
+                }
+            )
+            + "\n"
+            + json.dumps(
+                {
+                    "task_id": "task-retry-limit",
+                    "task_name": "limited retry",
+                    "status": "failed",
+                    "profile": "service_ops",
+                    "retry_count": 2,
+                    "max_retries": 2,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli("task", "doctor", "--path", str(root), "--stale-minutes", "999999", "--json")
+
+        assert result.returncode == 1
+        payload = json.loads(result.stdout)
+        kinds = {item["kind"] for item in payload["findings"]}
+        assert "active_process_not_alive" in kinds
+        assert "retry_limit_reached" in kinds
+
+
+def test_task_retry_respects_max_retries() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        (root / ".helm" / "task-ledger.jsonl").write_text(
+            json.dumps(
+                {
+                    "task_id": "task-limited",
+                    "task_name": "limited task",
+                    "status": "failed",
+                    "retry_count": 1,
+                    "max_retries": 1,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli("task", "retry", "task-limited", "--path", str(root))
+
+        assert result.returncode == 2
+        assert "retry limit reached" in result.stderr
+
+
+def test_task_mark_stale_and_reclaim_append_states() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        ledger = root / ".helm" / "task-ledger.jsonl"
+        ledger.write_text(
+            json.dumps(
+                {
+                    "task_id": "task-stale",
+                    "task_name": "detached operation",
+                    "status": "running",
+                    "profile": "service_ops",
+                    "started_at": "2026-01-01T00:00:00+00:00",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        marked = run_cli(
+            "task",
+            "mark-stale",
+            "task-stale",
+            "--path",
+            str(root),
+            "--reason",
+            "heartbeat expired",
+        )
+        reclaimed = run_cli(
+            "task",
+            "reclaim",
+            "task-stale",
+            "--path",
+            str(root),
+            "--reason",
+            "operator resumed work",
+            "--owner-session-id",
+            "session-1",
+        )
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+
+        assert marked.returncode == 0, marked.stderr
+        assert reclaimed.returncode == 0, reclaimed.stderr
+        assert rows[-2]["status"] == "stale"
+        assert rows[-2]["stale_reason"] == "heartbeat expired"
+        assert rows[-2]["blocked_reason"] == "heartbeat expired"
+        assert rows[-2]["heartbeat_at"] == rows[-2]["finished_at"]
+        assert rows[-1]["status"] == "ready"
+        assert rows[-1]["reclaim_reason"] == "operator resumed work"
+        assert rows[-1]["owner_session_id"] == "session-1"
+        assert "finished_at" not in rows[-1]
+
+
+def test_checkpoint_prune_keeps_recent_referenced_and_pinned() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        checkpoint_dir = root / ".helm" / "checkpoints"
+        for archive in ("old.tar.gz", "referenced.tar.gz", "pinned.tar.gz", "new.tar.gz"):
+            (checkpoint_dir / archive).write_text("archive\n", encoding="utf-8")
+        (checkpoint_dir / "index.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "checkpoint_id": "old",
+                        "label": "old",
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                        "archive": "old.tar.gz",
+                    },
+                    {
+                        "checkpoint_id": "referenced",
+                        "label": "referenced",
+                        "created_at": "2026-01-02T00:00:00+00:00",
+                        "archive": "referenced.tar.gz",
+                    },
+                    {
+                        "checkpoint_id": "pinned",
+                        "label": "pinned",
+                        "created_at": "2026-01-03T00:00:00+00:00",
+                        "archive": "pinned.tar.gz",
+                        "pinned": True,
+                    },
+                    {
+                        "checkpoint_id": "new",
+                        "label": "new",
+                        "created_at": "2026-05-09T00:00:00+00:00",
+                        "archive": "new.tar.gz",
+                    },
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (root / ".helm" / "task-ledger.jsonl").write_text(
+            json.dumps({"task_id": "task-1", "checkpoint_id": "referenced"}) + "\n",
+            encoding="utf-8",
+        )
+
+        plan = run_cli(
+            "checkpoint",
+            "prune",
+            "--path",
+            str(root),
+            "--keep-recent",
+            "1",
+            "--keep-days",
+            "30",
+            "--json",
+        )
+        assert plan.returncode == 0, plan.stderr
+        payload = json.loads(plan.stdout)
+        assert [item["checkpoint_id"] for item in payload["prune"]] == ["old"]
+        assert {item["checkpoint_id"] for item in payload["keep"]} == {"referenced", "pinned", "new"}
+        assert (checkpoint_dir / "old.tar.gz").exists()
+        applied = run_cli(
+            "checkpoint",
+            "prune",
+            "--path",
+            str(root),
+            "--keep-recent",
+            "1",
+            "--keep-days",
+            "30",
+            "--apply",
+            "--json",
+        )
+        assert applied.returncode == 0, applied.stderr
+        remaining = json.loads((checkpoint_dir / "index.json").read_text(encoding="utf-8"))
+        assert {item["checkpoint_id"] for item in remaining} == {"referenced", "pinned", "new"}
+        assert not (checkpoint_dir / "old.tar.gz").exists()
+
+
+def test_checkpoint_protect_pins_checkpoint_for_prune() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        checkpoint_dir = root / ".helm" / "checkpoints"
+        (checkpoint_dir / "old.tar.gz").write_text("archive\n", encoding="utf-8")
+        (checkpoint_dir / "index.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "checkpoint_id": "old",
+                        "label": "old",
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                        "archive": ".helm/checkpoints/old.tar.gz",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        protected = run_cli("checkpoint", "protect", "old", "--path", str(root))
+        plan = run_cli("checkpoint", "prune", "--path", str(root), "--keep-recent", "0", "--keep-days", "1", "--json")
+
+        assert protected.returncode == 0, protected.stderr
+        payload = json.loads(plan.stdout)
+        assert payload["prune"] == []
+        assert payload["keep"][0]["retention_reasons"] == ["pinned"]
+
+
+def test_checkpoint_policy_reads_default_and_file_policy() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        default_result = run_cli("checkpoint", "policy", "--path", str(root), "--json")
+        (root / "references" / "checkpoint_policy.json").write_text(
+            json.dumps({"keep_recent": 2, "max_total_mb": 100}),
+            encoding="utf-8",
+        )
+        file_result = run_cli("checkpoint", "policy", "--path", str(root), "--json")
+
+        assert default_result.returncode == 0, default_result.stderr
+        assert json.loads(default_result.stdout)["source"] == "default"
+        payload = json.loads(file_result.stdout)
+        assert payload["source"] == "file"
+        assert payload["policy"]["keep_recent"] == 2
+        assert payload["policy"]["max_total_mb"] == 100
+
+
+def test_checkpoint_prune_uses_policy_defaults() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        checkpoint_dir = root / ".helm" / "checkpoints"
+        (checkpoint_dir / "old.tar.gz").write_text("archive\n", encoding="utf-8")
+        (checkpoint_dir / "new.tar.gz").write_text("archive\n", encoding="utf-8")
+        (checkpoint_dir / "index.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "checkpoint_id": "old",
+                        "label": "old",
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                        "archive": ".helm/checkpoints/old.tar.gz",
+                    },
+                    {
+                        "checkpoint_id": "new",
+                        "label": "new",
+                        "created_at": "2026-01-02T00:00:00+00:00",
+                        "archive": ".helm/checkpoints/new.tar.gz",
+                    },
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (root / "references" / "checkpoint_policy.json").write_text(
+            json.dumps({"keep_recent": 1, "keep_days": 1}),
+            encoding="utf-8",
+        )
+
+        result = run_cli("checkpoint", "prune", "--path", str(root), "--json")
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["keep_recent"] == 1
+        assert payload["keep_days"] == 1
+        assert [item["checkpoint_id"] for item in payload["prune"]] == ["old"]
+        assert [item["checkpoint_id"] for item in payload["keep"]] == ["new"]
+
+
+def test_dci_alias_uses_context_command() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        (root / ".helm" / "task-ledger.jsonl").write_text(
+            json.dumps({"task_id": "task-dci", "task_name": "dci task", "status": "completed"}) + "\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli("dci", "--path", str(root), "--include", "tasks", "--json")
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload[0]["metadata"]["task_id"] == "task-dci"
+        assert payload[0]["metadata"]["direct_inspection_hint"].startswith("helm task show task-dci --path ")
+
+
+def test_hitl_decision_patterns_record_report_and_policy() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        script = REPO_ROOT / "scripts" / "hitl_decision_patterns.py"
+        for index in range(3):
+            recorded = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "record",
+                    "--path",
+                    str(root),
+                    "--kind",
+                    "mark_stale",
+                    "--reason",
+                    "heartbeat expired",
+                    "--decision",
+                    "approve",
+                    "--task-id",
+                    f"task-{index}",
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert recorded.returncode == 0, recorded.stderr
+
+        approved = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "approve-policy",
+                "--path",
+                str(root),
+                "--action-signature",
+                "mark_stale|heartbeat expired",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        report = subprocess.run(
+            [sys.executable, str(script), "report", "--path", str(root), "--json"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert approved.returncode == 0, approved.stderr
+        approved_payload = json.loads(approved.stdout)
+        assert approved_payload["decision_history_snapshot"]["recommendation"]["status"] == "automation_candidate"
+        assert report.returncode == 0, report.stderr
+        payload = json.loads(report.stdout)
+        assert payload["automation_policy"]["approved_patterns"][0]["action_signature"] == "mark_stale|heartbeat expired"
+
+
+def test_skill_lifecycle_promote_from_trajectory_dry_run() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        lifecycle = root / ".openclaw" / "skill-lifecycle"
+        lifecycle.mkdir(parents=True)
+        (lifecycle / "events.jsonl").write_text(
+            json.dumps(
+                {
+                    "ts": "2026-05-10T00:00:00+00:00",
+                    "event": "skill_failure",
+                    "skill_id": "alpha",
+                    "outcome": {
+                        "schema_version": 2,
+                        "task_id": "task-1",
+                        "status": "failure",
+                        "improvement_candidate": True,
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli(
+            "skill-lifecycle",
+            "promote-from-trajectory",
+            "--path",
+            str(root),
+            "--name",
+            "alpha-improved",
+            "--description",
+            "Improved alpha skill",
+            "--json",
+        )
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["candidate"]["task_id"] == "task-1"
+        assert payload["draft_name"] == "alpha-improved"
+        assert payload["apply"] is False
+        assert not (root / "skill_drafts" / "alpha-improved").exists()
+
+
 def test_status_uses_openclaw_state_root_when_layout_is_openclaw() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
@@ -804,6 +1346,55 @@ def test_harness_postflight_requires_browser_and_retrieval_evidence_when_contrac
         assert recorded.returncode == 0
         recorded_payload = json.loads(recorded.stdout)
         assert recorded_payload["postflight"]["ok"]
+
+
+def test_harness_record_evidence_accepts_completion_evidence() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        (root / ".helm" / "task-ledger.jsonl").write_text(
+            json.dumps(
+                {
+                    "task_id": "task-completion-evidence",
+                    "task_name": "manual evidence task",
+                    "status": "completed",
+                    "profile": "risky_edit",
+                    "checkpoint_id": "cp-1",
+                    "meta": {"harness": {"enforcement_level": "balanced"}},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        env = os.environ.copy()
+        env["HELM_WORKSPACE"] = str(root)
+
+        recorded = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "adaptive_harness.py"),
+                "record-evidence",
+                "--task-id",
+                "task-completion-evidence",
+                "--completion-evidence",
+                "test:pytest",
+                "--completion-evidence",
+                "diff:reviewed",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+        assert recorded.returncode == 0, recorded.stderr
+        rows = [
+            json.loads(line)
+            for line in (root / ".helm" / "task-ledger.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        assert rows[-1]["completion_evidence"] == ["test:pytest", "diff:reviewed"]
+        payload = json.loads(recorded.stdout)
+        assert payload["postflight"]["ok"]
 
 
 def test_harness_postflight_can_infer_missing_evidence_from_task_metadata() -> None:

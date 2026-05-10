@@ -33,6 +33,7 @@ class LifecycleError(Exception):
 
 
 SCHEMA_VERSION = 1
+OUTCOME_SCHEMA_VERSION = 2
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -864,6 +865,99 @@ _TIMESTAMP_BY_EVENT = {
 }
 
 
+def build_skill_outcome_metadata(event: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    extra = extra or {}
+    exit_code = extra.get("exit_code")
+    task_id = extra.get("task_id")
+    status = "unknown"
+    if event == "skill_success":
+        status = "success"
+    elif event == "skill_failure":
+        status = "failure"
+    elif event == "skill_used":
+        status = "started"
+    elif event == "skill_promoted":
+        status = "promoted"
+    evidence_quality = str(extra.get("evidence_quality") or "unknown")
+    if evidence_quality == "unknown":
+        if extra.get("completion_evidence") or extra.get("checkpoint_id") or extra.get("write_validation"):
+            evidence_quality = "grounded"
+        elif exit_code is not None:
+            evidence_quality = "process_exit"
+    retry_count = int(extra.get("retry_count") or 0)
+    improvement_candidate = bool(
+        extra.get("improvement_candidate")
+        or event == "skill_failure"
+        or retry_count > 0
+        or extra.get("user_correction")
+    )
+    return {
+        "schema_version": OUTCOME_SCHEMA_VERSION,
+        "task_id": task_id,
+        "status": status,
+        "exit_code": exit_code,
+        "selection_reason": extra.get("selection_reason"),
+        "evidence_quality": evidence_quality,
+        "user_correction": extra.get("user_correction"),
+        "retry_count": retry_count,
+        "improvement_candidate": improvement_candidate,
+    }
+
+
+def skill_outcome_rows(paths: LifecyclePaths, *, skill_id: str | None = None, limit: int | None = None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for event in read_events(paths, skill_id=skill_id, limit=None):
+        outcome = event.get("outcome")
+        if not isinstance(outcome, dict):
+            continue
+        row = {
+            "ts": event.get("ts"),
+            "event": event.get("event"),
+            "skill_id": event.get("skill_id"),
+            **outcome,
+        }
+        rows.append(row)
+    return rows[-limit:] if limit else rows
+
+
+def skill_outcome_summary(paths: LifecyclePaths) -> dict[str, Any]:
+    rows = skill_outcome_rows(paths)
+    by_skill: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        skill_id = str(row.get("skill_id") or "")
+        if not skill_id:
+            continue
+        bucket = by_skill.setdefault(
+            skill_id,
+            {
+                "skill_id": skill_id,
+                "total": 0,
+                "success": 0,
+                "failure": 0,
+                "improvement_candidates": 0,
+                "evidence_quality": {},
+            },
+        )
+        bucket["total"] += 1
+        status = str(row.get("status") or "unknown")
+        if status in {"success", "failure"}:
+            bucket[status] += 1
+        if row.get("improvement_candidate"):
+            bucket["improvement_candidates"] += 1
+        evidence_quality = str(row.get("evidence_quality") or "unknown")
+        bucket["evidence_quality"][evidence_quality] = bucket["evidence_quality"].get(evidence_quality, 0) + 1
+    return {"total_outcomes": len(rows), "skills": sorted(by_skill.values(), key=lambda item: item["skill_id"])}
+
+
+def skill_outcome_candidates(paths: LifecyclePaths, *, limit: int | None = None) -> list[dict[str, Any]]:
+    candidates = [
+        row for row in skill_outcome_rows(paths)
+        if row.get("improvement_candidate") or row.get("status") == "failure"
+    ]
+    candidates.sort(key=lambda row: str(row.get("ts") or ""))
+    return candidates[-limit:] if limit else candidates
+
+
 def record_runner_event(
     workspace: Path,
     *,
@@ -898,8 +992,10 @@ def record_runner_event(
         ts_key = _TIMESTAMP_BY_EVENT.get(event)
         if ts_key:
             entry[ts_key] = now
+        outcome = build_skill_outcome_metadata(event, extra)
+        entry["last_outcome"] = outcome
         save_usage(paths, usage)
-        payload: dict[str, Any] = {"event": event, "skill_id": skill_id}
+        payload: dict[str, Any] = {"event": event, "skill_id": skill_id, "outcome": outcome}
         if extra:
             payload.update(extra)
         append_event(paths, payload)

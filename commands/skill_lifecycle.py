@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,9 @@ from scripts.skill_lifecycle_lib import (
     scan,
     set_negative_claim_probe_command,
     set_pinned,
+    skill_outcome_candidates,
+    skill_outcome_rows,
+    skill_outcome_summary,
     stale_candidates,
     update_negative_claim_revalidation,
 )
@@ -364,6 +368,116 @@ def cmd_skill_lifecycle_ledger(args: argparse.Namespace) -> int:
         suffix = " ".join(suffix_parts)
         print(f"{ts} {event} {skill_id} {suffix}".rstrip())
     return 0
+
+
+def cmd_skill_lifecycle_outcome_report(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    payload = skill_outcome_summary(paths)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    print(f"total_outcomes={payload['total_outcomes']}")
+    for row in payload["skills"]:
+        print(
+            f"{row['skill_id']} total={row['total']} "
+            f"success={row['success']} failure={row['failure']} "
+            f"improvement_candidates={row['improvement_candidates']}"
+        )
+    return 0
+
+
+def cmd_skill_lifecycle_outcome_candidates(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    rows = skill_outcome_candidates(paths, limit=args.limit)
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+    if not rows:
+        print("(no outcome candidates)")
+        return 0
+    for row in rows:
+        print(
+            f"{row.get('ts', '?')} skill={row.get('skill_id')} "
+            f"status={row.get('status')} task={row.get('task_id') or '-'} "
+            f"evidence={row.get('evidence_quality')} retry={row.get('retry_count')}"
+        )
+    return 0
+
+
+def cmd_skill_lifecycle_selection_stats(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    rows = skill_outcome_rows(paths, skill_id=args.skill, limit=args.limit)
+    reasons: dict[str, int] = {}
+    evidence: dict[str, int] = {}
+    for row in rows:
+        reason = str(row.get("selection_reason") or "unknown")
+        reasons[reason] = reasons.get(reason, 0) + 1
+        quality = str(row.get("evidence_quality") or "unknown")
+        evidence[quality] = evidence.get(quality, 0) + 1
+    payload = {"total": len(rows), "selection_reasons": reasons, "evidence_quality": evidence}
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    print(f"total={payload['total']}")
+    print("selection_reasons:")
+    for key, value in sorted(reasons.items()):
+        print(f"  {key}: {value}")
+    print("evidence_quality:")
+    for key, value in sorted(evidence.items()):
+        print(f"  {key}: {value}")
+    return 0
+
+
+def cmd_skill_lifecycle_promote_from_trajectory(args: argparse.Namespace) -> int:
+    paths = _paths_for(args)
+    _ensure_config(paths, write=False)
+    candidates = skill_outcome_candidates(paths, limit=args.limit)
+    target = None
+    if args.task_id:
+        target = next((row for row in candidates if row.get("task_id") == args.task_id), None)
+    elif candidates:
+        target = candidates[-1]
+    if target is None:
+        print("error: no matching outcome trajectory candidate", file=sys.stderr)
+        return 1
+    payload = {
+        "candidate": target,
+        "draft_name": args.name,
+        "description": args.description,
+        "apply": args.apply,
+        "command": [
+            sys.executable,
+            str(Path(__file__).resolve().parents[1] / "scripts" / "skill_capture.py"),
+            "draft-from-task",
+            "--task-id",
+            str(target.get("task_id")),
+            "--name",
+            args.name,
+            "--description",
+            args.description,
+        ],
+    }
+    if args.json and not args.apply:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    if not args.apply:
+        print("dry_run=true")
+        print("command=" + " ".join(payload["command"]))
+        return 0
+    result = subprocess.run(payload["command"], cwd=str(paths.workspace), capture_output=True, text=True)
+    payload["returncode"] = result.returncode
+    payload["stdout"] = result.stdout
+    payload["stderr"] = result.stderr
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(result.stdout, end="")
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+    return result.returncode
 
 
 def cmd_skill_lifecycle_view(args: argparse.Namespace) -> int:

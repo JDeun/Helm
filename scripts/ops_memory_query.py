@@ -164,9 +164,28 @@ def matches_since(timestamp: str | None, since: str | None) -> bool:
     return timestamp >= since
 
 
+def direct_inspection_hint(source: ContextSource, area: str, metadata: dict) -> str | None:
+    if area in {"notes", "memory"} and metadata.get("path"):
+        path = source.root / str(metadata["path"])
+        line = metadata.get("line")
+        if line:
+            return f"open {path}:{line} or inspect with sed around that line"
+        return f"open {path}"
+    if area == "tasks" and metadata.get("task_id"):
+        return f"helm task show {metadata['task_id']} --path {source.root}"
+    if area == "commands" and metadata.get("task_id"):
+        return f"helm dci --path {source.root} --include commands --task-id {metadata['task_id']}"
+    if area == "checkpoints" and metadata.get("checkpoint_id"):
+        return f"helm checkpoint show {metadata['checkpoint_id']} --path {source.root}"
+    return None
+
+
 def result_for(source: ContextSource, area: str, kind: str, timestamp: str | None, title: str, excerpt: str, metadata: dict) -> SearchResult:
     enriched = dict(metadata)
     enriched.setdefault("workspace", str(source.root))
+    hint = direct_inspection_hint(source, area, enriched)
+    if hint:
+        enriched.setdefault("direct_inspection_hint", hint)
     return SearchResult(
         adapter=source.name,
         adapter_kind=source.kind,
@@ -499,6 +518,7 @@ def load_checkpoint_results(source: ContextSource, args: argparse.Namespace) -> 
             record.get("checkpoint_id", "checkpoint"),
             f"label={record.get('label')} paths={', '.join(record.get('paths', []))}",
             {
+                "checkpoint_id": record.get("checkpoint_id"),
                 "label": record.get("label"),
                 "paths": record.get("paths", []),
                 "archive": record.get("archive"),

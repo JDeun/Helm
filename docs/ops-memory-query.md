@@ -19,6 +19,7 @@ Recent cross-layer context:
 
 ```bash
 helm context --path ~/.helm/workspace
+helm dci --path ~/.helm/workspace
 ```
 
 Search Hermes-related context everywhere:
@@ -99,6 +100,30 @@ helm context --path ~/.helm/workspace --adapter openclaw-main --include notes ta
 - `--explain-ranking` adds ranking metadata with field scores, temporal boost, graph boost, adapter priority, source priority, and total score. This is a debugging surface, not a stable scoring contract.
 - `--summary` prints adapter/source/kind counts before the detailed rows.
 - This is read-only. It does not mutate memory, ontology, or task state.
+
+## Direct Corpus Interaction
+
+For operational answers, treat query results as evidence pointers rather than
+final truth. The escalation ladder is:
+
+1. Run `helm context` with the narrowest useful `--include` set.
+2. Use `--explain-ranking --json` when the result is weak or surprising.
+3. Follow direct pointers into task ledgers, command logs, checkpoint metadata,
+   notes, or ontology rows.
+4. Run a scripted inspection command when the answer depends on current local
+   state rather than historical memory.
+5. Record the verification as task evidence before treating high-impact work as
+   complete.
+
+Weak-result signals include low ranking scores, missing direct task ids,
+conflicting task outcomes, stale timestamps, or evidence that only appears in
+summaries. In those cases, prefer direct file or ledger inspection over adding
+more abstract summary text.
+
+JSON results include `metadata.direct_inspection_hint` when Helm can point to a
+concrete follow-up path, such as `helm task show <task-id>`, a source file path,
+or a checkpoint inspection command. Treat that hint as a review aid, not an
+automatic approval step.
 
 ## Hindsight-Inspired Roadmap
 

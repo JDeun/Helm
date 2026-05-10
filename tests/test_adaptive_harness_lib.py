@@ -11,7 +11,11 @@ from scripts import adaptive_harness_lib
 from scripts.adaptive_harness_lib import (
     _deep_merge,
     build_hydration_commands,
+    completion_evidence_signals,
+    evaluate_completion_policy,
     infer_file_intake_evidence,
+    mark_task_needs_verification,
+    postflight_payload_for_entry,
     preflight_payload,
     resolve_skill_contract,
 )
@@ -229,6 +233,120 @@ def test_resolve_skill_contract_preserves_base_required_fields_on_partial_overri
     # The base provides ["reason", "evidence", "api_reusable", "next_action"]
     assert "reason" in contract["browser_work"]["required_fields"]
     assert "evidence" in contract["browser_work"]["required_fields"]
+
+
+def test_completion_evidence_signals_detects_policy_sources() -> None:
+    entry = {
+        "profile": "risky_edit",
+        "completion_evidence": ["test:pytest", "healthcheck:openclaw health"],
+        "checkpoint_id": "checkpoint-123",
+        "exit_code": 0,
+        "memory_capture": {
+            "write_validation": {
+                "ok": True,
+                "checked_paths": ["commands/task.py"],
+            }
+        },
+    }
+
+    signals = completion_evidence_signals(entry)
+
+    assert signals["completion_evidence"]
+    assert signals["process_exit"]
+    assert signals["checkpoint_id"]
+    assert signals["write_validation"]
+    assert signals["test_or_lint_or_diff"]
+    assert signals["healthcheck"]
+
+
+def test_completion_policy_requires_service_ops_evidence_at_balanced() -> None:
+    policy = {
+        "enforcement_order": ["light", "balanced", "strict"],
+        "completion_policy": {
+            "enabled": True,
+            "default_enforce_at_or_above": "balanced",
+            "profiles": {
+                "service_ops": {
+                    "require_one_of": ["process_exit", "healthcheck", "provider_result", "completion_evidence"]
+                }
+            },
+        },
+    }
+    entry = {"task_id": "task-1", "profile": "service_ops", "status": "completed", "command": ["openclaw", "health"]}
+
+    ok, detail = evaluate_completion_policy(entry, policy, "balanced")
+    assert not ok
+    assert "requires one of" in detail
+
+    entry["completion_evidence"] = ["healthcheck:openclaw health"]
+    ok, detail = evaluate_completion_policy(entry, policy, "balanced")
+    assert ok
+    assert "healthcheck" in detail
+
+
+def test_postflight_enforces_risky_edit_checkpoint_and_evidence() -> None:
+    policy = {
+        "enforcement_order": ["light", "balanced", "strict"],
+        "validation": {"finalization_must_not_be_pending_at_or_above": "balanced"},
+        "completion_policy": {
+            "enabled": True,
+            "default_enforce_at_or_above": "balanced",
+            "profiles": {
+                "risky_edit": {
+                    "require_all": ["checkpoint_id"],
+                    "require_one_of": ["test_or_lint_or_diff", "write_validation", "completion_evidence"],
+                }
+            },
+        },
+    }
+    contract = {"require_finalization_written": False}
+    entry = {
+        "task_id": "task-1",
+        "profile": "risky_edit",
+        "status": "completed",
+        "command": ["python3", "-m", "pytest"],
+        "completion_evidence": ["test:pytest"],
+        "meta": {"harness": {}},
+    }
+
+    payload = postflight_payload_for_entry(
+        entry,
+        task_id="task-1",
+        contract=contract,
+        enforcement_level="balanced",
+        harness_policy=policy,
+    )
+
+    failed = {check["name"] for check in payload["checks"] if not check["ok"]}
+    assert "completion_policy" in failed
+
+    entry["checkpoint_id"] = "checkpoint-123"
+    payload = postflight_payload_for_entry(
+        entry,
+        task_id="task-1",
+        contract=contract,
+        enforcement_level="balanced",
+        harness_policy=policy,
+    )
+    assert payload["ok"]
+
+
+def test_mark_task_needs_verification_appends_state() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ledger = Path(tmpdir) / "task-ledger.jsonl"
+        ledger.write_text(
+            json.dumps({"task_id": "task-1", "status": "completed", "task_name": "verify me"}) + "\n",
+            encoding="utf-8",
+        )
+
+        with patch.object(adaptive_harness_lib, "TASK_LEDGER", ledger):
+            marked = mark_task_needs_verification("task-1", reason="completion policy failed")
+
+        assert marked is not None
+        rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+        assert rows[-1]["status"] == "needs_verification"
+        assert rows[-1]["verification_reason"] == "completion policy failed"
+        assert rows[-1]["blocked_reason"] == "completion policy failed"
 
 
 # ---------------------------------------------------------------------------

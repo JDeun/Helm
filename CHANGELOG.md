@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## [0.9.0] — 2026-05-11
+
+### Added
+
+- **task state CLI**: added `helm task list|show|block|complete|retry|doctor` for append-only task inspection, manual blocked/completed transitions with evidence, retry task creation, and stale task detection.
+- **task reclaim flow**: added `helm task mark-stale` and `helm task reclaim` to convert stale active work into append-only stale and ready states without rewriting prior ledger rows.
+- **task state docs**: added `docs/task-state.md` and README examples for task inspection and doctor checks.
+- **completion evidence gate**: adaptive harness postflight now enforces profile-level completion evidence at `balanced` or stricter enforcement. `risky_edit` requires a checkpoint plus test/lint/diff, write validation, or explicit evidence; `service_ops` and `remote_handoff` require operational or handoff evidence.
+- **manual evidence recording**: `helm harness record-evidence` now accepts `--completion-evidence` so operators can attach reviewed completion evidence without auto-completing work.
+- **needs verification transition**: harness-managed commands that exit successfully but fail completion policy now append a `needs_verification` task state.
+- **task doctor hardening**: task doctor now reports dead recorded processes and retry-limit exhaustion as review findings while keeping all remediation human-triggered.
+- **skill outcome metadata v2**: lifecycle runner events now include an `outcome` object with evidence quality, retry count, user correction, selection reason, and improvement-candidate metadata.
+- **skill outcome reporting**: added `helm skill-lifecycle outcome-report`, `outcome-candidates`, and `selection-stats` for outcome metadata inspection.
+- **trajectory draft flow**: added `helm skill-lifecycle promote-from-trajectory` to create review-only skill drafts from outcome candidates.
+- **checkpoint pruning**: added `helm checkpoint prune` to plan or apply retention cleanup while preserving recent, pinned, and task-referenced checkpoints. Added `helm checkpoint protect` for retention pins, `helm checkpoint policy` for config inspection, and `--max-total-mb` size pressure.
+- **DCI alias**: added `helm dci` as a direct corpus interaction query entry point for common context options.
+- **DCI inspection hints**: query results now include direct inspection hints for tasks, commands, checkpoints, and source files when available.
+- **HITL decision patterns**: added a Helm-local approval/rejection pattern logger with audit snapshots for approved policy entries. The policy records review state only and does not execute commands.
+
+### Tests
+
+- Full suite: 399 tests passing.
+
 ## [0.8.0] — 2026-05-08
 
 ### Added

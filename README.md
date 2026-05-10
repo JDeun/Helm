@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.8.0</strong></p>
+<p align="center"><strong>Current release: v0.9.0</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -172,6 +172,8 @@ Check rollback and recent state.
 ```bash
 helm checkpoint-recommend --path ~/.helm/workspace
 helm checkpoint list --path ~/.helm/workspace
+helm task list --path ~/.helm/workspace --status running
+helm task doctor --path ~/.helm/workspace
 helm report --path ~/.helm/workspace --format markdown
 ```
 
@@ -244,7 +246,10 @@ Core concepts:
 - [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
 - [`docs/privacy-boundary.md`](docs/privacy-boundary.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
+- [`docs/task-state.md`](docs/task-state.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
+- [`docs/evidence-label-convention.md`](docs/evidence-label-convention.md)
+- [`docs/hitl-decision-patterns.md`](docs/hitl-decision-patterns.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
 
 Positioning:
@@ -262,6 +267,7 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.9.0.md`](docs/releases/0.9.0.md)
 - [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md)
 - [`docs/releases/0.7.3.md`](docs/releases/0.7.3.md)
 - [`docs/releases/0.7.2.md`](docs/releases/0.7.2.md)
@@ -272,7 +278,7 @@ Release details:
 
 ## Status
 
-Helm v0.8.0 adds privacy boundary tokenization, explainable context ranking, and a safer negative-claim revalidation workflow for skill lifecycle maintenance. See [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md).
+Helm v0.9.0 adds append-only task state operations, completion evidence gates, checkpoint retention planning, outcome-aware skill lifecycle reporting, DCI inspection hints, and human-approved HITL decision pattern tracking. See [`docs/releases/0.9.0.md`](docs/releases/0.9.0.md).
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

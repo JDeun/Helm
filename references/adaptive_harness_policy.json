@@ -44,5 +44,24 @@
     "skill_relevance_min_score": 25,
     "skill_relevance_block_verdicts": ["poor"],
     "skill_relevance_warn_verdicts": ["weak"]
+  },
+  "completion_policy": {
+    "enabled": true,
+    "default_enforce_at_or_above": "balanced",
+    "profiles": {
+      "workspace_edit": {
+        "require_one_of": ["file_diff", "diagnostics", "direct_inspection", "write_validation", "completion_evidence"]
+      },
+      "risky_edit": {
+        "require_all": ["checkpoint_id"],
+        "require_one_of": ["test_or_lint_or_diff", "write_validation", "completion_evidence"]
+      },
+      "service_ops": {
+        "require_one_of": ["process_exit", "healthcheck", "provider_result", "completion_evidence"]
+      },
+      "remote_handoff": {
+        "require_one_of": ["handoff_target", "completion_evidence"]
+      }
+    }
   }
 }

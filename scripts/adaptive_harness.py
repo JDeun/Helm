@@ -12,7 +12,9 @@ from adaptive_harness_lib import (
     ensure_task_evidence,
     load_harness_policy,
     parse_evidence_json,
+    mark_task_needs_verification,
     postflight_payload_from_task,
+    postflight_check_failed,
     record_task_evidence,
     resolve_skill_contract,
     preflight_payload,
@@ -127,6 +129,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     result = subprocess.run(run_cmd, cwd=str(WORKSPACE))
     ensure_task_evidence(payload["task_id"], payload["contract"])
     postflight = postflight_payload(payload["task_id"], payload["contract"], payload["enforcement_level"])
+    completion_failure = postflight_check_failed(postflight, "completion_policy")
+    if result.returncode == 0 and completion_failure:
+        marked = mark_task_needs_verification(payload["task_id"], reason=str(completion_failure.get("detail") or "completion policy failed"))
+        if marked is not None:
+            postflight["needs_verification_entry"] = marked
     output = {
         "preflight": payload,
         "hydration": hydration_outputs,
@@ -152,13 +159,17 @@ def cmd_record_evidence(args: argparse.Namespace) -> int:
     browser_evidence = parse_evidence_json(args.browser_evidence_json, label="--browser-evidence-json")
     retrieval_evidence = parse_evidence_json(args.retrieval_evidence_json, label="--retrieval-evidence-json")
     file_intake_evidence = parse_evidence_json(args.file_intake_evidence_json, label="--file-intake-evidence-json")
-    if browser_evidence is None and retrieval_evidence is None and file_intake_evidence is None:
-        raise SystemExit("Provide --browser-evidence-json, --retrieval-evidence-json, or --file-intake-evidence-json")
+    completion_evidence = list(args.completion_evidence or [])
+    if browser_evidence is None and retrieval_evidence is None and file_intake_evidence is None and not completion_evidence:
+        raise SystemExit(
+            "Provide --browser-evidence-json, --retrieval-evidence-json, --file-intake-evidence-json, or --completion-evidence"
+        )
     entry = record_task_evidence(
         args.task_id,
         browser_evidence=browser_evidence,
         retrieval_evidence=retrieval_evidence,
         file_intake_evidence=file_intake_evidence,
+        completion_evidence=completion_evidence,
     )
     postflight = postflight_payload_from_task(args.task_id)
     print(json.dumps({"entry": entry, "postflight": postflight}, indent=2, ensure_ascii=False))
@@ -218,11 +229,12 @@ def build_parser() -> argparse.ArgumentParser:
     postflight.add_argument("--task-id", required=True)
     postflight.set_defaults(func=cmd_postflight)
 
-    record = subparsers.add_parser("record-evidence", help="Append browser or retrieval evidence to an existing task entry.")
+    record = subparsers.add_parser("record-evidence", help="Append browser, retrieval, file-intake, or completion evidence to an existing task entry.")
     record.add_argument("--task-id", required=True)
     record.add_argument("--browser-evidence-json", help="Structured browser evidence JSON to persist.")
     record.add_argument("--retrieval-evidence-json", help="Structured retrieval evidence JSON to persist.")
     record.add_argument("--file-intake-evidence-json", help="Structured file intake evidence JSON to persist.")
+    record.add_argument("--completion-evidence", action="append", help="Explicit completion evidence, e.g. test:pytest or diff:reviewed.")
     record.set_defaults(func=cmd_record_evidence)
 
     backfill = subparsers.add_parser("backfill-evidence", help="Infer and append missing browser or retrieval evidence for prior tasks.")

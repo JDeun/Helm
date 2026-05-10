@@ -8,6 +8,10 @@ This is a conservative lifecycle layer. It records observations and surfaces
 candidates; it never auto-deletes a skill, and the only state mutations it
 performs are explicit (`archive`, `pin`, `stale --apply`).
 
+All promotion and execution-changing decisions stay human-in-the-loop. Reports
+and outcome candidates are review queues; commands that move files, mark stale
+state, or create drafts require an explicit operator action.
+
 > Status: PRD-complete except for OpenClaw-core-dependent items. Includes
 > task-ledger correlation, observer + manual `view`, persisted negative-
 > claim metadata with TTL revalidation, four umbrella signals (name token,
@@ -201,6 +205,24 @@ helm skill-lifecycle ledger --path ~/.openclaw/workspace --skill car
 helm skill-lifecycle ledger --path ~/.openclaw/workspace --limit 50 --json
 ```
 
+### Outcome Metadata
+
+Runner events include `outcome.schema_version=2`. Use these commands to inspect
+that metadata:
+
+```bash
+helm skill-lifecycle outcome-report --path ~/.openclaw/workspace
+helm skill-lifecycle outcome-candidates --path ~/.openclaw/workspace
+helm skill-lifecycle selection-stats --path ~/.openclaw/workspace
+helm skill-lifecycle promote-from-trajectory --path ~/.openclaw/workspace \
+  --name improved-skill --description "Improved workflow skill"
+```
+
+`promote-from-trajectory` defaults to dry-run and creates a review-only draft
+when `--apply` is provided. It does not directly promote into `skills/`.
+Live skill promotion is intentionally outside this command so that a human can
+review the generated draft, edit it, and approve any activation separately.
+
 Useful for tracing a skill's recent runs end-to-end without manually
 correlating event timestamps to the task ledger.
 
@@ -366,10 +388,16 @@ Every state-changing operation appends one JSONL line to `events.jsonl`:
 ```json
 {"ts":"2026-05-03T05:48:31+00:00","event":"skill_registered","skill_id":"car","source":"workspace"}
 {"ts":"2026-05-03T06:26:32+00:00","event":"skill_used","skill_id":"car","profile":"inspect_local","task_id":"..."}
-{"ts":"2026-05-03T06:26:32+00:00","event":"skill_success","skill_id":"car","exit_code":0,"task_id":"..."}
+{"ts":"2026-05-03T06:26:32+00:00","event":"skill_success","skill_id":"car","exit_code":0,"task_id":"...","outcome":{"schema_version":2,"status":"success","evidence_quality":"process_exit","improvement_candidate":false}}
 ```
 
 The log is append-only.
+
+Runner events include `outcome.schema_version=2`. The outcome payload captures
+task id, status, exit code, selection reason, evidence quality, user
+correction, retry count, and whether the event should be treated as an
+improvement candidate. The latest outcome is also stored on skill metadata as
+`last_outcome`.
 
 ### Recorded events
 

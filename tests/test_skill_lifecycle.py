@@ -17,6 +17,7 @@ from scripts.skill_lifecycle_lib import (
     apply_archive,
     apply_restore,
     apply_stale,
+    build_skill_outcome_metadata,
     compute_summary,
     correlate_events_with_ledger,
     detect_negative_claims,
@@ -39,6 +40,8 @@ from scripts.skill_lifecycle_lib import (
     scan,
     set_negative_claim_probe_command,
     set_pinned,
+    skill_outcome_candidates,
+    skill_outcome_summary,
     stale_candidates,
     update_negative_claim_revalidation,
 )
@@ -478,11 +481,22 @@ def test_record_runner_event_success_sets_last_successful(tmp_path: Path) -> Non
     paths = LifecyclePaths.for_workspace(tmp_path)
     scan(paths)
 
-    record_runner_event(tmp_path, skill_id="alpha", event="skill_success")
+    record_runner_event(
+        tmp_path,
+        skill_id="alpha",
+        event="skill_success",
+        extra={"task_id": "task-1", "exit_code": 0, "selection_reason": "route matched"},
+    )
     entry = load_usage(paths)["skills"]["alpha"]
     assert entry["last_successful_apply_at"] is not None
+    assert entry["last_outcome"]["schema_version"] == 2
+    assert entry["last_outcome"]["status"] == "success"
+    assert entry["last_outcome"]["selection_reason"] == "route matched"
     # success does not increment use_count (use is recorded by skill_used)
     assert entry["use_count"] == 0
+    event = read_events(paths, skill_id="alpha")[-1]
+    assert event["outcome"]["task_id"] == "task-1"
+    assert event["outcome"]["evidence_quality"] == "process_exit"
 
 
 def test_record_runner_event_failure_does_not_set_success_ts(tmp_path: Path) -> None:
@@ -496,6 +510,43 @@ def test_record_runner_event_failure_does_not_set_success_ts(tmp_path: Path) -> 
     events = read_events(paths, skill_id="alpha")
     failure = next(e for e in events if e["event"] == "skill_failure")
     assert failure.get("reason") == "timeout"
+    assert failure["outcome"]["improvement_candidate"] is True
+
+
+def test_build_skill_outcome_metadata_detects_grounded_evidence() -> None:
+    outcome = build_skill_outcome_metadata(
+        "skill_success",
+        {
+            "task_id": "task-1",
+            "checkpoint_id": "checkpoint-1",
+            "retry_count": 1,
+            "user_correction": "prefer narrower runner",
+        },
+    )
+
+    assert outcome["schema_version"] == 2
+    assert outcome["status"] == "success"
+    assert outcome["evidence_quality"] == "grounded"
+    assert outcome["retry_count"] == 1
+    assert outcome["improvement_candidate"] is True
+
+
+def test_skill_outcome_summary_and_candidates(tmp_path: Path) -> None:
+    _write_skill(tmp_path, "alpha")
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    scan(paths)
+
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_used", extra={"task_id": "task-0"})
+    record_runner_event(tmp_path, skill_id="alpha", event="skill_failure", extra={"task_id": "task-1", "exit_code": 1})
+
+    summary = skill_outcome_summary(paths)
+    candidates = skill_outcome_candidates(paths)
+
+    assert summary["total_outcomes"] == 2
+    assert summary["skills"][0]["skill_id"] == "alpha"
+    assert summary["skills"][0]["failure"] == 1
+    assert len(candidates) == 1
+    assert candidates[0]["task_id"] == "task-1"
 
 
 def test_record_runner_event_promoted_increments_patch_count(tmp_path: Path) -> None:

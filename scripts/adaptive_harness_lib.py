@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sys
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +34,10 @@ PROFILE_FILE = WORKSPACE / "references" / "execution_profiles.json"
 POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"
 HARNESS_POLICY_FILE = WORKSPACE / "references" / "adaptive_harness_policy.json"
 TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def load_json(path: Path, default: object) -> object:
@@ -85,6 +90,8 @@ def load_harness_policy() -> dict:
                 merged_validation = dict(policy.get("validation", {}))
                 merged_validation.update(overlay["validation"])
                 policy["validation"] = merged_validation
+            if "completion_policy" in overlay and isinstance(overlay["completion_policy"], dict):
+                policy["completion_policy"] = _deep_merge(policy.get("completion_policy", {}), overlay["completion_policy"])
             if "enforcement_order" in overlay and isinstance(overlay["enforcement_order"], list):
                 policy["enforcement_order"] = overlay["enforcement_order"]
     return policy
@@ -401,12 +408,11 @@ def infer_missing_evidence(entry: dict, contract: dict) -> tuple[dict | None, di
 def infer_result_consistency(entry: dict) -> dict:
     harness_meta = ((entry.get("meta") or {}).get("harness") or {})
     status = str(entry.get("status") or "unknown")
-    evidence_count = 0
+    signals = completion_evidence_signals(entry)
+    evidence_count = sum(1 for value in signals.values() if value)
     if harness_meta.get("browser_evidence"):
         evidence_count += 1
     if harness_meta.get("retrieval_evidence"):
-        evidence_count += 1
-    if entry.get("checkpoint_paths"):
         evidence_count += 1
     warnings: list[str] = []
     grounded = evidence_count > 0 or (status in {"completed", "handoff_required"} and entry.get("profile") == "inspect_local")
@@ -418,6 +424,139 @@ def infer_result_consistency(entry: dict) -> dict:
         "evidence_summary": f"{evidence_count} evidence bucket(s)",
         "warnings": warnings,
     }
+
+
+def _completion_evidence_items(entry: dict) -> list[str]:
+    raw = entry.get("completion_evidence")
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    value = str(raw).strip()
+    return [value] if value else []
+
+
+def _completion_evidence_prefixes(entry: dict) -> set[str]:
+    prefixes: set[str] = set()
+    for item in _completion_evidence_items(entry):
+        prefix = item.split(":", 1)[0].strip().casefold()
+        if prefix:
+            prefixes.add(prefix)
+    return prefixes
+
+
+def completion_evidence_signals(entry: dict) -> dict[str, bool]:
+    """Map a task-ledger row into policy-level completion evidence signals."""
+    prefixes = _completion_evidence_prefixes(entry)
+    command_blob = " ".join(str(item) for item in entry.get("command") or []).casefold()
+    memory_capture = entry.get("memory_capture") or {}
+    write_validation = memory_capture.get("write_validation") or {}
+    checked_paths = write_validation.get("checked_paths") or write_validation.get("paths") or []
+    touched_paths = entry.get("touched_paths") or memory_capture.get("touched_paths") or []
+    checkpoint_paths = entry.get("checkpoint_paths") or memory_capture.get("checkpoint_paths") or []
+
+    file_diff = bool(touched_paths or checked_paths or checkpoint_paths or {"diff", "file_diff"} & prefixes)
+    diagnostics = bool({"diagnostics", "diagnostic", "inspect"} & prefixes)
+    direct_inspection = bool({"direct_inspection", "inspection", "review"} & prefixes)
+    write_validation_ok = write_validation.get("ok") is True
+    has_checkpoint = bool(entry.get("checkpoint_id"))
+    has_completion_evidence = bool(_completion_evidence_items(entry))
+    process_exit = entry.get("exit_code") is not None
+    healthcheck = bool({"healthcheck", "health", "probe"} & prefixes)
+    provider_result = bool({"provider", "api", "remote", "service"} & prefixes)
+    handoff_target = bool(entry.get("runtime_target") or {"handoff", "handoff_target"} & prefixes)
+    command_has_test_or_lint = any(
+        token in command_blob
+        for token in (" pytest", "pytest", " ruff", "ruff", " mypy", "mypy", " test", "npm test", "pnpm test", "yarn test")
+    )
+    test_or_lint_or_diff = bool(
+        file_diff
+        or {"test", "tests", "pytest", "lint", "ruff", "mypy", "diff"} & prefixes
+        or (process_exit and command_has_test_or_lint)
+    )
+
+    return {
+        "completion_evidence": has_completion_evidence,
+        "process_exit": process_exit,
+        "checkpoint_id": has_checkpoint,
+        "file_diff": file_diff,
+        "diagnostics": diagnostics,
+        "direct_inspection": direct_inspection,
+        "write_validation": write_validation_ok,
+        "test_or_lint_or_diff": test_or_lint_or_diff,
+        "healthcheck": healthcheck,
+        "provider_result": provider_result,
+        "handoff_target": handoff_target,
+    }
+
+
+def completion_policy_for_profile(policy: dict, profile: str | None) -> dict:
+    completion_policy = policy.get("completion_policy") or {}
+    profiles = completion_policy.get("profiles") or {}
+    profile_policy = profiles.get(str(profile or "")) or {}
+    return profile_policy if isinstance(profile_policy, dict) else {}
+
+
+def completion_policy_active(policy: dict, profile: str | None, enforcement_level: str) -> bool:
+    completion_policy = policy.get("completion_policy") or {}
+    if completion_policy.get("enabled", True) is False:
+        return False
+    profile_policy = completion_policy_for_profile(policy, profile)
+    if not profile_policy:
+        return False
+    required_level = str(
+        profile_policy.get("enforce_at_or_above")
+        or completion_policy.get("default_enforce_at_or_above")
+        or "balanced"
+    )
+    return enforcement_rank(policy, enforcement_level) >= enforcement_rank(policy, required_level)
+
+
+def evaluate_completion_policy(entry: dict, policy: dict, enforcement_level: str) -> tuple[bool, str]:
+    profile = str(entry.get("profile") or "")
+    if not completion_policy_active(policy, profile, enforcement_level):
+        return True, f"profile={profile or 'unknown'} completion policy not active"
+
+    profile_policy = completion_policy_for_profile(policy, profile)
+    signals = completion_evidence_signals(entry)
+    failures: list[str] = []
+
+    require_all = [str(item) for item in profile_policy.get("require_all", []) if str(item)]
+    missing_all = [item for item in require_all if not signals.get(item)]
+    if missing_all:
+        failures.append(f"missing all-required signals: {', '.join(missing_all)}")
+
+    require_one_of = [str(item) for item in profile_policy.get("require_one_of", []) if str(item)]
+    if require_one_of and not any(signals.get(item) for item in require_one_of):
+        failures.append(f"requires one of: {', '.join(require_one_of)}")
+
+    present = ", ".join(sorted(name for name, present in signals.items() if present)) or "none"
+    if failures:
+        return False, f"profile={profile} present={present}; {'; '.join(failures)}"
+    return True, f"profile={profile} present={present}"
+
+
+def postflight_check_failed(payload: dict, name: str) -> dict | None:
+    for check in payload.get("checks", []):
+        if check.get("name") == name and not check.get("ok"):
+            return check
+    return None
+
+
+def mark_task_needs_verification(task_id: str, *, reason: str) -> dict | None:
+    entry = latest_task_entry(task_id)
+    if entry is None:
+        return None
+    payload = dict(entry)
+    now = utc_now_iso()
+    payload["status"] = "needs_verification"
+    payload["verification_reason"] = reason
+    payload["blocked_reason"] = reason
+    payload["next_action"] = "attach completion evidence or rerun verification before treating this task as complete"
+    payload["updated_at"] = now
+    payload["heartbeat_at"] = now
+    append_jsonl_atomic(TASK_LEDGER, payload)
+    return payload
 
 
 def preflight_payload(
@@ -670,6 +809,9 @@ def postflight_payload_for_entry(
     else:
         append_check(checks, "file_intake_evidence", True, "file intake evidence not required")
 
+    completion_ok, completion_detail = evaluate_completion_policy(entry, policy, enforcement_level)
+    append_check(checks, "completion_policy", completion_ok, completion_detail)
+
     route_ok, route_detail = validate_route_decision(
         harness_meta.get("route_decision"),
         contract,
@@ -717,6 +859,7 @@ def record_task_evidence(
     browser_evidence: dict | None,
     retrieval_evidence: dict | None,
     file_intake_evidence: dict | None,
+    completion_evidence: list[str] | None = None,
 ) -> dict:
     entry = latest_task_entry(task_id)
     if entry is None:
@@ -731,6 +874,17 @@ def record_task_evidence(
         harness["file_intake_evidence"] = file_intake_evidence
     meta["harness"] = harness
     entry["meta"] = meta
+    if completion_evidence:
+        existing = entry.get("completion_evidence")
+        merged: list[str] = []
+        if isinstance(existing, list):
+            merged.extend(str(item) for item in existing if str(item))
+        elif isinstance(existing, str) and existing.strip():
+            merged.append(existing.strip())
+        for item in completion_evidence:
+            if item and item not in merged:
+                merged.append(item)
+        entry["completion_evidence"] = merged
     append_jsonl_atomic(TASK_LEDGER, entry)
     return entry
 
@@ -747,6 +901,7 @@ def ensure_task_evidence(task_id: str, contract: dict) -> dict | None:
         browser_evidence=inferred_browser,
         retrieval_evidence=inferred_retrieval,
         file_intake_evidence=inferred_file_intake,
+        completion_evidence=None,
     )
 
 

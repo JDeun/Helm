@@ -21,6 +21,42 @@ This is a model-tier-aware guardrail system. It keeps the normal execution-profi
 - context hydration for contracts that depend on prior state
 - preferred narrow runners in strict mode
 - postflight finalization checks so a task is not treated as complete while durable capture is still pending
+- profile-level completion evidence checks for higher-risk postflight paths
+
+## Completion Evidence Gate
+
+`references/adaptive_harness_policy.json` includes a `completion_policy`
+section. When the current enforcement level is at or above the configured
+threshold, postflight requires profile-appropriate evidence before a task can
+be considered complete.
+
+Default profile signals:
+
+- `workspace_edit`: file diff, diagnostics, direct inspection, write validation, or explicit completion evidence
+- `risky_edit`: checkpoint id plus test/lint/diff, write validation, or explicit completion evidence
+- `service_ops`: process exit, healthcheck, provider result, or explicit completion evidence
+- `remote_handoff`: handoff target or explicit completion evidence
+
+Completion evidence can come from existing runner fields such as `exit_code`,
+`checkpoint_id`, `memory_capture.write_validation`, checkpoint paths, touched
+paths, and `completion_evidence` entries. Explicit entries should use compact
+`kind:value` strings, for example `test:pytest`, `diff:reviewed`,
+`healthcheck:ok`, or `provider:request-id`.
+See [Evidence Label Convention](evidence-label-convention.md) for the standard
+label vocabulary.
+
+Operators can append explicit evidence after review:
+
+```bash
+helm harness --path ~/.helm/workspace record-evidence \
+  --task-id <task-id> \
+  --completion-evidence test:pytest \
+  --completion-evidence diff:reviewed
+```
+
+If a harness-managed command exits with code 0 but fails `completion_policy`,
+the harness appends a `needs_verification` task state so the ledger reflects
+that command execution finished but operational verification did not.
 
 ## Audit Interpretation
 
