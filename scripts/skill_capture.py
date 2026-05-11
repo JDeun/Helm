@@ -33,6 +33,11 @@ PLACEHOLDER_MARKERS = (
     "State the real commands, tools, or APIs to use.",
     "Prefer deterministic scripts over freeform shell improvisation.",
     "State what a successful answer must include.",
+    "Required when this skill writes durable files, generated notes, reports, automation state, or other reusable artifacts",
+    "Validator or check command",
+    "What counts as `checked_paths`",
+    "How to record `memory_capture.write_validation`",
+    "Stop or repair rule when validation fails",
     "List what this skill should not do.",
 )
 PROFILE_MARKERS = ("inspect_local", "workspace_edit", "risky_edit", "service_ops", "remote_handoff")

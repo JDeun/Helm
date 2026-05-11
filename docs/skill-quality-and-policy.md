@@ -27,6 +27,7 @@ The real questions are:
 - `approval_keywords` should cover irreversible, account-bound, or payment-adjacent actions
 - `runner.strict_required` should be used only when freeform execution is too risky for weaker models
 - file-handling skills should declare `file_intake` evidence when parser routing depends on the real content type
+- artifact-producing skills should declare `artifact_validation` when generated files, notes, reports, or reusable state must be structurally checked after writing
 
 ## SKILL.md Baseline
 
@@ -49,6 +50,12 @@ Every promoted skill should make these contracts visible inside `SKILL.md`:
   - the required fields
   - the length rule
   - the claims the skill must not make
+- `Post-write validation contract`
+  - when generated artifacts require validation
+  - which validator, smoke test, or inspection proves the write was usable
+  - what counts as `checked_paths`
+  - how to record `memory_capture.write_validation`
+  - whether to repair, stop, or request review when validation fails
 - `Failure contract`
   - common failure types
   - fallback behavior
@@ -63,6 +70,13 @@ For file-oriented workflows, make the intake boundary visible as well:
 
 These sections matter because Helm should be able to govern unknown or newly added skills without relying on prompt folklore or operator memory.
 
+For artifact-producing workflows, make the write boundary visible as well:
+
+- which generated files, notes, reports, indexes, or automation state must be checked
+- whether a deterministic validator exists, or whether direct inspection is the minimum acceptable evidence
+- whether failed validation should trigger repair, user review, or task failure
+- how the final task state will expose `memory_capture.write_validation`
+
 ## Why This Matters
 
 A skill with only a good description is still operationally weak.
@@ -74,6 +88,7 @@ Typical weak-skill failure modes:
 - the model does not know which failure should trigger clarification vs escalation
 - the model produces long answers even when the right output is a short shortlist
 - the skill can technically run, but its stop boundary is invisible
+- the skill writes a file and reports success before checking whether the artifact landed in the expected structure
 
 Helm should push skills away from those patterns.
 
@@ -94,6 +109,7 @@ Helm should push skills away from those patterns.
 - would a weak local model benefit from a strict runner instead of open-ended command execution
 - does reply-gate failure for this skill mean the manifest is too weak, or the workflow is missing a real finalization step
 - does `SKILL.md` expose a real stop boundary, or only describe the workflow at a high level
+- if the skill writes durable artifacts, does it explain the post-write validator and the `checked_paths` evidence
 - if this skill were swapped out for a new one tomorrow, would the same Helm quality bar still catch weak inputs, weak outputs, and weak failure handling
 - when this skill fails, can Helm later distinguish an unresolved failure from a failure that was already superseded by a successful retry
 
@@ -124,7 +140,8 @@ Warning signs:
 4. Review `SKILL.md` for missing input, decision, output, or failure contracts
 5. Tighten `approval_keywords` for account-bound or irreversible actions
 6. Add `runner.entrypoint` and `runner.strict_required` where weaker models should not improvise
-7. Re-run `helm validate --path <workspace>` after policy changes
+7. Add `artifact_validation` where artifact-producing skills need post-write structure checks
+8. Re-run `helm validate --path <workspace>` after policy changes
 
 ## Release Bar
 

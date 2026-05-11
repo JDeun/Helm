@@ -44,6 +44,14 @@ This should explain how the skill stays safe, focused, and predictable.
 - Length rule
 - Do not say or Do not imply
 
+## Post-write validation contract
+
+- Required when this skill writes durable files, generated notes, reports, automation state, or other reusable artifacts
+- Validator or check command
+- What counts as `checked_paths`
+- How to record `memory_capture.write_validation`
+- Stop or repair rule when validation fails
+
 ## Failure contract
 
 - Failure types

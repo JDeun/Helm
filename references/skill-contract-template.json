@@ -25,6 +25,11 @@
     "required_fields": ["path", "claimed_type", "detected_type", "detector", "route_decision"],
     "when_any": []
   },
+  "artifact_validation": {
+    "required": false,
+    "required_fields": ["ok", "checked_paths"],
+    "when_any": []
+  },
   "route_decision": {
     "required": false,
     "task_type": "generic",

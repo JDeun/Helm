@@ -52,6 +52,41 @@ The operating rule is:
 - keep that distinction visible in diagnostics and operator summaries
 - only promote support artifacts into first-class navigation when the inspection value clearly outweighs the noise
 
+## Post-Write Validation
+
+Some tasks are not complete when the process exits. They are complete only after
+the written artifact has been checked against the workspace's expected
+structure.
+
+Helm keeps this runtime-neutral. A workspace-specific validator can inspect
+whatever it owns, then attach the result to the task ledger as
+`memory_capture.write_validation`.
+
+Example:
+
+```bash
+python scripts/adaptive_harness.py record-evidence \
+  --task-id <task-id> \
+  --write-validation-json '{"ok": true, "checked_paths": ["notes/generated.md"], "validator": "obsidian-structure-audit"}'
+```
+
+Skills can require this boundary with an `artifact_validation` section in
+`contract.json`:
+
+```json
+{
+  "artifact_validation": {
+    "required": true,
+    "required_fields": ["ok", "checked_paths"]
+  }
+}
+```
+
+When that contract is present, `adaptive_harness.py postflight` does not treat a
+task as operationally clean until the ledger contains a successful
+post-write validation record. This is the general Helm pattern behind
+workspace-specific checks such as Obsidian note structure audits.
+
 ## Why This Matters
 
 - Verification answers "did the task actually run?"
@@ -65,6 +100,7 @@ If the durable traces are weak, later routing and recovery will also be weak.
 The current implementation adds planning and observability:
 
 - `scripts/run_with_profile.py` writes a `memory_capture` section into the final task-ledger state
+- `scripts/adaptive_harness.py postflight` can enforce task evidence, finalization, and post-write artifact validation contracts
 - `task_ledger_report.py`, `ops_daily_report.py`, `helm status`, and `helm report` surface finalization counts
 
 Actual mutation of workspace-specific memory files stays intentionally separate because each runtime has different write rules.

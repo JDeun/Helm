@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.9.0</strong></p>
+<p align="center"><strong>Current release: v0.9.1</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -267,6 +267,7 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.9.1.md`](docs/releases/0.9.1.md)
 - [`docs/releases/0.9.0.md`](docs/releases/0.9.0.md)
 - [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md)
 - [`docs/releases/0.7.3.md`](docs/releases/0.7.3.md)
@@ -278,7 +279,7 @@ Release details:
 
 ## Status
 
-Helm v0.9.0 adds append-only task state operations, completion evidence gates, checkpoint retention planning, outcome-aware skill lifecycle reporting, DCI inspection hints, and human-approved HITL decision pattern tracking. See [`docs/releases/0.9.0.md`](docs/releases/0.9.0.md).
+Helm v0.9.1 adds post-write artifact validation gates for generated files, notes, reports, and reusable state. Skill contracts can require `artifact_validation`, postflight enforces `memory_capture.write_validation`, and new skill templates now document the validation boundary. See [`docs/releases/0.9.1.md`](docs/releases/0.9.1.md).
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

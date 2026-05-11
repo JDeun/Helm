@@ -154,6 +154,88 @@ def test_file_intake_manifest_without_skill_guidance_is_flagged() -> None:
         assert "manifest requires file intake evidence but SKILL.md does not explain the intake boundary" in warnings
 
 
+def test_artifact_validation_manifest_without_skill_guidance_is_flagged() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "references").mkdir()
+        (root / "skills" / "artifact-skill").mkdir(parents=True)
+        (root / "references" / "execution_profiles.json").write_text(
+            json.dumps({"profiles": {"workspace_edit": {}}}),
+            encoding="utf-8",
+        )
+        (root / "skills" / "artifact-skill" / "contract.json").write_text(
+            json.dumps(
+                {
+                    "skill": "artifact-skill",
+                    "allowed_profiles": ["workspace_edit"],
+                    "default_profile": "workspace_edit",
+                    "artifact_validation": {"required": True, "required_fields": ["ok", "checked_paths"]},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / "skills" / "artifact-skill" / "SKILL.md").write_text(
+            "# Artifact Skill\n\n## Core rule\n\nWrite the report.\n",
+            encoding="utf-8",
+        )
+
+        report = manifest_quality_audit(root, root / "references" / "execution_profiles.json")
+
+        assert not report["ok"]
+        warnings = report["items"][0]["warnings"]
+        assert "manifest requires artifact validation but SKILL.md does not explain the post-write validation boundary" in warnings
+
+
+def test_artifact_validation_manifest_with_skill_guidance_passes_that_boundary() -> None:
+    skill_md = """# Artifact Skill
+
+## Core rule
+
+Write durable files only after the request is clear.
+
+## Input contract
+
+- Required inputs: destination and content source
+- Optional inputs: prior examples
+- Ask first when missing: destination
+
+## Decision contract
+
+- State the decision order explicitly.
+- Red flags: ambiguous destination or unchecked generated artifact.
+
+## Execution contract
+
+- Use the workspace_edit profile for local file writes.
+
+## Output contract
+
+- Default output format: short summary
+- Always include: changed paths and validation result
+
+## Post-write validation contract
+
+- Run the validator after creating generated artifacts.
+- Record `memory_capture.write_validation` with `ok` and `checked_paths`.
+
+## Failure contract
+
+- Failure types: missing destination, failed validator
+- Fallback behavior: stop and report the failed validation
+- User-facing failure language: state which path failed validation
+"""
+
+    warnings = audit_skill_markdown_contracts(
+        skill_md,
+        {
+            "allowed_profiles": ["workspace_edit"],
+            "artifact_validation": {"required": True, "required_fields": ["ok", "checked_paths"]},
+        },
+    )
+
+    assert "manifest requires artifact validation but SKILL.md does not explain the post-write validation boundary" not in warnings
+
+
 def test_route_decision_without_tool_rules_is_flagged() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)

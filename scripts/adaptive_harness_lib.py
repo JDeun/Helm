@@ -106,6 +106,7 @@ def base_skill_contract(skill: str | None) -> dict:
         "browser_work": {"required": False, "required_fields": ["reason", "evidence", "api_reusable", "next_action"]},
         "retrieval_policy": {"required": False, "required_fields": ["attempt_stage", "exit_classification", "recovery_artifact"]},
         "file_intake": {"required": False, "required_fields": ["path", "claimed_type", "detected_type", "detector", "route_decision"]},
+        "artifact_validation": {"required": False, "required_fields": ["ok", "checked_paths"]},
         "route_decision": {
             "required": False,
             "task_type": "generic",
@@ -263,6 +264,19 @@ def validate_evidence_payload(
     return True, f"{label} satisfied"
 
 
+def validate_artifact_validation_payload(payload: dict | None, required_fields: list[str]) -> tuple[bool, str]:
+    ok, detail = validate_evidence_payload(payload, required_fields, label="artifact_validation")
+    if not ok:
+        return ok, detail
+    assert payload is not None
+    if payload.get("ok") is not True:
+        return False, f"artifact_validation reported issues: ok={payload.get('ok')!r}"
+    checked_paths = payload.get("checked_paths") or payload.get("paths") or []
+    if not checked_paths:
+        return False, "artifact_validation did not record checked paths"
+    return True, f"artifact_validation satisfied paths={len(checked_paths)}"
+
+
 def evidence_hints(section: dict) -> list[str]:
     raw = section.get("when_any")
     if not isinstance(raw, list):
@@ -309,6 +323,7 @@ def entry_evidence_requirements(entry: dict, contract: dict) -> dict[str, bool]:
         "browser_work": evidence_requirement_active(contract.get("browser_work") or {}, blob=blob),
         "retrieval_policy": evidence_requirement_active(contract.get("retrieval_policy") or {}, blob=blob),
         "file_intake": evidence_requirement_active(contract.get("file_intake") or {}, blob=blob),
+        "artifact_validation": evidence_requirement_active(contract.get("artifact_validation") or {}, blob=blob),
     }
 
 
@@ -809,6 +824,15 @@ def postflight_payload_for_entry(
     else:
         append_check(checks, "file_intake_evidence", True, "file intake evidence not required")
 
+    artifact_validation = contract.get("artifact_validation") or {}
+    artifact_fields = [str(item) for item in artifact_validation.get("required_fields", []) if str(item)]
+    if evidence_requirement_active(artifact_validation, blob=blob):
+        write_validation = (entry.get("memory_capture") or {}).get("write_validation")
+        ok, detail = validate_artifact_validation_payload(write_validation, artifact_fields)
+        append_check(checks, "artifact_validation", ok, detail)
+    else:
+        append_check(checks, "artifact_validation", True, "artifact validation not required")
+
     completion_ok, completion_detail = evaluate_completion_policy(entry, policy, enforcement_level)
     append_check(checks, "completion_policy", completion_ok, completion_detail)
 
@@ -859,6 +883,7 @@ def record_task_evidence(
     browser_evidence: dict | None,
     retrieval_evidence: dict | None,
     file_intake_evidence: dict | None,
+    write_validation: dict | None = None,
     completion_evidence: list[str] | None = None,
 ) -> dict:
     entry = latest_task_entry(task_id)
@@ -874,6 +899,10 @@ def record_task_evidence(
         harness["file_intake_evidence"] = file_intake_evidence
     meta["harness"] = harness
     entry["meta"] = meta
+    if write_validation is not None:
+        memory_capture = dict(entry.get("memory_capture") or {})
+        memory_capture["write_validation"] = write_validation
+        entry["memory_capture"] = memory_capture
     if completion_evidence:
         existing = entry.get("completion_evidence")
         merged: list[str] = []
@@ -901,6 +930,7 @@ def ensure_task_evidence(task_id: str, contract: dict) -> dict | None:
         browser_evidence=inferred_browser,
         retrieval_evidence=inferred_retrieval,
         file_intake_evidence=inferred_file_intake,
+        write_validation=None,
         completion_evidence=None,
     )
 

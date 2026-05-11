@@ -22,6 +22,7 @@ This is a model-tier-aware guardrail system. It keeps the normal execution-profi
 - preferred narrow runners in strict mode
 - postflight finalization checks so a task is not treated as complete while durable capture is still pending
 - profile-level completion evidence checks for higher-risk postflight paths
+- skill-level artifact validation checks for workflows that write generated files, notes, reports, or reusable state
 
 ## Completion Evidence Gate
 
@@ -53,6 +54,33 @@ helm harness --path ~/.helm/workspace record-evidence \
   --completion-evidence test:pytest \
   --completion-evidence diff:reviewed
 ```
+
+## Artifact Validation Gate
+
+Skills that create durable artifacts can declare an `artifact_validation`
+section in `contract.json`. This makes postflight require a successful
+workspace-specific validator result before the task is treated as complete.
+
+```json
+{
+  "artifact_validation": {
+    "required": true,
+    "required_fields": ["ok", "checked_paths"]
+  }
+}
+```
+
+After the workspace validator runs, record the result on the task ledger:
+
+```bash
+helm harness --path ~/.helm/workspace record-evidence \
+  --task-id <task-id> \
+  --write-validation-json '{"ok": true, "checked_paths": ["notes/generated.md"], "validator": "workspace-structure-audit"}'
+```
+
+`checked_paths` should name the artifacts that were actually inspected. If the
+validator reports `ok: false`, or if no checked path is recorded, postflight
+fails the artifact validation check.
 
 If a harness-managed command exits with code 0 but fails `completion_policy`,
 the harness appends a `needs_verification` task state so the ledger reflects

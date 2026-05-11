@@ -1397,6 +1397,84 @@ def test_harness_record_evidence_accepts_completion_evidence() -> None:
         assert payload["postflight"]["ok"]
 
 
+def test_harness_postflight_requires_artifact_validation_when_contract_demands_it() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        (root / "skills" / "artifact-skill").mkdir(parents=True)
+        (root / "skills" / "artifact-skill" / "contract.json").write_text(
+            json.dumps(
+                {
+                    "skill": "artifact-skill",
+                    "allowed_profiles": ["workspace_edit"],
+                    "default_profile": "workspace_edit",
+                    "artifact_validation": {
+                        "required": True,
+                        "required_fields": ["ok", "checked_paths"],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / ".helm" / "task-ledger.jsonl").write_text(
+            json.dumps(
+                {
+                    "task_id": "task-artifact-1",
+                    "task_name": "write generated notes",
+                    "skill": "artifact-skill",
+                    "status": "completed",
+                    "profile": "workspace_edit",
+                    "command_preview": "python3 scripts/write_notes.py",
+                    "memory_capture": {"finalization_status": "capture_written"},
+                    "meta": {"harness": {"enforcement_level": "balanced"}},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        env = os.environ.copy()
+        env["HELM_WORKSPACE"] = str(root)
+
+        missing = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-artifact-1"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        assert missing.returncode == 2
+        missing_payload = json.loads(missing.stdout)
+        failed_checks = {item["name"]: item for item in missing_payload["checks"]}
+        assert not failed_checks["artifact_validation"]["ok"]
+
+        recorded = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "adaptive_harness.py"),
+                "record-evidence",
+                "--task-id",
+                "task-artifact-1",
+                "--write-validation-json",
+                json.dumps(
+                    {
+                        "ok": True,
+                        "checked_paths": ["notes/generated.md"],
+                        "validator": "workspace-specific-post-write-audit",
+                    }
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        assert recorded.returncode == 0, recorded.stderr
+        recorded_payload = json.loads(recorded.stdout)
+        checks = {item["name"]: item for item in recorded_payload["postflight"]["checks"]}
+        assert checks["artifact_validation"]["ok"]
+
+
 def test_harness_postflight_can_infer_missing_evidence_from_task_metadata() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)

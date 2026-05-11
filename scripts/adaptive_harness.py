@@ -159,16 +159,24 @@ def cmd_record_evidence(args: argparse.Namespace) -> int:
     browser_evidence = parse_evidence_json(args.browser_evidence_json, label="--browser-evidence-json")
     retrieval_evidence = parse_evidence_json(args.retrieval_evidence_json, label="--retrieval-evidence-json")
     file_intake_evidence = parse_evidence_json(args.file_intake_evidence_json, label="--file-intake-evidence-json")
+    write_validation = parse_evidence_json(args.write_validation_json, label="--write-validation-json")
     completion_evidence = list(args.completion_evidence or [])
-    if browser_evidence is None and retrieval_evidence is None and file_intake_evidence is None and not completion_evidence:
+    if (
+        browser_evidence is None
+        and retrieval_evidence is None
+        and file_intake_evidence is None
+        and write_validation is None
+        and not completion_evidence
+    ):
         raise SystemExit(
-            "Provide --browser-evidence-json, --retrieval-evidence-json, --file-intake-evidence-json, or --completion-evidence"
+            "Provide --browser-evidence-json, --retrieval-evidence-json, --file-intake-evidence-json, --write-validation-json, or --completion-evidence"
         )
     entry = record_task_evidence(
         args.task_id,
         browser_evidence=browser_evidence,
         retrieval_evidence=retrieval_evidence,
         file_intake_evidence=file_intake_evidence,
+        write_validation=write_validation,
         completion_evidence=completion_evidence,
     )
     postflight = postflight_payload_from_task(args.task_id)
@@ -229,11 +237,15 @@ def build_parser() -> argparse.ArgumentParser:
     postflight.add_argument("--task-id", required=True)
     postflight.set_defaults(func=cmd_postflight)
 
-    record = subparsers.add_parser("record-evidence", help="Append browser, retrieval, file-intake, or completion evidence to an existing task entry.")
+    record = subparsers.add_parser(
+        "record-evidence",
+        help="Append browser, retrieval, file-intake, artifact-validation, or completion evidence to an existing task entry.",
+    )
     record.add_argument("--task-id", required=True)
     record.add_argument("--browser-evidence-json", help="Structured browser evidence JSON to persist.")
     record.add_argument("--retrieval-evidence-json", help="Structured retrieval evidence JSON to persist.")
     record.add_argument("--file-intake-evidence-json", help="Structured file intake evidence JSON to persist.")
+    record.add_argument("--write-validation-json", help="Structured post-write artifact validation JSON to persist.")
     record.add_argument("--completion-evidence", action="append", help="Explicit completion evidence, e.g. test:pytest or diff:reviewed.")
     record.set_defaults(func=cmd_record_evidence)
 
