@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+No unreleased changes yet.
+
+## [0.9.2] — 2026-05-13
+
 ### Added
 
 - **artifact validation gate**: adaptive harness contracts can now require post-write artifact validation through `artifact_validation`, with `helm harness record-evidence --write-validation-json` persisting `memory_capture.write_validation` for postflight enforcement.
@@ -11,7 +15,6 @@
 ### Tests
 
 - Full suite: 402 tests passing.
-- Focused validation for the Obsidian artifact validator/exporter path: 21 tests passing.
 
 ## [0.9.0] — 2026-05-11
 
