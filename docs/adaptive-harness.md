@@ -82,6 +82,19 @@ helm harness --path ~/.helm/workspace record-evidence \
 validator reports `ok: false`, or if no checked path is recorded, postflight
 fails the artifact validation check.
 
+For Obsidian-backed workflows, one validator can branch by extension while still
+reporting the same Helm evidence shape:
+
+```bash
+python3 ~/.openclaw/workspace/scripts/obsidian_artifact_validate.py \
+  --path ~/Documents/ObsidianVault/04-Resources/Notes/Maps/project-candidates.canvas \
+  --json
+```
+
+The resulting `write_validation` should preserve the artifact type, validator
+name, status, and checked path so postflight can distinguish Markdown,
+Base, and Canvas failures.
+
 If a harness-managed command exits with code 0 but fails `completion_policy`,
 the harness appends a `needs_verification` task state so the ledger reflects
 that command execution finished but operational verification did not.

@@ -45,11 +45,32 @@ Pick the narrowest profile that matches the real risk:
 - If the right answer is `remote_handoff`, say so early instead of silently faking local execution.
 - Name the real runtime target with `--runtime-target` whenever the backend is not just the local workspace shell.
 
+## Minimal Diff Discipline
+
+For `workspace_edit` and `risky_edit`, every changed line should trace directly to the user's request.
+
+Agents should not:
+
+- refactor adjacent code unless explicitly requested
+- rewrite comments or formatting unrelated to the task
+- add speculative abstractions or configurability
+- remove pre-existing dead code unless asked
+
+Agents may remove only the unused imports, variables, or helpers introduced by their own change.
+
 ## Finalization Rule
 
 Execution is not the whole task boundary.
 
 After the command or handoff path ends, Helm should still decide whether the result needs durable state capture.
+
+A task is not complete merely because files changed. It is complete only when the intended outcome has a named verification gate. Examples:
+
+- bug fix: regression test reproduces the bug and passes
+- documentation change: links, anchors, or direct inspection validate the rendered guidance
+- package or release change: metadata parses and install/build checks pass
+- workflow change: dry-run, static validation, or postflight evidence passes
+- Obsidian artifact change: Markdown, Base, or Canvas structure is checked according to the artifact type
 
 Examples:
 

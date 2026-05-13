@@ -87,6 +87,18 @@ task as operationally clean until the ledger contains a successful
 post-write validation record. This is the general Helm pattern behind
 workspace-specific checks such as Obsidian note structure audits.
 
+Artifact-specific validators should name the syntax and integrity boundary they
+checked. For Obsidian-backed workspaces, useful gates include:
+
+- Markdown notes: frontmatter YAML, wikilink syntax, empty template sections,
+  and source fields when the note is a first-pass capture
+- Bases: YAML parse, `views` shape, and filter/formula sanity checks
+- Canvas files: JSON parse, unique node and edge IDs, edge references, and
+  required node fields
+
+Those checks should be recorded as `write_validation` evidence with the
+validator name and the exact artifact paths inspected.
+
 ## Why This Matters
 
 - Verification answers "did the task actually run?"
