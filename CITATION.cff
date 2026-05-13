@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use Helm in your work, please cite this repository. For research background on harness design and operational stability, see the related arXiv paper below."
+title: "Helm: A stability-first operations layer for long-lived agent workspaces"
+authors:
+  - family-names: "Cho"
+    given-names: "Yong Eun"
+    alias: "JDeun"
+repository-code: "https://github.com/JDeun/Helm"
+url: "https://v0-helm-agent-ops.vercel.app/"
+license: "MIT"
+version: "0.9.1"
+abstract: "Helm is a local operations layer for long-lived AI agent workspaces, adding execution profiles, guard decisions, checkpoints, task ledgers, context hydration, and recovery discipline around existing agent runtimes."
+keywords:
+  - ai-agents
+  - agent-ops
+  - coding-agents
+  - guardrails
+  - checkpoints
+  - local-first
+  - developer-tools
+references:
+  - type: article
+    title: "Harness Design Determines Operational Stability in Small Language Models"
+    authors:
+      - family-names: "Cho"
+        given-names: "Yong Eun"
+    year: 2026
+    doi: "10.48550/arXiv.2605.12129"
+    url: "https://arxiv.org/abs/2605.12129"
+    collection-title: "arXiv"
+    notes: "arXiv:2605.12129 [cs.SE]"

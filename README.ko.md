@@ -86,6 +86,12 @@ OpenClaw/Hermes 스타일 workspace나 유사한 self-hosted agent service가 �
 
 에이전트가 일회성 데모만 수행한다면 Helm은 과할 수 있습니다.
 
+## 연구 배경
+
+Helm의 설계 방향은 [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129) 논문에서 다룬 문제의식과 맞닿아 있습니다. 이 논문은 small language model의 운영 안정성이 모델 자체뿐 아니라 planning, verification, recovery를 포함한 harness 설계에 크게 좌우된다는 점을 실험적으로 분석합니다.
+
+논문과 Helm의 workspace-level operations layer가 어떻게 연결되는지는 [`docs/research-background.md`](docs/research-background.md)를 참고하세요.
+
 ## 3분 데모
 
 ![Helm three-minute demo terminal capture](https://raw.githubusercontent.com/JDeun/Helm/main/assets/helm-three-minute-demo.gif)
@@ -252,6 +258,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`docs/opensource-product-definition.md`](docs/opensource-product-definition.md)
 - [`docs/opensource-module-split.md`](docs/opensource-module-split.md)
 - [`docs/helm-dogfooding-reference.md`](docs/helm-dogfooding-reference.md)
+- [`docs/research-background.md`](docs/research-background.md)
 - [`docs/public-launch-checklist.md`](docs/public-launch-checklist.md)
 - [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)

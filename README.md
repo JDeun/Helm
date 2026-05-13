@@ -86,6 +86,12 @@ Use it when an OpenClaw/Hermes-style workspace, or a similar self-hosted agent s
 
 If the agent only runs one-off demos, Helm is probably unnecessary.
 
+## Research Background
+
+Helm's design direction is aligned with the findings in [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129), which experimentally studies how planning, verification, and recovery harnesses affect the operational stability of small language models.
+
+See [`docs/research-background.md`](docs/research-background.md) for the connection between the paper and Helm's workspace-level operations layer.
+
 ## Three-Minute Demo
 
 ![Helm three-minute demo terminal capture](https://raw.githubusercontent.com/JDeun/Helm/main/assets/helm-three-minute-demo.gif)
@@ -257,6 +263,7 @@ Positioning:
 - [`docs/opensource-product-definition.md`](docs/opensource-product-definition.md)
 - [`docs/opensource-module-split.md`](docs/opensource-module-split.md)
 - [`docs/helm-dogfooding-reference.md`](docs/helm-dogfooding-reference.md)
+- [`docs/research-background.md`](docs/research-background.md)
 - [`docs/public-launch-checklist.md`](docs/public-launch-checklist.md)
 - [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
