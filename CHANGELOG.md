@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-No unreleased changes yet.
+### Added
+
+- **CI release gate**: added a GitHub Actions workflow that runs tests, release-version consistency, package build, and package metadata checks on pushes and pull requests.
+
+### Changed
+
+- **PyPI publish hardening**: the publish workflow now runs `twine check` before publishing release artifacts.
+- **release smoke isolation**: package install verification now uses a smoke-run virtual environment instead of writing to the active user Python environment.
 
 ## [0.9.4] — 2026-05-13
 

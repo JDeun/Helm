@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SMOKE_ROOT="${1:-/tmp/helm-release-smoke}"
 export PYTHONPYCACHEPREFIX="$SMOKE_ROOT/pycache"
+export PIP_CACHE_DIR="$SMOKE_ROOT/pip-cache"
 
 PYTHON="${HELM_RELEASE_PYTHON:-}"
 if [[ -z "$PYTHON" ]]; then
@@ -38,7 +39,9 @@ echo "[5/13] package metadata check"
 "$PYTHON" -m twine check "$SMOKE_ROOT"/dist/* >/dev/null
 
 echo "[6/13] package install"
-"$PYTHON" -m pip install --user --no-build-isolation --ignore-installed "$ROOT" >/dev/null
+"$PYTHON" -m venv --system-site-packages "$SMOKE_ROOT/install-venv"
+"$SMOKE_ROOT/install-venv/bin/python" -m pip install --no-build-isolation --no-deps "$ROOT" >/dev/null
+"$SMOKE_ROOT/install-venv/bin/helm" --help >/dev/null
 
 echo "[7/13] manifest audit"
 "$PYTHON" "$ROOT/scripts/run_with_profile.py" validate-manifests --json >/dev/null
