@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 AI agent workspace를 위한 로컬 운영 레이어입니다. 명령 전 profile, 위험 작업 전 checkpoint, chat이 사라진 뒤에도 남는 durable task history를 제공합니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.9.3</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.9.4</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -269,15 +269,14 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
-- [`docs/releases/0.9.3.md`](docs/releases/0.9.3.md)
-- [`docs/releases/0.9.2.md`](docs/releases/0.9.2.md)
-- [`docs/releases/0.9.1.md`](docs/releases/0.9.1.md)
+- 최신: [`docs/releases/0.9.4.md`](docs/releases/0.9.4.md)
+- 최근: [`0.9.3`](docs/releases/0.9.3.md), [`0.9.2`](docs/releases/0.9.2.md)
 
 이전 릴리즈 노트는 [`docs/releases/`](docs/releases/)에 있습니다.
 
 ## 현재 상태
 
-Helm v0.9.3은 릴리즈 버전 정합성 검사를 추가하고 README 릴리즈 목록을 최신 노트 중심으로 정리합니다. 자세한 내용은 [`docs/releases/0.9.3.md`](docs/releases/0.9.3.md) 참고.
+Helm v0.9.4는 release smoke 패키징 검증과 단일 패키지 버전 source를 추가합니다. 자세한 내용은 [`docs/releases/0.9.4.md`](docs/releases/0.9.4.md) 참고.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 

@@ -4,6 +4,21 @@
 
 No unreleased changes yet.
 
+## [0.9.4] — 2026-05-13
+
+### Added
+
+- **release smoke packaging checks**: expanded `scripts/release_smoke.sh` to include release-version consistency, wheel/sdist build, and package metadata checks.
+
+### Changed
+
+- **single package version source**: removed the legacy `setup.py` packaging shim so `pyproject.toml` is the only package version source.
+- **README release readability**: condensed release links into latest/recent entries plus the full release-note directory.
+
+### Tests
+
+- Updated release-version tests to reject legacy `setup.py` reintroduction.
+
 ## [0.9.3] — 2026-05-13
 
 ### Added

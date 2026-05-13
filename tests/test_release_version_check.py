@@ -12,14 +12,10 @@ if str(SCRIPTS) not in sys.path:
 from release_version_check import check_release
 
 
-def write_release_files(root: Path, version: str, *, setup_version: str | None = None) -> None:
+def write_release_files(root: Path, version: str) -> None:
     (root / "docs" / "releases").mkdir(parents=True)
     (root / "pyproject.toml").write_text(
         f'[project]\nname = "helm-agent-ops"\nversion = "{version}"\n',
-        encoding="utf-8",
-    )
-    (root / "setup.py").write_text(
-        f'from setuptools import setup\nsetup(name="helm-agent-ops", version="{setup_version or version}")\n',
         encoding="utf-8",
     )
     (root / "CITATION.cff").write_text(f'version: "{version}"\n', encoding="utf-8")
@@ -35,12 +31,16 @@ def test_check_release_accepts_consistent_versions(tmp_path: Path) -> None:
     assert check_release(tmp_path) == []
 
 
-def test_check_release_reports_mismatched_setup_version(tmp_path: Path) -> None:
-    write_release_files(tmp_path, "0.9.2", setup_version="0.9.1")
+def test_check_release_reports_legacy_setup_py(tmp_path: Path) -> None:
+    write_release_files(tmp_path, "0.9.2")
+    (tmp_path / "setup.py").write_text(
+        'from setuptools import setup\nsetup(name="helm-agent-ops", version="0.9.2")\n',
+        encoding="utf-8",
+    )
 
     errors = check_release(tmp_path)
 
-    assert "setup.py: 0.9.1 != 0.9.2" in errors
+    assert "setup.py: remove legacy version-bearing packaging shim; pyproject.toml is the package version source" in errors
 
 
 def test_check_release_reports_missing_version_field(tmp_path: Path) -> None:
