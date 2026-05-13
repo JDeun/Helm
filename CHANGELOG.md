@@ -6,10 +6,12 @@
 
 - **artifact validation gate**: adaptive harness contracts can now require post-write artifact validation through `artifact_validation`, with `helm harness record-evidence --write-validation-json` persisting `memory_capture.write_validation` for postflight enforcement.
 - **skill scaffolding guidance**: new skill templates now include a post-write validation contract, and manifest quality audit flags skills that require artifact validation without documenting that boundary in `SKILL.md`.
+- **artifact-specific validation docs**: execution profiles, task finalization, and adaptive harness docs now spell out minimal-diff discipline and Obsidian Markdown/Base/Canvas validation gates.
 
 ### Tests
 
 - Full suite: 402 tests passing.
+- Focused validation for the Obsidian artifact validator/exporter path: 21 tests passing.
 
 ## [0.9.0] — 2026-05-11
 
