@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 AI agent workspace를 위한 로컬 운영 레이어입니다. 명령 전 profile, 위험 작업 전 checkpoint, chat이 사라진 뒤에도 남는 durable task history를 제공합니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.9.1</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.9.2</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -269,6 +269,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.9.2.md`](docs/releases/0.9.2.md)
 - [`docs/releases/0.9.1.md`](docs/releases/0.9.1.md)
 - [`docs/releases/0.9.0.md`](docs/releases/0.9.0.md)
 - [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md)
@@ -281,7 +282,7 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 
 ## 현재 상태
 
-Helm v0.9.1은 생성 파일, 노트, 보고서, 재사용 상태에 대한 post-write artifact validation gate를 추가합니다. 스킬 계약은 `artifact_validation`을 요구할 수 있고, postflight는 `memory_capture.write_validation`을 강제하며, 새 스킬 템플릿은 검증 경계를 문서화합니다. 자세한 내용은 [`docs/releases/0.9.1.md`](docs/releases/0.9.1.md) 참고.
+Helm v0.9.2는 Obsidian 기반 workspace를 위한 artifact별 검증 규율을 문서화합니다. minimal-diff 규칙과 Markdown/Base/Canvas verification gate를 명시했습니다. 자세한 내용은 [`docs/releases/0.9.2.md`](docs/releases/0.9.2.md) 참고.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 
