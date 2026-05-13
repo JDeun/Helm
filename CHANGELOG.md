@@ -4,6 +4,20 @@
 
 No unreleased changes yet.
 
+## [0.9.3] — 2026-05-13
+
+### Added
+
+- **release version check**: added `scripts/release_version_check.py` to verify package metadata, citation metadata, README release banners, changelog entries, and release-note files agree before publishing.
+
+### Changed
+
+- **README release list**: shortened the release section to the latest notes and linked the full `docs/releases/` directory for older entries.
+
+### Tests
+
+- Added release-version consistency tests.
+
 ## [0.9.2] — 2026-05-13
 
 ### Added

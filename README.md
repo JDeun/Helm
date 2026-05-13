@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.9.2</strong></p>
+<p align="center"><strong>Current release: v0.9.3</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -274,20 +274,15 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.9.3.md`](docs/releases/0.9.3.md)
 - [`docs/releases/0.9.2.md`](docs/releases/0.9.2.md)
 - [`docs/releases/0.9.1.md`](docs/releases/0.9.1.md)
-- [`docs/releases/0.9.0.md`](docs/releases/0.9.0.md)
-- [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md)
-- [`docs/releases/0.7.3.md`](docs/releases/0.7.3.md)
-- [`docs/releases/0.7.2.md`](docs/releases/0.7.2.md)
-- [`docs/releases/0.7.1.md`](docs/releases/0.7.1.md)
-- [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md)
-- [`docs/releases/0.6.7.md`](docs/releases/0.6.7.md)
-- [`docs/releases/0.6.6.md`](docs/releases/0.6.6.md)
+
+Older release notes live in [`docs/releases/`](docs/releases/).
 
 ## Status
 
-Helm v0.9.2 documents artifact-specific validation discipline for Obsidian-backed workspaces, including minimal-diff rules and Markdown/Base/Canvas verification gates. See [`docs/releases/0.9.2.md`](docs/releases/0.9.2.md).
+Helm v0.9.3 adds release-version consistency checks and keeps the README release list focused on the latest notes. See [`docs/releases/0.9.3.md`](docs/releases/0.9.3.md).
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

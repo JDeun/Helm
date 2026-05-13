@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 AI agent workspace를 위한 로컬 운영 레이어입니다. 명령 전 profile, 위험 작업 전 checkpoint, chat이 사라진 뒤에도 남는 durable task history를 제공합니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.9.2</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.9.3</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -269,20 +269,15 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
+- [`docs/releases/0.9.3.md`](docs/releases/0.9.3.md)
 - [`docs/releases/0.9.2.md`](docs/releases/0.9.2.md)
 - [`docs/releases/0.9.1.md`](docs/releases/0.9.1.md)
-- [`docs/releases/0.9.0.md`](docs/releases/0.9.0.md)
-- [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md)
-- [`docs/releases/0.7.3.md`](docs/releases/0.7.3.md)
-- [`docs/releases/0.7.2.md`](docs/releases/0.7.2.md)
-- [`docs/releases/0.7.1.md`](docs/releases/0.7.1.md)
-- [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md)
-- [`docs/releases/0.6.7.md`](docs/releases/0.6.7.md)
-- [`docs/releases/0.6.6.md`](docs/releases/0.6.6.md)
+
+이전 릴리즈 노트는 [`docs/releases/`](docs/releases/)에 있습니다.
 
 ## 현재 상태
 
-Helm v0.9.2는 Obsidian 기반 workspace를 위한 artifact별 검증 규율을 문서화합니다. minimal-diff 규칙과 Markdown/Base/Canvas verification gate를 명시했습니다. 자세한 내용은 [`docs/releases/0.9.2.md`](docs/releases/0.9.2.md) 참고.
+Helm v0.9.3은 릴리즈 버전 정합성 검사를 추가하고 README 릴리즈 목록을 최신 노트 중심으로 정리합니다. 자세한 내용은 [`docs/releases/0.9.3.md`](docs/releases/0.9.3.md) 참고.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 
