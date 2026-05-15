@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 AI agent workspace를 위한 로컬 운영 레이어입니다. 명령 전 profile, 위험 작업 전 checkpoint, chat이 사라진 뒤에도 남는 durable task history를 제공합니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.9.4</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.9.5</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -131,6 +131,7 @@ helm dashboard --path ~/.helm/workspace
 - **File-backed memory**: 다음 실행이 chat history가 아니라 파일에 남은 durable state에서 이어지게 합니다.
 - **Context retrieval**: notes, memory, ontology, tasks, commands, checkpoints를 하나의 inspectable query surface로 정렬합니다.
 - **Privacy boundary**: private text가 tool, API, report, remote handoff 경계를 넘기 전에 scan/tokenize합니다.
+- **Operations digest**: capture 상태, artifact fingerprint, connector freshness, review pressure를 private workspace 내용 없이 요약합니다.
 
 | 반복 에이전트 운영 문제 | Helm이 더하는 것 |
 | --- | --- |
@@ -142,6 +143,7 @@ helm dashboard --path ~/.helm/workspace
 | skill 규칙이 프롬프트에만 남음 | `SKILL.md` guidance와 `contract.json` 실행 정책 |
 | model fallback이 즉흥적으로 결정됨 | file-backed health check와 fallback selection |
 | 운영 상태가 흩어짐 | workspace layout, adopted sources, SQLite query index |
+| 장기 연동이 조용히 stale 상태가 됨 | connector freshness probe와 daily digest review queue |
 
 Helm은 원칙적으로 runtime-agnostic이지만, state, memory, profiles, checkpoints, task history가 있는 persistent workspace를 1차 대상으로 설계되었습니다.
 
@@ -250,7 +252,11 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
 - [`docs/privacy-boundary.md`](docs/privacy-boundary.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
+- [`docs/task-state.md`](docs/task-state.md)
+- [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
+- [`docs/evidence-label-convention.md`](docs/evidence-label-convention.md)
+- [`docs/hitl-decision-patterns.md`](docs/hitl-decision-patterns.md)
 - [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
 
 포지셔닝:
@@ -269,14 +275,14 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
-- 최신: [`docs/releases/0.9.4.md`](docs/releases/0.9.4.md)
-- 최근: [`0.9.3`](docs/releases/0.9.3.md), [`0.9.2`](docs/releases/0.9.2.md)
+- 최신: [`docs/releases/0.9.5.md`](docs/releases/0.9.5.md)
+- 최근: [`0.9.4`](docs/releases/0.9.4.md), [`0.9.3`](docs/releases/0.9.3.md)
 
 이전 릴리즈 노트는 [`docs/releases/`](docs/releases/)에 있습니다.
 
 ## 현재 상태
 
-Helm v0.9.4는 release smoke 패키징 검증과 단일 패키지 버전 source를 추가합니다. 자세한 내용은 [`docs/releases/0.9.4.md`](docs/releases/0.9.4.md) 참고.
+Helm v0.9.5는 OpenHuman에서 차용한 operations digest 경계를 문서화하고 release metadata를 동기화합니다. 자세한 내용은 [`docs/releases/0.9.5.md`](docs/releases/0.9.5.md) 참고.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 

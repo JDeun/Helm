@@ -11,6 +11,23 @@
 - **PyPI publish hardening**: the publish workflow now runs `twine check` before publishing release artifacts.
 - **release smoke isolation**: package install verification now uses a smoke-run virtual environment instead of writing to the active user Python environment.
 
+## [0.9.5] — 2026-05-15
+
+### Added
+
+- **OpenHuman-inspired operations digest boundary**: documented the reusable pattern from OpenClaw dogfooding: artifact fingerprints, connector freshness, daily digest review queues, and recoverable JSONL retention.
+- **OpenClaw integration guidance**: expanded the integration doc with a public-safe boundary for promoting operations metadata without private memory, schedules, credentials, or raw task content.
+
+### Changed
+
+- **README positioning**: added operations digest and connector freshness to the core Helm value proposition in English and Korean.
+- **release metadata**: bumped package, citation, README, changelog, and release-note metadata to `0.9.5`.
+
+### Verification
+
+- `python3 scripts/release_version_check.py --version 0.9.5`
+- `python3 -m pytest -q`
+
 ## [0.9.4] — 2026-05-13
 
 ### Added

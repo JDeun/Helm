@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.9.4</strong></p>
+<p align="center"><strong>Current release: v0.9.5</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -131,6 +131,7 @@ Core ideas:
 - **File-backed memory**: keeps reusable context in files so later runs resume from durable state instead of chat history.
 - **Context retrieval**: ranks notes, memory, ontology, tasks, commands, and checkpoints through one inspectable query surface.
 - **Privacy boundary**: scans and tokenizes private text before it crosses tool, API, report, or remote handoff boundaries.
+- **Operations digest**: summarizes capture status, artifact fingerprints, connector freshness, and review pressure without exposing private workspace contents.
 
 | Repeated-agent problem | Helm adds |
 | --- | --- |
@@ -142,6 +143,7 @@ Core ideas:
 | Skill rules live in prompts | `SKILL.md` guidance plus `contract.json` execution policy |
 | Model fallback is ad hoc | File-backed health checks and fallback selection |
 | Operational state is scattered | Workspace layout, adopted sources, and SQLite query index |
+| Long-lived integrations silently go stale | Connector freshness probes and daily digest review queues |
 
 Helm is runtime-agnostic, but it is built first for persistent workspaces with state, memory, profiles, checkpoints, and task history.
 
@@ -253,6 +255,7 @@ Core concepts:
 - [`docs/privacy-boundary.md`](docs/privacy-boundary.md)
 - [`docs/task-finalization.md`](docs/task-finalization.md)
 - [`docs/task-state.md`](docs/task-state.md)
+- [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
 - [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
 - [`docs/evidence-label-convention.md`](docs/evidence-label-convention.md)
 - [`docs/hitl-decision-patterns.md`](docs/hitl-decision-patterns.md)
@@ -274,14 +277,14 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
-- Latest: [`docs/releases/0.9.4.md`](docs/releases/0.9.4.md)
-- Recent: [`0.9.3`](docs/releases/0.9.3.md), [`0.9.2`](docs/releases/0.9.2.md)
+- Latest: [`docs/releases/0.9.5.md`](docs/releases/0.9.5.md)
+- Recent: [`0.9.4`](docs/releases/0.9.4.md), [`0.9.3`](docs/releases/0.9.3.md)
 
 Older release notes live in [`docs/releases/`](docs/releases/).
 
 ## Status
 
-Helm v0.9.4 adds release-smoke packaging validation and a single package version source. See [`docs/releases/0.9.4.md`](docs/releases/0.9.4.md).
+Helm v0.9.5 documents the OpenHuman-inspired operations digest boundary and keeps release metadata in sync. See [`docs/releases/0.9.5.md`](docs/releases/0.9.5.md).
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

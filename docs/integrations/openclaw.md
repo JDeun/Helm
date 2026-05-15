@@ -28,6 +28,25 @@ helm status --path ~/.openclaw/workspace --brief
 helm report --path ~/.openclaw/workspace --format markdown
 ```
 
+## Operations Digest Boundary
+
+OpenHuman-inspired dogfooding in OpenClaw produced a reusable operations pattern that belongs in Helm as a public-safe primitive:
+
+- artifact registry rows should store path identity, content hash, byte size, role, source task metadata, and duplicate links
+- connector freshness rows should store last attempt, last success, stale threshold, last error, token scope label, and artifact count
+- daily digest output should summarize task status, capture status, artifact roles, connector freshness, and review queue pressure
+- retention policy should compact high-volume JSONL logs into recoverable archives instead of silently deleting history
+- status surfaces should expose summaries and pointers, not raw private memory, personal schedules, credentials, or task content
+
+The OpenClaw-specific part stays private:
+
+- actual connector names tied to personal accounts
+- raw memory captures, notes, schedules, and command outputs
+- local vault paths and private workspace state
+- user-specific automation cadence and notification routing
+
+The portable Helm rule is: preserve evidence and freshness metadata, but keep private content behind the workspace boundary.
+
 ## Promotion rule
 
 Promote to Helm only when a pattern is:
