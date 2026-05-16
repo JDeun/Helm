@@ -21,6 +21,7 @@ REQUIRED_REFERENCE_FILES = (
     "skill-capture-template.md",
     "skill-contract-template.json",
 )
+DEFAULT_SCRIPT_TIMEOUT_SECONDS = 1800
 
 
 def _warn_parse_failure(path: Path, detail: str) -> None:
@@ -95,12 +96,31 @@ def target_root(path: str | None, *, create: bool = False) -> Path:
     return resolved
 
 
+def script_timeout_seconds() -> float | None:
+    raw = os.environ.get("HELM_SCRIPT_TIMEOUT_SECONDS")
+    if raw is None or raw == "":
+        return float(DEFAULT_SCRIPT_TIMEOUT_SECONDS)
+    try:
+        value = float(raw)
+    except ValueError:
+        return float(DEFAULT_SCRIPT_TIMEOUT_SECONDS)
+    if value <= 0:
+        return None
+    return value
+
+
 def run_script(script_name: str, script_args: list[str], workspace: Path | None = None) -> int:
     script_path = SCRIPT_ROOT / script_name
     env = os.environ.copy()
     if workspace is not None:
         env["HELM_WORKSPACE"] = str(workspace)
-    result = subprocess.run([sys.executable, str(script_path), *script_args], env=env)
+    timeout = script_timeout_seconds()
+    try:
+        result = subprocess.run([sys.executable, str(script_path), *script_args], env=env, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timeout_label = "configured limit" if timeout is None else f"{timeout:g}s"
+        print(f"error: script timed out after {timeout_label}: {script_name}", file=sys.stderr)
+        return 124
     return result.returncode
 
 
@@ -116,6 +136,7 @@ __all__ = [
     "memory_review_queue_count_for",
     "relative_or_absolute",
     "target_root",
+    "script_timeout_seconds",
     "run_script",
     "adopt_context_source",
     "configured_context_sources",

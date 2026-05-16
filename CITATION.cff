@@ -8,7 +8,7 @@ authors:
 repository-code: "https://github.com/JDeun/Helm"
 url: "https://v0-helm-agent-ops.vercel.app/"
 license: "MIT"
-version: "0.9.5"
+version: "0.9.6"
 abstract: "Helm is a local operations layer for long-lived AI agent workspaces, adding execution profiles, guard decisions, checkpoints, task ledgers, context hydration, and recovery discipline around existing agent runtimes."
 keywords:
   - ai-agents

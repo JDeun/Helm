@@ -86,22 +86,25 @@ class SearchResult:
 
 
 def read_jsonl(path: Path) -> list[dict]:
+    return list(iter_jsonl(path))
+
+
+def iter_jsonl(path: Path) -> Iterable[dict]:
     if not path.exists():
-        return []
-    rows: list[dict] = []
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            print(f"warning: ignoring malformed JSONL line {lineno} in {path}: {exc}", file=sys.stderr)
-            continue
-        if not isinstance(payload, dict):
-            print(f"warning: ignoring non-object JSONL line {lineno} in {path}", file=sys.stderr)
-            continue
-        rows.append(payload)
-    return rows
+        return
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        for lineno, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                print(f"warning: ignoring malformed JSONL line {lineno} in {path}: {exc}", file=sys.stderr)
+                continue
+            if not isinstance(payload, dict):
+                print(f"warning: ignoring non-object JSONL line {lineno} in {path}", file=sys.stderr)
+                continue
+            yield payload
 
 
 def read_json_array(path: Path) -> list[dict]:
@@ -162,6 +165,25 @@ def matches_since(timestamp: str | None, since: str | None) -> bool:
     if not since or not timestamp:
         return True
     return timestamp >= since
+
+
+def _queryless_window(args: argparse.Namespace) -> int:
+    return max(args.limit * 20, 200)
+
+
+def iter_text_lines(path: Path) -> Iterable[tuple[int, str]]:
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        for lineno, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if stripped:
+                yield lineno, stripped
+
+
+def _safe_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def direct_inspection_hint(source: ContextSource, area: str, metadata: dict) -> str | None:
@@ -261,22 +283,25 @@ def load_note_results(source: ContextSource, args: argparse.Namespace) -> Iterab
     files.extend(source.curated_memory_files)
     for root in source.notes_roots:
         files.extend(text_files_under(root))
-    for path in sorted(dict.fromkeys(files)):
+    queryless = args.query is None
+    emitted = 0
+    unique_files = list(dict.fromkeys(files))
+    ordered_files = sorted(unique_files, key=_safe_mtime, reverse=True) if queryless else sorted(unique_files)
+    for path in ordered_files:
         if not path.exists() or not path.is_file():
             continue
         if source.ontology_root in path.parents:
             continue
         relpath = path.relative_to(source.root)
-        for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), start=1):
-            stripped = line.strip()
-            if not stripped:
-                continue
+        if queryless and any(part.startswith(".") for part in relpath.parts):
+            continue
+        for lineno, stripped in iter_text_lines(path):
             if not matches_query(stripped, args.query):
                 continue
             timestamp = None
             if path.parent.name == "memory" and path.stem[:4].isdigit():
                 timestamp = path.stem
-            yield result_for(
+            result = result_for(
                 source,
                 "notes",
                 "note-line",
@@ -285,33 +310,50 @@ def load_note_results(source: ContextSource, args: argparse.Namespace) -> Iterab
                 stripped,
                 {"path": str(relpath), "line": lineno},
             )
+            if queryless:
+                yield result
+                emitted += 1
+                if emitted >= _queryless_window(args):
+                    return
+            else:
+                yield result
 
 
 def load_memory_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
     memory_root = source.memory_root
     if not memory_root.exists():
         return
-    for path in sorted(memory_root.rglob("*")):
+    queryless = args.query is None
+    emitted = 0
+    paths = [path for path in memory_root.rglob("*") if path.is_file()]
+    ordered_paths = sorted(paths, key=_safe_mtime, reverse=True) if queryless else sorted(paths)
+    for path in ordered_paths:
         if not path.is_file():
             continue
         if source.ontology_root in path.parents:
             continue
         relpath = path.relative_to(source.root)
+        if queryless and any(part.startswith(".") for part in relpath.parts):
+            continue
         if path.suffix in {".json", ".jsonl"}:
             blob = path.read_text(encoding="utf-8", errors="ignore")
             if not matches_query(blob, args.query):
                 continue
-            yield result_for(source, "memory", "structured-file", None, str(relpath), blob[:240], {"path": str(relpath)})
+            result = result_for(source, "memory", "structured-file", None, str(relpath), blob[:240], {"path": str(relpath)})
+            if queryless:
+                yield result
+                emitted += 1
+                if emitted >= _queryless_window(args):
+                    return
+            else:
+                yield result
             continue
         if path.suffix not in {".md", ".txt"}:
             continue
-        for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), start=1):
-            stripped = line.strip()
-            if not stripped:
-                continue
+        for lineno, stripped in iter_text_lines(path):
             if not matches_query(stripped, args.query):
                 continue
-            yield result_for(
+            result = result_for(
                 source,
                 "memory",
                 "memory-line",
@@ -320,10 +362,17 @@ def load_memory_results(source: ContextSource, args: argparse.Namespace) -> Iter
                 stripped,
                 {"path": str(relpath), "line": lineno},
             )
+            if queryless:
+                yield result
+                emitted += 1
+                if emitted >= _queryless_window(args):
+                    return
+            else:
+                yield result
 
 
 def load_ontology_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
-    for entity in read_jsonl(source.ontology_root / "entities.jsonl"):
+    for entity in iter_jsonl(source.ontology_root / "entities.jsonl"):
         properties = entity.get("properties", {})
         blob = json.dumps(entity, ensure_ascii=False)
         if not matches_query(blob, args.query):
@@ -347,7 +396,7 @@ def load_ontology_results(source: ContextSource, args: argparse.Namespace) -> It
             metadata,
         )
 
-    for relation in read_jsonl(source.ontology_root / "relations.jsonl"):
+    for relation in iter_jsonl(source.ontology_root / "relations.jsonl"):
         blob = json.dumps(relation, ensure_ascii=False)
         if not matches_query(blob, args.query):
             continue
@@ -374,11 +423,11 @@ def load_ontology_graph_neighbors(source: ContextSource, args: argparse.Namespac
         return
     entities = {
         str(entity.get("id")): entity
-        for entity in read_jsonl(source.ontology_root / "entities.jsonl")
+        for entity in iter_jsonl(source.ontology_root / "entities.jsonl")
         if entity.get("id")
     }
     yielded_entities: set[str] = set()
-    for relation in read_jsonl(source.ontology_root / "relations.jsonl"):
+    for relation in iter_jsonl(source.ontology_root / "relations.jsonl"):
         relation_from = str(relation.get("from") or "")
         relation_to = str(relation.get("to") or "")
         if args.entity not in {relation_from, relation_to}:
@@ -426,9 +475,10 @@ def load_ontology_graph_neighbors(source: ContextSource, args: argparse.Namespac
 
 
 def load_task_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
-    entries = read_jsonl(source.state_root / "task-ledger.jsonl")
     if args.latest_tasks:
-        entries = latest_tasks(entries)
+        entries: Iterable[dict] = latest_tasks(read_jsonl(source.state_root / "task-ledger.jsonl"))
+    else:
+        entries = iter_jsonl(source.state_root / "task-ledger.jsonl")
     for entry in entries:
         blob = json.dumps(entry, ensure_ascii=False)
         if not matches_query(blob, args.query):
@@ -470,7 +520,7 @@ def load_task_results(source: ContextSource, args: argparse.Namespace) -> Iterab
 
 
 def load_command_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
-    for entry in read_jsonl(source.state_root / "command-log.jsonl"):
+    for entry in iter_jsonl(source.state_root / "command-log.jsonl"):
         blob = json.dumps(entry, ensure_ascii=False)
         if not matches_query(blob, args.query):
             continue

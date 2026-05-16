@@ -201,7 +201,7 @@ def build_hydration_commands(contract: dict) -> list[list[str]]:
     commands: list[list[str]] = [
         [
             sys.executable,
-            str(WORKSPACE / "scripts" / "ops_memory_query.py"),
+            str(ROOT / "scripts" / "ops_memory_query.py"),
             str(context.get("query") or ""),
         ]
     ]
@@ -216,7 +216,7 @@ def build_hydration_commands(contract: dict) -> list[list[str]]:
         commands.append(
             [
                 sys.executable,
-                str(WORKSPACE / "scripts" / "ops_memory_query.py"),
+                str(ROOT / "scripts" / "ops_memory_query.py"),
                 "--failed-only",
                 "--limit",
                 str(context.get("failed_limit", 6)),

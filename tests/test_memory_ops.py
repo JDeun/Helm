@@ -224,6 +224,34 @@ def test_review_queue_hides_task_closed_by_supersede_operation() -> None:
         assert payload["count"] == 0
 
 
+def test_review_queue_ignores_no_capture_low_confidence_tasks() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_workspace(root)
+        ledger_entry = {
+            "task_id": "task-smoke",
+            "task_name": "smoke probe",
+            "profile": "inspect_local",
+            "status": "completed",
+            "memory_capture": {
+                "relevant": False,
+                "finalization_status": "no_capture_needed",
+                "claim_state": {"confidence_hint": "low"},
+                "review_flags": [{"type": "low_confidence_review", "severity": "low"}],
+                "supersession": {"state": "not_applicable", "supersedes_task_ids": []},
+            },
+        }
+        (root / ".helm" / "task-ledger.jsonl").write_text(json.dumps(ledger_entry) + "\n", encoding="utf-8")
+
+        queue = run_cli(root, "memory", "review-queue", "--json")
+        assert queue.returncode == 0, queue.stderr
+        assert json.loads(queue.stdout)["count"] == 0
+
+        audit = run_cli(root, "memory", "audit-coherence", "--json")
+        assert audit.returncode == 0, audit.stderr
+        assert json.loads(audit.stdout)["issue_count"] == 0
+
+
 def test_memory_coherence_audit_reports_cross_layer_gaps() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)

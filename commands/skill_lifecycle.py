@@ -44,6 +44,14 @@ from scripts.skill_lifecycle_lib import (
     update_negative_claim_revalidation,
 )
 
+SKILL_CAPTURE_TIMEOUT_SECONDS = 120
+
+
+def _timeout_text(value: str | bytes | None) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value or ""
+
 
 def _human_bytes(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
@@ -467,7 +475,25 @@ def cmd_skill_lifecycle_promote_from_trajectory(args: argparse.Namespace) -> int
         print("dry_run=true")
         print("command=" + " ".join(payload["command"]))
         return 0
-    result = subprocess.run(payload["command"], cwd=str(paths.workspace), capture_output=True, text=True)
+    try:
+        result = subprocess.run(
+            payload["command"],
+            cwd=str(paths.workspace),
+            capture_output=True,
+            text=True,
+            timeout=SKILL_CAPTURE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        payload["returncode"] = 124
+        payload["stdout"] = _timeout_text(exc.stdout)
+        payload["stderr"] = _timeout_text(exc.stderr) or f"skill capture timed out after {SKILL_CAPTURE_TIMEOUT_SECONDS}s"
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            if payload["stdout"]:
+                print(payload["stdout"], end="")
+            print(payload["stderr"], end="", file=sys.stderr)
+        return 124
     payload["returncode"] = result.returncode
     payload["stdout"] = result.stdout
     payload["stderr"] = result.stderr

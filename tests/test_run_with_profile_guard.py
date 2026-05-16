@@ -398,6 +398,14 @@ def test_checkpoint_timeout_returns_error_dict():
     assert "timed out" in result["error"]
 
 
+def test_checkpoint_script_uses_package_copy_not_workspace_copy():
+    from scripts.run_with_profile import CHECKPOINT_SCRIPT
+
+    assert CHECKPOINT_SCRIPT.exists()
+    assert CHECKPOINT_SCRIPT.name == "workspace_checkpoint.py"
+    assert CHECKPOINT_SCRIPT.parent.name == "scripts"
+
+
 # ---------------------------------------------------------------------------
 # H4: minimal environment for restricted profiles
 # ---------------------------------------------------------------------------

@@ -62,7 +62,7 @@ def test_skill_relevance_accepts_runner_signal() -> None:
         contract={"runner": {"entrypoint": "flightclaw-search"}},
         request="항공권 검색",
         task_name=None,
-        command=["/Users/kevin/.local/bin/flightclaw-search", "SEL", "NYC"],
+        command=["flightclaw-search", "SEL", "NYC"],
     )
 
     assert payload["verdict"] in {"weak", "strong"}

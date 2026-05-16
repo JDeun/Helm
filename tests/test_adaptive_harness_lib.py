@@ -37,6 +37,8 @@ def test_build_hydration_commands_omits_empty_include_flags() -> None:
     assert len(commands) == 1
     assert "--include" not in commands[0]
     assert commands[0][-2:] == ["--limit", "4"]
+    assert Path(commands[0][1]).exists()
+    assert Path(commands[0][1]).name == "ops_memory_query.py"
 
 
 def test_latest_task_entry_skips_malformed_jsonl_rows() -> None:

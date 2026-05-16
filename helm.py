@@ -9,7 +9,6 @@ from pathlib import Path
 from helm_workspace import DEFAULT_WORKSPACE
 
 from commands.checkpoint import (
-    cmd_checkpoint,
     cmd_checkpoint_create,
     cmd_checkpoint_finalize,
     cmd_checkpoint_list,
@@ -191,6 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--json", action="store_true")
     status.add_argument("--verbose", action="store_true")
     status.add_argument("--brief", action="store_true", help="Print a compact health-oriented status summary.")
+    status.add_argument("--public", action="store_true", help="Redact local paths and captured command output from status payloads.")
     status.set_defaults(func=cmd_status)
 
     dashboard = subparsers.add_parser("dashboard", help="Show a compact local operations dashboard.")
@@ -609,6 +609,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     report.add_argument("--limit", type=int, default=20)
     report.add_argument("--format", choices=["text", "json", "markdown", "html"], default="text")
+    report.add_argument("--public", action="store_true", help="Redact local paths and captured command output from reports.")
     report.set_defaults(func=cmd_report)
 
     db = subparsers.add_parser("db", help="Manage the SQLite operations index.")

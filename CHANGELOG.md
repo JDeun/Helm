@@ -2,14 +2,28 @@
 
 ## Unreleased
 
+## [0.9.6] — 2026-05-16
+
 ### Added
 
 - **CI release gate**: added a GitHub Actions workflow that runs tests, release-version consistency, package build, and package metadata checks on pushes and pull requests.
+- **timeout regression coverage**: added tests for Helm script-runner timeout handling and skill promotion timeout handling.
 
 ### Changed
 
 - **PyPI publish hardening**: the publish workflow now runs `twine check` before publishing release artifacts.
 - **release smoke isolation**: package install verification now uses a smoke-run virtual environment instead of writing to the active user Python environment.
+- **adaptive harness timeouts**: auto-hydration and wrapper execution now fail with explicit timeout status instead of waiting indefinitely.
+- **CLI script-runner timeout**: Helm command wrappers now enforce a default script timeout, with `HELM_SCRIPT_TIMEOUT_SECONDS=0` available for deliberate unlimited runs.
+
+### Fixed
+
+- **skill promotion hangs**: `skill-lifecycle promote-from-trajectory --apply` now returns `124` when draft generation exceeds its timeout.
+
+### Verification
+
+- `python3 scripts/release_version_check.py --version 0.9.6`
+- `python3 -m pytest -q`
 
 ## [0.9.5] — 2026-05-15
 

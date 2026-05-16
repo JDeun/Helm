@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import tarfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -75,6 +76,32 @@ def archive_members(record: CheckpointRecord) -> list[str]:
         raise ValueError(f"archive missing: {archive_path}")
     with tarfile.open(archive_path, "r:gz") as tar:
         return sorted(member.name for member in tar.getmembers() if member.isfile())
+
+
+def validate_archive_member(member: tarfile.TarInfo) -> Path:
+    if member.issym() or member.islnk():
+        raise ValueError(f"archive contains unsupported link member: {member.name}")
+    if not (member.isfile() or member.isdir()):
+        raise ValueError(f"archive contains unsupported member type: {member.name}")
+    member_path = (WORKSPACE / member.name).resolve()
+    workspace_resolved = WORKSPACE.resolve()
+    if workspace_resolved not in member_path.parents and member_path != workspace_resolved:
+        raise ValueError(f"archive member escapes workspace: {member.name}")
+    return member_path
+
+
+def extract_validated_members(tar: tarfile.TarFile, members: list[tarfile.TarInfo]) -> None:
+    for member in members:
+        target = validate_archive_member(member)
+        if member.isdir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        source = tar.extractfile(member)
+        if source is None:
+            raise ValueError(f"archive member is not extractable: {member.name}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with source, target.open("wb") as handle:
+            shutil.copyfileobj(source, handle)
 
 
 def create_checkpoint(args: argparse.Namespace) -> int:
@@ -152,13 +179,8 @@ def restore_checkpoint(args: argparse.Namespace) -> int:
     with tarfile.open(archive_path, "r:gz") as tar:
         members = tar.getmembers()
         for member in members:
-            if member.issym() or member.islnk():
-                raise ValueError(f"archive contains unsupported link member: {member.name}")
-            member_path = (WORKSPACE / member.name).resolve()
-            workspace_resolved = WORKSPACE.resolve()
-            if workspace_resolved not in member_path.parents and member_path != workspace_resolved:
-                raise ValueError(f"archive member escapes workspace: {member.name}")
-        tar.extractall(path=WORKSPACE)
+            validate_archive_member(member)
+        extract_validated_members(tar, members)
 
     print(f"Restored {record.checkpoint_id} into {WORKSPACE}")
     return 0

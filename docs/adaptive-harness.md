@@ -86,7 +86,7 @@ For Obsidian-backed workflows, one validator can branch by extension while still
 reporting the same Helm evidence shape:
 
 ```bash
-python3 ~/.openclaw/workspace/scripts/obsidian_artifact_validate.py \
+python3 <workspace>/scripts/obsidian_artifact_validate.py \
   --path ~/Documents/ObsidianVault/04-Resources/Notes/Maps/project-candidates.canvas \
   --json
 ```
@@ -123,5 +123,5 @@ New skills do not need central harness edits anymore if they ship their own `con
 helm harness --path ~/.helm/workspace policy
 helm harness --path examples/demo-workspace contract --skill router-context-demo
 helm harness --path examples/demo-workspace preflight --skill router-context-demo --profile inspect_local --model gemma4:e4b --task-name "router triage" --request "라우터 변경 전에 필요한 컨텍스트를 먼저 점검해줘" -- python3 -c 'print("ok")'
-python3 /Users/kevin/Helm/scripts/reply_gate.py --json
+python3 scripts/reply_gate.py --json
 ```

@@ -78,6 +78,27 @@ def test_scan_registers_all_skills(tmp_path: Path) -> None:
     assert set(usage["skills"].keys()) == {"alpha", "beta", "gamma"}
 
 
+def test_lifecycle_paths_use_helm_state_root_for_helm_workspace(tmp_path: Path) -> None:
+    (tmp_path / ".helm").mkdir()
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    assert paths.lifecycle_root == tmp_path.resolve() / ".helm" / "skill-lifecycle"
+
+
+def test_lifecycle_ledger_correlation_uses_helm_state_root(tmp_path: Path) -> None:
+    (tmp_path / ".helm").mkdir()
+    paths = LifecyclePaths.for_workspace(tmp_path)
+    append_event(paths, {"event": "skill_used", "skill_id": "alpha", "task_id": "task-1"})
+    (tmp_path / ".helm" / "task-ledger.jsonl").write_text(
+        json.dumps({"task_id": "task-1", "task_name": "Helm task", "status": "completed"}) + "\n",
+        encoding="utf-8",
+    )
+
+    rows = correlate_events_with_ledger(paths)
+
+    assert rows[0]["task_name"] == "Helm task"
+    assert rows[0]["task_status"] == "completed"
+
+
 def test_scan_is_idempotent(tmp_path: Path) -> None:
     _write_skill(tmp_path, "alpha")
     paths = LifecyclePaths.for_workspace(tmp_path)
@@ -905,7 +926,7 @@ def test_correlate_events_with_ledger_joins_task_metadata(tmp_path: Path) -> Non
     paths = LifecyclePaths.for_workspace(tmp_path)
     scan(paths)
 
-    ledger_path = tmp_path / ".openclaw" / "task-ledger.jsonl"
+    ledger_path = paths.lifecycle_root.parent / "task-ledger.jsonl"
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     ledger_path.write_text(
         json.dumps({

@@ -6,6 +6,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from helm_workspace import get_workspace_layout
 
 
@@ -100,6 +104,17 @@ def _resolved_task_ids_for_state(state_root: Path) -> set[str]:
     return resolved
 
 
+def _is_review_relevant(memory_capture: dict, finalization: str) -> bool:
+    if memory_capture.get("relevant"):
+        return True
+    if finalization in {"capture_planned", "capture_partial", "capture_written"}:
+        return True
+    supersession = memory_capture.get("supersession") or {}
+    if supersession.get("supersedes_task_ids"):
+        return True
+    return False
+
+
 def review_queue_items(state_root: Path, limit: int | None = None) -> list[dict]:
     crystallized = _crystallized_task_ids_for_state(state_root)
     operations_by_task = _operations_by_task_for_state(state_root)
@@ -113,6 +128,8 @@ def review_queue_items(state_root: Path, limit: int | None = None) -> list[dict]
         claim_state = memory_capture.get("claim_state") or {}
         task_id = str(task.get("task_id") or "")
         if task_id and task_id in resolved_task_ids:
+            continue
+        if not _is_review_relevant(memory_capture, finalization):
             continue
         task_ops = operations_by_task.get(task_id, [])
 

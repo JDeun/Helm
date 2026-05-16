@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -30,6 +31,32 @@ from commands.context import (
     latest_tasks,
     load_draft_assessments,
 )
+
+
+SENSITIVE_OUTPUT_KEYS = {"stdout", "stderr"}
+PATH_PATTERN = re.compile(r"(?<![\w.-])(?:/Users|/private/var|/var/folders|/tmp)/[^\s`\"']+")
+
+
+def _redact_string(value: str, home: Path) -> str:
+    redacted = PATH_PATTERN.sub("<LOCAL_PATH>", value)
+    return redacted.replace(str(home), "<LOCAL_PATH>")
+
+
+def public_safe_payload(value: object, *, home: Path | None = None) -> object:
+    local_home = home or Path.home()
+    if isinstance(value, dict):
+        sanitized: dict = {}
+        for key, item in value.items():
+            if key in SENSITIVE_OUTPUT_KEYS and item not in (None, ""):
+                sanitized[key] = "<redacted>"
+                continue
+            sanitized[key] = public_safe_payload(item, home=local_home)
+        return sanitized
+    if isinstance(value, list):
+        return [public_safe_payload(item, home=local_home) for item in value]
+    if isinstance(value, str):
+        return _redact_string(value, local_home)
+    return value
 
 
 def build_status_payload(root: Path) -> dict:
@@ -401,6 +428,9 @@ def cmd_status(args: argparse.Namespace) -> int:
     root = target_root(args.path)
     payload = build_status_payload(root)
     onboarding = build_onboarding_payload(root)
+    if getattr(args, "public", False):
+        payload = public_safe_payload(payload)
+        onboarding = public_safe_payload(onboarding)
     if args.json:
         payload["onboarding"] = onboarding
         print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -512,6 +542,8 @@ def cmd_report(args: argparse.Namespace) -> int:
     root = target_root(args.path)
     payload = build_report_payload(root, args.limit)
     payload["onboarding"] = build_onboarding_payload(root)
+    if getattr(args, "public", False):
+        payload = public_safe_payload(payload)
     if args.format == "json":
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0

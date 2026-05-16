@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.9.5</strong></p>
+<p align="center"><strong>Current release: v0.9.6</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -277,14 +277,14 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
-- Latest: [`docs/releases/0.9.5.md`](docs/releases/0.9.5.md)
-- Recent: [`0.9.4`](docs/releases/0.9.4.md), [`0.9.3`](docs/releases/0.9.3.md)
+- Latest: [`docs/releases/0.9.6.md`](docs/releases/0.9.6.md)
+- Recent: [`0.9.5`](docs/releases/0.9.5.md), [`0.9.4`](docs/releases/0.9.4.md)
 
 Older release notes live in [`docs/releases/`](docs/releases/).
 
 ## Status
 
-Helm v0.9.5 documents the OpenHuman-inspired operations digest boundary and keeps release metadata in sync. See [`docs/releases/0.9.5.md`](docs/releases/0.9.5.md).
+Helm v0.9.6 hardens long-running orchestration paths with explicit timeout handling and keeps release metadata in sync. See [`docs/releases/0.9.6.md`](docs/releases/0.9.6.md).
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 

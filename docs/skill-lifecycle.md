@@ -34,11 +34,12 @@ This layer answers the basic questions:
 
 ## Layout
 
-All metadata lives next to the workspace it describes, under
-`<workspace>/.openclaw/skill-lifecycle/`:
+All metadata lives next to the workspace it describes, under the detected
+workspace state root (`.helm/` for Helm-native workspaces, `.openclaw/` for
+OpenClaw-shaped workspaces):
 
 ```
-<workspace>/.openclaw/skill-lifecycle/
+<workspace>/<state-root>/skill-lifecycle/
 ├── usage.json     central per-skill metadata index
 ├── events.jsonl   append-only event log
 └── config.json    policy / thresholds
@@ -193,8 +194,8 @@ PRD explicitly rules out automatic merging.
 
 ### `helm skill-lifecycle ledger`
 
-Print lifecycle events joined with rows from
-`<workspace>/.openclaw/task-ledger.jsonl` by `task_id`. When a runner
+Print lifecycle events joined with rows from the detected state root's
+`task-ledger.jsonl` by `task_id`. When a runner
 event carries a `task_id`, the matching ledger row contributes
 `task_name`, `task_status`, `exit_code`, `started_at`, `finished_at`,
 and `profile` to the event line.

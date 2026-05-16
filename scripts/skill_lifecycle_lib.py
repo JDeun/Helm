@@ -3,10 +3,10 @@
 Sidecar telemetry for skills installed in a Helm/OpenClaw workspace. Records
 view/use/patch counts and lifecycle state without modifying SKILL.md content.
 
-Layout under workspace root:
-    .openclaw/skill-lifecycle/usage.json     central per-skill index
-    .openclaw/skill-lifecycle/events.jsonl   append-only event log
-    .openclaw/skill-lifecycle/config.json    policy/config
+Layout under workspace state root:
+    <state-root>/skill-lifecycle/usage.json     central per-skill index
+    <state-root>/skill-lifecycle/events.jsonl   append-only event log
+    <state-root>/skill-lifecycle/config.json    policy/config
 
 Skills are discovered under <workspace>/skills/. Archived skills live in
 <workspace>/skills/.archive/<skill-name>/.
@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from helm_workspace import detect_layout
 from scripts.state_io import append_jsonl_atomic
 
 
@@ -63,11 +64,13 @@ class LifecyclePaths:
 
     @classmethod
     def for_workspace(cls, workspace: Path) -> "LifecyclePaths":
-        skills_root = workspace / "skills"
+        resolved = workspace.expanduser().resolve()
+        state_root = detect_layout(resolved).state_root
+        skills_root = resolved / "skills"
         archive_root = skills_root / ".archive"
-        lifecycle_root = workspace / ".openclaw" / "skill-lifecycle"
+        lifecycle_root = state_root / "skill-lifecycle"
         return cls(
-            workspace=workspace,
+            workspace=resolved,
             skills_root=skills_root,
             archive_root=archive_root,
             lifecycle_root=lifecycle_root,
@@ -1636,7 +1639,7 @@ def read_events(paths: LifecyclePaths, *, skill_id: str | None = None, limit: in
 
 
 def _task_ledger_path(workspace: Path) -> Path:
-    return workspace / ".openclaw" / "task-ledger.jsonl"
+    return detect_layout(workspace.expanduser().resolve()).state_root / "task-ledger.jsonl"
 
 
 def read_task_ledger_index(workspace: Path) -> dict[str, dict[str, Any]]:

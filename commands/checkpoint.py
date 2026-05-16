@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from commands import (
-    discover_workspace,
     read_json,
     read_jsonl,
     run_script,
@@ -172,16 +171,32 @@ def cmd_checkpoint_list(args: argparse.Namespace) -> int:
 
 
 def _checkpoint_archive_size(root: Path, item: dict) -> int:
-    archive = item.get("archive")
-    if not archive:
+    archive_path = _checkpoint_archive_path(root, item)
+    if archive_path is None:
         return 0
-    archive_path = Path(str(archive))
-    if not archive_path.is_absolute():
-        archive_path = root / archive_path
     try:
         return archive_path.stat().st_size
     except OSError:
         return 0
+
+
+def _checkpoint_archive_path(root: Path, item: dict) -> Path | None:
+    archive = item.get("archive")
+    if not archive:
+        return None
+    archive_path = Path(str(archive))
+    if archive_path.is_absolute():
+        return archive_path
+
+    state_root = state_root_for(root)
+    candidates = (
+        root / archive_path,
+        state_root / "checkpoints" / archive_path,
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def build_checkpoint_prune_plan(root: Path, *, keep_recent: int, keep_days: int, max_total_mb: int | None = None) -> dict:
@@ -266,9 +281,9 @@ def _apply_checkpoint_prune(root: Path, plan: dict) -> None:
         archive = item.get("archive")
         if not archive:
             continue
-        archive_path = Path(str(archive))
-        if not archive_path.is_absolute():
-            archive_path = state_root / "checkpoints" / archive_path
+        archive_path = _checkpoint_archive_path(root, item)
+        if archive_path is None:
+            continue
         try:
             archive_path.unlink()
         except FileNotFoundError:
@@ -422,16 +437,3 @@ def cmd_checkpoint_finalize(args: argparse.Namespace) -> int:
         print(f"checkpoint_id={checkpoint.get('checkpoint_id')}")
         print(f"checkpoint_label={checkpoint.get('label')}")
     return 0
-
-
-def cmd_checkpoint(args: argparse.Namespace) -> int:
-    root = target_root(args.path) if args.path else discover_workspace().root
-    if args.args:
-        subcommand, *remainder = args.args
-        if subcommand == "finalize":
-            parser = argparse.ArgumentParser(prog="helm checkpoint finalize")
-            parser.add_argument("--task-id")
-            parser.add_argument("--json", action="store_true")
-            parsed = parser.parse_args(remainder)
-            return cmd_checkpoint_finalize(argparse.Namespace(path=str(root), task_id=parsed.task_id, json=parsed.json))
-    return run_script("workspace_checkpoint.py", args.args, root)

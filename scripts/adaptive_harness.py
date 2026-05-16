@@ -5,6 +5,7 @@ import argparse
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 from adaptive_harness_lib import (
     WORKSPACE,
@@ -22,7 +23,16 @@ from adaptive_harness_lib import (
 )
 
 
-RUN_WITH_PROFILE = WORKSPACE / "scripts" / "run_with_profile.py"
+ROOT = Path(__file__).resolve().parents[1]
+RUN_WITH_PROFILE = ROOT / "scripts" / "run_with_profile.py"
+HYDRATION_TIMEOUT_SECONDS = 120
+RUNNER_TIMEOUT_SECONDS = 1900
+
+
+def _timeout_text(value: str | bytes | None) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value or ""
 
 
 def cmd_policy(_: argparse.Namespace) -> int:
@@ -69,7 +79,28 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     if args.auto_hydrate and payload["hydration_commands"]:
         for command in payload["hydration_commands"]:
-            result = subprocess.run(command, cwd=str(WORKSPACE), capture_output=True, text=True)
+            try:
+                result = subprocess.run(
+                    command,
+                    cwd=str(WORKSPACE),
+                    capture_output=True,
+                    text=True,
+                    timeout=HYDRATION_TIMEOUT_SECONDS,
+                )
+            except subprocess.TimeoutExpired as exc:
+                hydration_outputs.append(
+                    {
+                        "command": command,
+                        "exit_code": 124,
+                        "stdout": _timeout_text(exc.stdout).strip().splitlines()[:20],
+                        "stderr": (
+                            _timeout_text(exc.stderr).strip()
+                            or f"hydration command timed out after {HYDRATION_TIMEOUT_SECONDS}s"
+                        ),
+                    }
+                )
+                print(json.dumps({"preflight": payload, "hydration": hydration_outputs}, indent=2, ensure_ascii=False))
+                return 124
             hydration_outputs.append(
                 {
                     "command": command,
@@ -126,7 +157,20 @@ def cmd_run(args: argparse.Namespace) -> int:
     run_cmd.extend(["--delivery-mode", args.delivery_mode, "--"])
     run_cmd.extend(args.command)
 
-    result = subprocess.run(run_cmd, cwd=str(WORKSPACE))
+    try:
+        result = subprocess.run(run_cmd, cwd=str(WORKSPACE), timeout=RUNNER_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        output = {
+            "preflight": payload,
+            "hydration": hydration_outputs,
+            "run_exit_code": 124,
+            "postflight": {
+                "ok": False,
+                "error": f"runner timed out after {RUNNER_TIMEOUT_SECONDS}s",
+            },
+        }
+        print(json.dumps(output, indent=2, ensure_ascii=False))
+        return 124
     ensure_task_evidence(payload["task_id"], payload["contract"])
     postflight = postflight_payload(payload["task_id"], payload["contract"], payload["enforcement_level"])
     completion_failure = postflight_check_failed(postflight, "completion_policy")

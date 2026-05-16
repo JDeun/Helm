@@ -127,6 +127,36 @@ def test_status_surfaces_memory_operation_and_crystallized_counts() -> None:
         assert "memory_review_queue_count=1" in result.stdout
 
 
+def test_status_public_redacts_local_paths_and_command_output() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        private_path = str(Path.home() / "Documents" / "secret-note.md")
+        (root / ".helm" / "command-log.jsonl").write_text(
+            json.dumps(
+                {
+                    "label": "private command",
+                    "command": ["cat", private_path],
+                    "exit_code": 1,
+                    "stdout": "private stdout",
+                    "stderr": f"failed at {private_path}",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = run_cli("status", "--path", str(root), "--json", "--public")
+
+        assert result.returncode == 0, result.stderr
+        assert str(Path.home()) not in result.stdout
+        assert "private stdout" not in result.stdout
+        payload = json.loads(result.stdout)
+        failed = payload["recent_failed_commands"][0]
+        assert failed["stdout"] == "<redacted>"
+        assert failed["stderr"] == "<redacted>"
+
+
 def test_status_brief_surfaces_health_and_next_action() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
@@ -510,6 +540,44 @@ def test_checkpoint_prune_keeps_recent_referenced_and_pinned() -> None:
         assert not (checkpoint_dir / "old.tar.gz").exists()
 
 
+def test_checkpoint_prune_deletes_workspace_relative_archive_paths() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_minimal_workspace(root)
+        archive_path = root / ".helm" / "checkpoints" / "cp-old" / "snapshot.tar.gz"
+        archive_path.parent.mkdir(parents=True)
+        archive_path.write_text("archive\n", encoding="utf-8")
+        (root / ".helm" / "checkpoints" / "index.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "checkpoint_id": "cp-old",
+                        "label": "old",
+                        "created_at": "2026-01-01T00:00:00+00:00",
+                        "archive": ".helm/checkpoints/cp-old/snapshot.tar.gz",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_cli(
+            "checkpoint",
+            "prune",
+            "--path",
+            str(root),
+            "--keep-recent",
+            "0",
+            "--keep-days",
+            "0",
+            "--apply",
+            "--json",
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert not archive_path.exists()
+
+
 def test_checkpoint_protect_pins_checkpoint_for_prune() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
@@ -679,7 +747,7 @@ def test_skill_lifecycle_promote_from_trajectory_dry_run() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
         create_minimal_workspace(root)
-        lifecycle = root / ".openclaw" / "skill-lifecycle"
+        lifecycle = root / ".helm" / "skill-lifecycle"
         lifecycle.mkdir(parents=True)
         (lifecycle / "events.jsonl").write_text(
             json.dumps(
