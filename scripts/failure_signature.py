@@ -85,12 +85,11 @@ _ERROR_CLASS_PATTERNS: list[tuple[re.Pattern, str]] = [
     # Obsidian vault / link maintenance errors.
     # `wikilink` alone matches non-Obsidian wiki systems (MediaWiki, Confluence);
     # require either the `malformed.*wikilink` shape or an explicit obsidian
-    # marker. The bare `obsidian` alternative covers `obsidian.*vault.*not found`
+    # marker. The bare `obsidian` alternative covers `obsidian_link_maintenance`
     # too, so the latter is omitted as redundant.
     (re.compile(
         r"obsidian"
-        r"|malformed.*wikilink"
-        r"|obsidian_link_maintenance",
+        r"|malformed.*wikilink",
         re.I,
     ), "obsidian_link_maintenance"),
 
@@ -248,7 +247,6 @@ def _classify_from_event(event: dict) -> str:
     status = str(event.get("status") or "").lower()
     exit_code = event.get("exit_code")
     command = event.get("command") or []
-    cmd_str = " ".join(str(c) for c in command)
 
     # 1. Guard stage
     if failure_stage == "guard":
@@ -314,7 +312,7 @@ def _classify_component(event: dict, tool: str) -> str:
         return "external_api"
 
     # Obsidian is a local tool but workspace-coupled
-    if tool in ("obsidian_link_maintenance",):
+    if tool == "obsidian_link_maintenance":
         return "skill"
 
     # Shells
@@ -379,7 +377,6 @@ def _derive_target(event: dict, component: str, tool: str, profile: str | None) 
         return f"profile:{profile}" if profile else "profile:unknown"
 
     command = list(event.get("command") or [])
-    cmd_str = " ".join(str(c) for c in command)
 
     # For Google Sheets scripts, try to extract the range argument
     if tool in ("google_sheets_append_row", "google_sheets_read_range"):
