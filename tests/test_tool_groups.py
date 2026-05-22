@@ -286,7 +286,7 @@ def test_json_round_trip():
 def test_helm_and_workspace_tool_groups_are_identical():
     """Test 14: The tool_groups.json file is byte-identical in both worktrees."""
     helm_path = Path(__file__).resolve().parents[1] / "references" / "tool_groups.json"
-    workspace_path = Path.home() / ".openclaw" / "workspace" / ".worktrees" / "harness-eng" / "references" / "tool_groups.json"
+    workspace_path = Path.home() / ".openclaw" / "workspace" / "references" / "tool_groups.json"
 
     if not workspace_path.exists():
         import pytest
