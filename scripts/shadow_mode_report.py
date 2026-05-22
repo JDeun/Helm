@@ -2,6 +2,9 @@
 
 Wave 6 — harness-engineering rollout.
 
+See also :mod:`scripts.shadow_mode_recommendation` for the enforce-readiness
+decision layer that consumes this report's output.
+
 This module reads tail-sampled data from the task ledger, proxy-events JSONL,
 and skill-promotion state file to produce a structured report that Kevin uses
 to decide which features to flip from shadow to enforce.
@@ -36,6 +39,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from scripts.jsonl_io import read_jsonl
+from scripts.skill_promotion_state import load_state as _load_promotion_state
 
 __all__ = ["generate_report", "to_markdown"]
 
@@ -82,7 +86,16 @@ _TS_FIELDS = ["updated_at", "started_at", "timestamp", "created_at", "notified_a
 # ---------------------------------------------------------------------------
 
 def _parse_ts(entry: dict) -> datetime | None:
-    """Return a UTC-aware datetime from the first recognised timestamp field."""
+    """Return a UTC-aware datetime from the first recognised timestamp field.
+
+    Fields are tried in the order defined by ``_TS_FIELDS``:
+    ``updated_at``, ``started_at``, ``timestamp``, ``created_at``,
+    ``notified_at`` — first field with a parseable value wins.  Because
+    ``updated_at`` is tried first, the window filter uses the last-update
+    time of an entry, *not* the task creation time.  This means a task that
+    was updated recently will appear in the window even if it was created
+    outside the window.
+    """
     for field in _TS_FIELDS:
         raw = entry.get(field)
         if not raw:
@@ -304,24 +317,9 @@ def _agg_skill_promotion(skill_state_path: pathlib.Path) -> dict:
     rejected = 0
     pending = 0
 
-    if not skill_state_path.exists():
-        return {
-            "candidates_notified": 0,
-            "approved": 0,
-            "rejected": 0,
-            "pending": 0,
-        }
-
-    try:
-        data = json.loads(skill_state_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {
-            "candidates_notified": 0,
-            "approved": 0,
-            "rejected": 0,
-            "pending": 0,
-        }
-
+    # Delegate file-not-found and JSON-decode handling to load_state, which
+    # returns an empty state dict for any missing or unreadable file.
+    data = _load_promotion_state(skill_state_path)
     entries = data.get("entries", [])
     for entry in entries:
         candidates_notified += 1
