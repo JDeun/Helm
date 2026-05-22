@@ -17,9 +17,6 @@ resume_profile(profile, resume_token, state_path) -> dict
 list_paused(state_path) -> list[dict]
     Return all paused profiles with their metadata, sorted by profile name.
 
-pause_session_summary(profile, sessions, cleanup_status) -> dict
-    Return a ledger-friendly dict for the ``pause_resume`` field.
-
 check_can_start(profile, state_path) -> tuple[bool, str | None]
     Pre-flight check callers MUST honour before starting a new browser
     session.  Returns ``(False, reason)`` when the profile is paused;
@@ -60,10 +57,11 @@ from __future__ import annotations
 import json
 import os
 import secrets
-import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from scripts.io_utils import atomic_write_json
+from scripts.time_helpers import utc_now_iso
 
 # ---------------------------------------------------------------------------
 # Default state-file location
@@ -94,24 +92,17 @@ def _read_state(state_path: Path) -> dict[str, Any]:
 def _write_state(state: dict[str, Any], state_path: Path) -> None:
     """Atomically write *state* to *state_path*.
 
-    Uses ``tempfile.mkstemp`` in the same directory so ``os.replace`` stays
-    on the same filesystem mount, making the rename POSIX-atomic.
+    Delegates to :func:`scripts.io_utils.atomic_write_json` which uses
+    ``tempfile.mkstemp`` in the same directory so ``os.replace`` stays on
+    the same filesystem mount, making the rename POSIX-atomic.
     """
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(state, indent=2, sort_keys=True, ensure_ascii=False)
-    dir_ = str(state_path.parent)
-    fd, tmp_path = tempfile.mkstemp(dir=dir_, suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(payload)
-        os.replace(tmp_path, state_path)
-    except Exception:
-        # Clean up the temp file if the rename failed.
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    # sort_keys for deterministic on-disk order; atomic_write_json handles
+    # parent-dir creation, temp cleanup, and the replace step.
+    atomic_write_json(
+        state_path,
+        dict(sorted(state.items())),
+        indent=2,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +136,7 @@ def pause_profile(
 
     state = _read_state(state_path)
     entry: dict[str, Any] = {
-        "paused_at": datetime.now(tz=timezone.utc).isoformat(),
+        "paused_at": utc_now_iso(),
         "reason": reason,
         "resume_token": secrets.token_hex(4),
     }
@@ -227,35 +218,6 @@ def list_paused(state_path: Path | None = None) -> list[dict[str, Any]]:
         {"profile": name, **entry}
         for name, entry in sorted(state.items())
     ]
-
-
-def pause_session_summary(
-    profile: str,
-    sessions: list[str],
-    cleanup_status: str,
-) -> dict[str, Any]:
-    """Return a ledger-friendly dict for the ``pause_resume`` task-ledger field.
-
-    This helper does **not** interact with the state file; it only assembles
-    a JSON-serializable structure that callers can embed in a task ledger
-    entry under the ``pause_resume`` key.
-
-    Args:
-        profile:        Browser profile name.
-        sessions:       Session IDs that were active at pause time.
-        cleanup_status: One of ``"ok"``, ``"partial"``, ``"failed"``,
-                        ``"not_required"``.
-
-    Returns:
-        Dict with keys ``profile``, ``paused_sessions``, ``cleanup_status``,
-        and ``stop_reason``.
-    """
-    return {
-        "profile": profile,
-        "paused_sessions": list(sessions),
-        "cleanup_status": cleanup_status,
-        "stop_reason": "hard_stop",
-    }
 
 
 def check_can_start(
