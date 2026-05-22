@@ -8,7 +8,7 @@
 
 <p align="center">Helm은 AI agent workspace를 위한 로컬 운영 레이어입니다. 명령 전 profile, 위험 작업 전 checkpoint, chat이 사라진 뒤에도 남는 durable task history를 제공합니다.</p>
 
-<p align="center"><strong>현재 릴리즈: v0.9.6</strong></p>
+<p align="center"><strong>현재 릴리즈: v0.10.0</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -280,14 +280,14 @@ Harness engineering 원칙:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
-- 최신: [`docs/releases/0.9.6.md`](docs/releases/0.9.6.md)
-- 최근: [`0.9.5`](docs/releases/0.9.5.md), [`0.9.4`](docs/releases/0.9.4.md)
+- 최신: [`docs/releases/0.10.0.md`](docs/releases/0.10.0.md)
+- 최근: [`0.9.6`](docs/releases/0.9.6.md), [`0.9.5`](docs/releases/0.9.5.md)
 
 이전 릴리즈 노트는 [`docs/releases/`](docs/releases/)에 있습니다.
 
 ## 현재 상태
 
-Helm v0.9.6은 장기 실행 orchestration 경로에 명시적인 timeout 처리를 더하고 release metadata를 동기화합니다. 자세한 내용은 [`docs/releases/0.9.6.md`](docs/releases/0.9.6.md) 참고.
+Helm v0.10.0은 harness-engineering 레이어를 추가합니다: failure-signature 분류, profile→tool-group grant, 반복 실패 policy transition, patch-first edit 정책, task-state 컨트롤 컨테이너(Forge "Control Flow Is Not Memory" 원칙), agent reliability eval scenario, trace recorder/replay 및 후보 promotion, profile pause/resume, browser work verifier와 policy decision, model repair / synthetic respond 라이브러리 hook, shadow-mode reporter (enforce 결정 보조). 자세한 내용은 [`docs/releases/0.10.0.md`](docs/releases/0.10.0.md) 참고.
 
 Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
 

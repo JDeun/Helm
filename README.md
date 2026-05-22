@@ -8,7 +8,7 @@
 
 <p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
 
-<p align="center"><strong>Current release: v0.9.6</strong></p>
+<p align="center"><strong>Current release: v0.10.0</strong></p>
 
 <p align="center">
   <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
@@ -282,14 +282,14 @@ Release details:
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
-- Latest: [`docs/releases/0.9.6.md`](docs/releases/0.9.6.md)
-- Recent: [`0.9.5`](docs/releases/0.9.5.md), [`0.9.4`](docs/releases/0.9.4.md)
+- Latest: [`docs/releases/0.10.0.md`](docs/releases/0.10.0.md)
+- Recent: [`0.9.6`](docs/releases/0.9.6.md), [`0.9.5`](docs/releases/0.9.5.md)
 
 Older release notes live in [`docs/releases/`](docs/releases/).
 
 ## Status
 
-Helm v0.9.6 hardens long-running orchestration paths with explicit timeout handling and keeps release metadata in sync. See [`docs/releases/0.9.6.md`](docs/releases/0.9.6.md).
+Helm v0.10.0 lands the harness-engineering layer: failure-signature classification, profile→tool-group grants, repeated-failure policy transitions, patch-first edit policy, the task-state control container (Forge "Control Flow Is Not Memory"), agent-reliability eval scenarios, trace recording / replay / candidate promotion, profile pause/resume, browser-work verifier with policy decisions, model-repair and synthetic-respond library hooks, and the shadow-mode reporter that drives enforce-readiness decisions. See [`docs/releases/0.10.0.md`](docs/releases/0.10.0.md).
 
 Helm does not include private memory, personal agent overlays, credentials, or private task history.
 
