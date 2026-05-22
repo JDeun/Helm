@@ -58,10 +58,11 @@ class TestRespondToolSchema(unittest.TestCase):
         self.assertIn("message", params["properties"])
 
     def test_schema_is_cached(self):
-        """Second call returns the same object (cache hit)."""
+        """Second call returns equal content (cache hit), but a new dict copy."""
         s1 = self.srt.respond_tool_schema()
         s2 = self.srt.respond_tool_schema()
-        self.assertIs(s1, s2)
+        self.assertEqual(s1, s2)
+        self.assertIsNot(s1, s2)  # copy-on-read: different dict objects
 
 
 class TestInjectRespondTool(unittest.TestCase):
@@ -211,6 +212,61 @@ class TestEnforceFinalResponse(unittest.TestCase):
         result = self.srt.enforce_final_response({}, required=True)
         self.assertFalse(result["valid"])
         self.assertEqual(result["issue"], "terminal_without_respond")
+
+
+class TestRespondToolSchemaCopyOnRead(unittest.TestCase):
+    """Fix 3 — copy-on-read and expanduser tests."""
+
+    def setUp(self):
+        self.srt = _fresh_module()
+
+    def test_respond_tool_schema_returns_copy_not_cache(self):
+        """Mutating the returned dict does not affect a subsequent call."""
+        s1 = self.srt.respond_tool_schema()
+        s1["__injected__"] = True
+        s2 = self.srt.respond_tool_schema()
+        self.assertNotIn("__injected__", s2)
+
+    def test_RESPOND_TOOL_SCHEMA_PATH_expands_tilde(self):
+        """Env var with ~ is expanded to the home directory."""
+        import os
+        from pathlib import Path
+
+        env_value = "~/x.json"
+        expected_path = Path.home() / "x.json"
+
+        # We cannot actually open the file, but we can verify the path
+        # resolution by monkey-patching the open call so we can capture
+        # what path was opened.
+        captured: list[Path] = []
+        original_schema_cache = dict(self.srt._SCHEMA_CACHE)
+
+        def _fake_open(path, *args, **kwargs):
+            captured.append(path)
+            # Return a minimal valid schema so the module doesn't error.
+            import io, json as _json
+            return io.StringIO(_json.dumps({"type": "function", "function": {"name": "respond", "description": "x", "parameters": {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"]}}}))
+
+        original_env = os.environ.get("RESPOND_TOOL_SCHEMA_PATH")
+        os.environ["RESPOND_TOOL_SCHEMA_PATH"] = env_value
+        # Also clear the cache so the env path is actually read.
+        self.srt._SCHEMA_CACHE.clear()
+        try:
+            import builtins
+            orig_open = builtins.open
+            builtins.open = _fake_open
+            try:
+                self.srt.respond_tool_schema()
+            finally:
+                builtins.open = orig_open
+        finally:
+            if original_env is None:
+                del os.environ["RESPOND_TOOL_SCHEMA_PATH"]
+            else:
+                os.environ["RESPOND_TOOL_SCHEMA_PATH"] = original_env
+
+        self.assertTrue(len(captured) >= 1)
+        self.assertEqual(captured[0], expected_path)
 
 
 if __name__ == "__main__":

@@ -91,11 +91,11 @@ def respond_tool_schema() -> dict:
         If the schema file contains invalid JSON.
     """
     if not _SCHEMA_CACHE:
-        schema_path = Path(os.environ.get("RESPOND_TOOL_SCHEMA_PATH", str(_SCHEMA_PATH)))
+        schema_path = Path(os.environ.get("RESPOND_TOOL_SCHEMA_PATH", str(_SCHEMA_PATH))).expanduser()
         with schema_path.open("r", encoding="utf-8") as fh:
             loaded = json.load(fh)
         _SCHEMA_CACHE.update(loaded)
-    return _SCHEMA_CACHE
+    return dict(_SCHEMA_CACHE)
 
 
 def inject_respond_tool(tools: list[dict]) -> list[dict]:
