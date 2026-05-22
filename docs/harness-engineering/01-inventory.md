@@ -203,7 +203,7 @@ Failures grouped by heuristic signature `(script / skill / profile / exit_code)`
 
 ## 5. Repeated Workflow / Compound Runner Candidates
 
-From 1 052 completed tasks (full distinct-task scan):
+From 1 052 completed tasks (full distinct-task scan). Threshold: ≥3 completions. Seven skills qualify; table is not padded below threshold.
 
 | Rank | Skill | Completions | Candidate Type |
 |---|---|---|---|
@@ -214,9 +214,6 @@ From 1 052 completed tasks (full distinct-task scan):
 | 5 | `linkedin-ghostwriter-ko` | 17 | Periodic workflow |
 | 6 | `local-discovery-ko` | 4 | Utility workflow |
 | 7 | `travel-ops-ko` | 4 | Periodic workflow |
-| 8 | `meeting-recording-ops-ko` | 2 | Event-driven workflow |
-| 9 | `wealth-ops-ko` | 2 | Periodic workflow |
-| 10 | `mechanic-ko` / `car` | 2 each | Specialized one-off workflows |
 
 **Key observation:** ~26% of completions (302/1 052) carry no `skill` tag. Tagging these would improve routing fidelity and compound-runner attribution in Phase 2.
 
