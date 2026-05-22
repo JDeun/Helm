@@ -430,6 +430,17 @@ def generate_report(
         Uses ``scripts.jsonl_io.read_jsonl(path, tail=N)`` which performs
         a backwards byte-chunk scan.  Default 5000.
 
+        ``tail_lines`` caps the per-file sample size.  At default 5000 and a
+        ledger turnover above ~360/day, the effective window is shorter than
+        ``since_days``.  Increase tail_lines for high-throughput deployments.
+        If ``tail_lines`` is smaller than the number of entries written during
+        ``since_days``, the report will include a ``data_freshness.window_truncated``
+        flag set to ``True``.
+
+        Peak memory: ~10 KB × tail_lines × number_of_files (ledger +
+        proxy_events); at defaults ~100 MB worst-case.  On memory-constrained
+        hosts reduce tail_lines.
+
     Returns
     -------
     dict
@@ -499,6 +510,12 @@ def generate_report(
     if "cleanup_evidence_gate" in active_features:
         features["cleanup_evidence_gate"] = _agg_cleanup_evidence(ledger_entries)
 
+    # window_truncated is True when the ledger (or proxy) reached the tail cap,
+    # meaning earlier entries within since_days may not have been scanned.
+    window_truncated = (
+        len(raw_ledger) >= tail_lines or len(raw_proxy) >= tail_lines
+    )
+
     return {
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%S+00:00"),
         "window": {
@@ -512,6 +529,7 @@ def generate_report(
             "skill_state_present": pathlib.Path(skill_state_path).exists(),
             "ledger_unparseable_timestamp_count": ledger_unparseable,
             "proxy_unparseable_timestamp_count": proxy_unparseable,
+            "window_truncated": window_truncated,
         },
         "features": features,
         "raw_filter_applied": feature_filter,
