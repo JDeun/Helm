@@ -21,7 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.failure_signature import classify_error, normalize_target, signature
+from scripts.failure_signature import (
+    _WORKSPACE_PATH,
+    classify_error,
+    normalize_target,
+    signature,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +165,10 @@ class TestNormalizeTarget:
         assert home not in result
 
     def test_workspace_path_replaced(self):
-        result = normalize_target("/Users/kevin/.openclaw/workspace/scripts/foo.py")
+        # Build the input from the module's actual _WORKSPACE_PATH so this works
+        # in any environment (local laptop, CI runner, container). Hardcoding
+        # /Users/kevin/... made the test pass locally but fail on GitHub Actions.
+        result = normalize_target(f"{_WORKSPACE_PATH}/scripts/foo.py")
         assert result == "<workspace>/scripts/foo.py"
 
     def test_tmp_path_digits_stripped(self):
@@ -201,7 +209,7 @@ class TestNormalizeTarget:
         assert result == "python3"
 
     def test_stable_across_calls(self):
-        val = "/Users/kevin/.openclaw/workspace/scripts/foo.py"
+        val = f"{_WORKSPACE_PATH}/scripts/foo.py"
         assert normalize_target(val) == normalize_target(val)
 
 
