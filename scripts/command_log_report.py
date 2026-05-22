@@ -14,8 +14,10 @@ if str(ROOT) not in sys.path:
 from helm_workspace import get_workspace_layout
 
 
-WORKSPACE = get_workspace_layout().root
-COMMAND_LOG = get_workspace_layout().state_root / "command-log.jsonl"
+# Single layout lookup at import time (was 2 separate calls).
+_LAYOUT = get_workspace_layout()
+WORKSPACE = _LAYOUT.root
+COMMAND_LOG = _LAYOUT.state_root / "command-log.jsonl"
 
 
 def load_entries() -> list[dict]:

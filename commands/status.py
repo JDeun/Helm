@@ -64,19 +64,21 @@ def build_status_payload(root: Path) -> dict:
     state_root = state_root_for(root)
     context_sources = configured_context_sources(root)
     task_entries = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
-    command_entries = read_jsonl(state_root / "command-log.jsonl")
+    # command-log.jsonl is only sliced to its trailing window; read only the
+    # tail to keep memory bounded on multi-MB workspaces (R0 #17 follow-up).
+    command_entries = read_jsonl(state_root / "command-log.jsonl", tail=100)
     checkpoints = read_json(state_root / "checkpoints" / "index.json", [])
 
     draft_assessments = load_draft_assessments(root)
 
     recent_tasks = task_entries[-10:]
-    failed_commands = [entry for entry in command_entries[-100:] if entry.get("exit_code") not in (0, None)]
+    failed_commands = [entry for entry in command_entries if entry.get("exit_code") not in (0, None)]
     finalization_counts = Counter(
         (entry.get("memory_capture") or {}).get("finalization_status", "unknown")
         for entry in recent_tasks
     )
-    memory_operations = read_jsonl(state_root / "memory-operations.jsonl")
-    crystallized_sessions = read_jsonl(state_root / "crystallized-sessions.jsonl")
+    memory_operations = read_jsonl(state_root / "memory-operations.jsonl", tail=5)
+    crystallized_sessions = read_jsonl(state_root / "crystallized-sessions.jsonl", tail=5)
     return {
         "workspace": str(root),
         "layout": layout.kind,
@@ -101,7 +103,11 @@ def build_status_payload(root: Path) -> dict:
 def build_report_payload(root: Path, limit: int) -> dict:
     state_root = state_root_for(root)
     tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
-    commands = read_jsonl(state_root / "command-log.jsonl")
+    # R5 M3: trailing-window readers — the function only ever consumes
+    # ``commands[-200:]`` / ``memory_operations[-10:]`` /
+    # ``crystallized_sessions[-10:]`` below, so use ``tail=`` to keep
+    # memory bounded on multi-MB ledgers (mirrors build_status_payload).
+    commands = read_jsonl(state_root / "command-log.jsonl", tail=200)
     checkpoints = read_json(state_root / "checkpoints" / "index.json", [])
     context_sources = configured_context_sources(root)
     assessments = load_draft_assessments(root)
@@ -111,8 +117,8 @@ def build_report_payload(root: Path, limit: int) -> dict:
     running_tasks = [task for task in recent_tasks if task.get("status") == "running"]
     handoffs = [task for task in recent_tasks if task.get("status") == "handoff_required"]
     failed_commands = [cmd for cmd in commands[-200:] if cmd.get("exit_code") not in (0, None)]
-    memory_operations = read_jsonl(state_root / "memory-operations.jsonl")
-    crystallized_sessions = read_jsonl(state_root / "crystallized-sessions.jsonl")
+    memory_operations = read_jsonl(state_root / "memory-operations.jsonl", tail=10)
+    crystallized_sessions = read_jsonl(state_root / "crystallized-sessions.jsonl", tail=10)
     source_breakdown = Counter(source.kind for source in context_sources)
     finalization_counts = Counter(
         (task.get("memory_capture") or {}).get("finalization_status", "unknown")

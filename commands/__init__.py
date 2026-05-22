@@ -8,6 +8,7 @@ from pathlib import Path
 
 from helm_context import adopt_context_source, configured_context_sources, load_context_sources, onboarding_root
 from helm_workspace import DEFAULT_WORKSPACE, detect_layout, discover_workspace, resolve_nested_workspace, suggest_external_sources
+from scripts.jsonl_io import read_jsonl as _read_jsonl
 from scripts.memory_ops import review_queue_items
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies, manifest_audit
 from scripts.state_snapshot import latest_snapshot_path
@@ -38,29 +39,19 @@ def read_json(path: Path, default: object) -> object:
         return default
 
 
-def read_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    rows: list[dict] = []
-    try:
-        f = open(path, "r", encoding="utf-8")
-    except OSError as exc:
-        _warn_parse_failure(path, str(exc))
-        return rows
-    with f:
-        for lineno, line in enumerate(f, start=1):
-            if not line.strip():
-                continue
-            try:
-                payload = json.loads(line)
-            except json.JSONDecodeError as exc:
-                _warn_parse_failure(path, f"line {lineno}: {exc}")
-                continue
-            if not isinstance(payload, dict):
-                _warn_parse_failure(path, f"line {lineno}: expected JSON object")
-                continue
-            rows.append(payload)
-    return rows
+def read_jsonl(path: Path, tail: int | None = None) -> list[dict]:
+    """Read a JSONL file into a list of dicts.
+
+    Thin wrapper around :func:`scripts.jsonl_io.read_jsonl`; kept here
+    so the public ``commands.read_jsonl`` import surface is unchanged.
+    Warnings on malformed lines go to stderr via the shared helper.
+
+    When ``tail`` is provided, only the last N well-formed object lines
+    are read (via a backwards byte-chunk scan in ``scripts.jsonl_io``).
+    Use this for ``helm status`` / ``helm dashboard`` style callers that
+    only need a trailing window of an ever-growing ledger.
+    """
+    return _read_jsonl(path, tail=tail)
 
 
 def state_root_for(root: Path) -> Path:

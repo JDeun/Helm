@@ -717,6 +717,71 @@ def test_known_profiles_listed_in_error_message(capsys):
 # --guard-json flag
 # ---------------------------------------------------------------------------
 
+def test_attach_advisory_action_scope_populates_when_task_name_has_verb():
+    """R2 I1: advisory wiring attaches an action-scope decision to the task dict."""
+    from argparse import Namespace
+    from scripts.run_with_profile import _attach_advisory_action_scope
+
+    task: dict = {}
+    args = Namespace(task_name="회의록 수정합니다", task_goal=None)
+    _attach_advisory_action_scope(task, args)
+    assert "advisory_action_scope" in task
+    assert task["advisory_action_scope"]["advisory_only"] is True
+    assert task["advisory_action_scope"]["locked_scope"] == "edit"
+
+
+def test_attach_advisory_action_scope_silent_when_no_task_strings():
+    from argparse import Namespace
+    from scripts.run_with_profile import _attach_advisory_action_scope
+
+    task: dict = {}
+    args = Namespace(task_name=None, task_goal=None)
+    _attach_advisory_action_scope(task, args)
+    assert "advisory_action_scope" not in task
+
+
+def test_attach_advisory_action_scope_swallows_exceptions(monkeypatch):
+    from argparse import Namespace
+    import scripts.action_scope as scope
+    from scripts.run_with_profile import _attach_advisory_action_scope
+
+    def explode(*_a, **_k):
+        raise RuntimeError("synthetic")
+
+    monkeypatch.setattr(scope, "evaluate", explode)
+    task: dict = {}
+    args = Namespace(task_name="수정합니다", task_goal=None)
+    # Must not raise.
+    _attach_advisory_action_scope(task, args)
+    assert "advisory_action_scope" not in task
+
+
+def test_attach_advisory_action_scope_records_counter_on_failure(monkeypatch):
+    """R5 M2: silently-swallowed advisory failure increments the counter."""
+    from argparse import Namespace
+    import scripts.action_scope as scope
+    from scripts.run_with_profile import _attach_advisory_action_scope
+    from scripts.advisory_log import (
+        reset_advisory_failures,
+        snapshot_advisory_failures,
+    )
+
+    reset_advisory_failures()
+
+    def explode(*_a, **_k):
+        raise RuntimeError("synthetic")
+
+    monkeypatch.setattr(scope, "evaluate", explode)
+    task: dict = {}
+    args = Namespace(task_name="수정합니다", task_goal=None)
+    _attach_advisory_action_scope(task, args)
+
+    snapshot = snapshot_advisory_failures()
+    assert snapshot.get("run_with_profile.action_scope", 0) >= 1
+    assert snapshot.get("run_with_profile.action_scope:RuntimeError", 0) >= 1
+    reset_advisory_failures()
+
+
 def test_guard_json_prints_decision_and_exits(capsys):
     """--guard-json should print guard decision as JSON and return 0 without executing."""
     import json as _json

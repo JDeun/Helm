@@ -46,14 +46,15 @@ Changelog = "https://github.com/JDeun/Helm/blob/main/CHANGELOG.md"
 Security = "https://github.com/JDeun/Helm/blob/main/SECURITY.md"
 
 [tool.setuptools]
-py-modules = ["helm", "helm_workspace", "helm_context"]
+py-modules = ["helm", "helm_workspace", "helm_context", "helm_state_model", "helm_frontmatter"]
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["scripts", "commands", "references"]
+include = ["scripts", "scripts.*", "commands", "references", "memory_tree", "memory_tree.*"]
 
 [tool.setuptools.package-data]
 references = ["*.json", "*.md"]
+"scripts.compression" = ["*.md"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

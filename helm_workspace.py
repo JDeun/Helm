@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,8 +66,23 @@ def _prune_nested(paths: list[Path]) -> list[Path]:
     return kept
 
 
-def suggest_external_sources(home: Path | None = None) -> dict[str, list[Path]]:
-    base = (home or Path.home()).expanduser().resolve()
+@functools.lru_cache(maxsize=4)
+def _suggest_external_sources_cached(base_str: str) -> dict[str, tuple[Path, ...]]:
+    """Cache the disk-walk portion of ``suggest_external_sources``.
+
+    ``helm detect`` and ``helm doctor`` both call ``suggest_external_sources``,
+    and a user with a large ``~/Documents`` tree pays the iterdir + .obsidian
+    probe cost on every call. The result rarely changes within a single
+    process lifetime, so cache by resolved-base path. Stored as tuples so
+    the cached value is immutable; the public function returns lists to
+    keep the API shape.
+    """
+    base = Path(base_str)
+    raw = _suggest_external_sources_uncached(base)
+    return {key: tuple(value) for key, value in raw.items()}
+
+
+def _suggest_external_sources_uncached(base: Path) -> dict[str, list[Path]]:
     suggestions = {
         "openclaw": _existing_paths(
             (
@@ -118,6 +134,13 @@ def suggest_external_sources(home: Path | None = None) -> dict[str, list[Path]]:
                 obsidian_vaults.append(child.resolve())
     suggestions["obsidian"] = _prune_nested(list(dict.fromkeys(obsidian_vaults)))
     return suggestions
+
+
+def suggest_external_sources(home: Path | None = None) -> dict[str, list[Path]]:
+    base = (home or Path.home()).expanduser().resolve()
+    cached = _suggest_external_sources_cached(str(base))
+    # Return a fresh dict[list] each call so callers can mutate safely.
+    return {key: list(value) for key, value in cached.items()}
 
 
 def detect_layout(root: Path) -> WorkspaceLayout:
@@ -258,5 +281,30 @@ def resolve_nested_workspace(root: Path) -> WorkspaceLayout | None:
     return None
 
 
+# Cache the discovery walk for the lifetime of the process. A single
+# ``helm`` invocation imports several ``scripts.*`` modules transitively,
+# each of which calls ``get_workspace_layout()`` at import time. Without
+# the cache each call re-walks ``Path.cwd()`` parents and re-probes
+# workspace markers; for a 4-7 module CLI invocation that's a meaningful
+# fraction of cold-start latency (R0 #5/#9 / R2 I4).
+#
+# Test-time monkey-patch contract: a test that mutates the environment
+# in a way that should affect discovery (``HELM_WORKSPACE``, cwd, marker
+# files on disk) MUST call ``get_workspace_layout.cache_clear()`` (or
+# the convenience wrapper ``clear_workspace_layout_cache()``) before
+# expecting fresh discovery. The existing test suite uses subprocesses
+# for ``HELM_WORKSPACE`` variation, so the in-process cache does not
+# interfere; this constraint is documented for any future test that
+# wants to swap the env mid-process.
+@functools.lru_cache(maxsize=1)
 def get_workspace_layout() -> WorkspaceLayout:
     return discover_workspace()
+
+
+def clear_workspace_layout_cache() -> None:
+    """Invalidate the cached layout returned by :func:`get_workspace_layout`.
+
+    Provided for tests that change ``HELM_WORKSPACE`` / cwd / on-disk
+    markers mid-process and need the next call to re-walk.
+    """
+    get_workspace_layout.cache_clear()

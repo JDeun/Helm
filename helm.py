@@ -80,6 +80,14 @@ from commands.task import (
 )
 from commands.validate import cmd_validate
 from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status, cmd_db_query
+from commands.phase_modules import (
+    cmd_action_scope_evaluate,
+    cmd_compression_profiles,
+    cmd_freshness_status,
+    cmd_frontmatter_validate,
+    cmd_memory_tree_status,
+    cmd_state_lint,
+)
 
 
 ASCII_BANNER = r"""
@@ -643,6 +651,129 @@ def build_parser() -> argparse.ArgumentParser:
     db_query.add_argument("--limit", type=int, default=50)
     db_query.add_argument("--json", action="store_true")
     db_query.set_defaults(func=cmd_db_query)
+
+    # ---- Phase A-E design module entry points -------------------------------
+    # Each command is an advisory read-only / in-memory check that surfaces
+    # the new design modules (action_scope, freshness_lib, helm_state_model,
+    # helm_frontmatter, memory_tree, compression) on the CLI so they
+    # participate in CI rather than remaining unwired (see 2026-05-21 Helm
+    # full review issue #6).
+    action_scope = subparsers.add_parser(
+        "action-scope",
+        help="Evaluate the action-scope gate for a user message (advisory).",
+    )
+    action_scope_sub = action_scope.add_subparsers(
+        dest="action_scope_command", required=True
+    )
+    as_eval = action_scope_sub.add_parser(
+        "evaluate",
+        help="Evaluate the gate against a message and print the decision JSON.",
+    )
+    as_eval.add_argument("--message", required=True, help="The current user message (raw text).")
+    as_eval.add_argument(
+        "--target", action="append", default=[],
+        help="Explicit target identifier; may be repeated.",
+    )
+    as_eval.add_argument(
+        "--topic", action="append", default=[],
+        help="Topic identifier hint (e.g. google_sheets). May be repeated.",
+    )
+    as_eval.add_argument(
+        "--attempt",
+        choices=["inspect", "save", "edit", "delete", "external_send"],
+        help="If given, also report whether this scope would be allowed.",
+    )
+    as_eval.add_argument(
+        "--resource",
+        help="Optional resource identifier used with --attempt (see MUTABLE_RESOURCES).",
+    )
+    as_eval.set_defaults(func=cmd_action_scope_evaluate)
+
+    freshness = subparsers.add_parser(
+        "freshness",
+        help="Inspect the connector freshness substrate state.",
+    )
+    freshness_sub = freshness.add_subparsers(
+        dest="freshness_command", required=True
+    )
+    fs_status = freshness_sub.add_parser(
+        "status",
+        help="Print the freshness substrate as a JSON or text report.",
+    )
+    fs_status.add_argument(
+        "--state-path",
+        help="Override path to connector-freshness.json (default: ~/.helm/state/connector-freshness.json).",
+    )
+    fs_status.add_argument(
+        "--strict-high-risk", action="store_true",
+        help="Apply design §3.4 strict-high-risk rule when computing fresh/stale.",
+    )
+    fs_status.add_argument("--json", action="store_true")
+    fs_status.set_defaults(func=cmd_freshness_status)
+
+    state_cmd = subparsers.add_parser(
+        "state",
+        help="Helm note lifecycle state machine helpers (Phase D, advisory).",
+    )
+    state_sub = state_cmd.add_subparsers(dest="state_command", required=True)
+    s_lint = state_sub.add_parser(
+        "lint-phrase",
+        help="Lint outbound text against the assertion rules for a given note state.",
+    )
+    s_lint.add_argument(
+        "--state", required=True,
+        help="Note state (captured | reviewed | applied | promoted | rejected).",
+    )
+    s_lint.add_argument(
+        "--text", required=True,
+        help="The outbound text to lint. Pass '-' to read from stdin.",
+    )
+    s_lint.add_argument("--json", action="store_true")
+    s_lint.set_defaults(func=cmd_state_lint)
+
+    frontmatter = subparsers.add_parser(
+        "frontmatter",
+        help="Validate the Obsidian vault layout (Phase B, advisory).",
+    )
+    fm_sub = frontmatter.add_subparsers(dest="frontmatter_command", required=True)
+    fm_validate = fm_sub.add_parser(
+        "validate-vault",
+        help="Verify the six-folder layout (00-Inbox / 10-Topics / ...).",
+    )
+    fm_validate.add_argument(
+        "vault_root",
+        help="Path to the Obsidian vault root.",
+    )
+    fm_validate.add_argument("--json", action="store_true")
+    fm_validate.set_defaults(func=cmd_frontmatter_validate)
+
+    memory_tree = subparsers.add_parser(
+        "memory-tree",
+        help="Inspect the memory tree on disk (Phase C, advisory).",
+    )
+    mt_sub = memory_tree.add_subparsers(dest="memory_tree_command", required=True)
+    mt_status = mt_sub.add_parser(
+        "status",
+        help="Show the present source / topic / global summary files.",
+    )
+    mt_status.add_argument(
+        "--root",
+        help="Override memory tree root (default: ~/.helm/memory).",
+    )
+    mt_status.add_argument("--json", action="store_true")
+    mt_status.set_defaults(func=cmd_memory_tree_status)
+
+    compression = subparsers.add_parser(
+        "compression",
+        help="Inspect the compression profile registry (Phase E, advisory).",
+    )
+    comp_sub = compression.add_subparsers(dest="compression_command", required=True)
+    comp_profiles = comp_sub.add_parser(
+        "profiles",
+        help="List the compression profiles registered with the default registry.",
+    )
+    comp_profiles.add_argument("--json", action="store_true")
+    comp_profiles.set_defaults(func=cmd_compression_profiles)
 
     return parser
 

@@ -296,3 +296,107 @@ def test_memory_coherence_audit_reports_cross_layer_gaps() -> None:
         assert "memory_operation_unknown_task" in kinds
         assert "memory_operation_supersedes_unknown_task" in kinds
         assert "crystallized_session_unknown_task" in kinds
+
+
+def test_memory_ops_append_jsonl_is_concurrent_safe(tmp_path: Path) -> None:
+    """Regression guard for the fcntl.LOCK_EX added to ``_append_jsonl``.
+
+    Background
+    ----------
+    The 2026-05-21 Helm full review §Critical#2 flagged that
+    ``scripts.memory_ops._append_jsonl`` previously used a plain
+    ``open("a")`` and could interleave bytes with concurrent writers
+    (memory_tree, run_with_profile, etc.) on the same shared file.
+    The fix takes a POSIX exclusive lock around each write. This test
+    spawns many threads that pound on the same path and asserts every
+    line round-trips as a valid JSON object — i.e. no torn writes.
+
+    If someone removes the lock, the threadpool will (probabilistically)
+    interleave one line inside another and ``json.loads`` will raise.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Lazy import: don't drag fcntl in on Windows test runs.
+    sys.path.insert(0, str(REPO_ROOT))
+    from scripts.memory_ops import _append_jsonl
+
+    target = tmp_path / "shared.jsonl"
+    n_threads = 8
+    n_writes_per_thread = 25
+    # Use a moderately-long payload so torn writes will straddle line
+    # boundaries detectably (a short payload often fits in a single
+    # atomic write even without locking).
+    payload_template = {"filler": "x" * 256}
+
+    def writer(thread_id: int) -> None:
+        for i in range(n_writes_per_thread):
+            row = dict(payload_template, thread=thread_id, seq=i)
+            _append_jsonl(target, row)
+
+    with ThreadPoolExecutor(max_workers=n_threads) as pool:
+        futures = [pool.submit(writer, t) for t in range(n_threads)]
+        for f in futures:
+            f.result()
+
+    lines = target.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == n_threads * n_writes_per_thread
+
+    seen: set[tuple[int, int]] = set()
+    for line in lines:
+        entry = json.loads(line)  # would raise on a torn write
+        assert entry["filler"] == "x" * 256
+        key = (entry["thread"], entry["seq"])
+        assert key not in seen, f"duplicate entry detected: {key}"
+        seen.add(key)
+    assert len(seen) == n_threads * n_writes_per_thread
+
+
+def test_memory_tree_append_ledger_is_concurrent_safe(tmp_path: Path) -> None:
+    """Same race-coverage as the memory_ops test, but on the memory_tree path.
+
+    ``MemoryTree._append_ledger`` is the second writer of
+    ``~/.helm/task-ledger.jsonl``; the review flagged the same fcntl gap
+    here. We invoke the private writer directly with a minimal
+    ``RefreshResult`` stub so the test never touches the rest of the
+    memory_tree pipeline.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    sys.path.insert(0, str(REPO_ROOT))
+    from memory_tree.tree import MemoryTree, RefreshResult, RefreshTrigger
+
+    root = tmp_path / "memtree-root"
+    root.mkdir()
+    ledger = tmp_path / "task-ledger.jsonl"
+    tree = MemoryTree(root=root, ledger_path=ledger)
+
+    n_threads = 6
+    n_writes_per_thread = 20
+
+    def writer(thread_id: int) -> None:
+        for i in range(n_writes_per_thread):
+            stub = RefreshResult(
+                layer="source",
+                target=f"src-{thread_id}",
+                trigger=RefreshTrigger.CRON,
+                reason="concurrent-race-regression-test",
+                before_hash="0" * 8,
+                after_hash="1" * 8,
+                path=root / f"src-{thread_id}.md",
+                task_id=f"t-{thread_id}-{i}",
+                timestamp="2026-05-21T00:00:00Z",
+            )
+            tree._append_ledger(stub)  # type: ignore[attr-defined]
+
+    with ThreadPoolExecutor(max_workers=n_threads) as pool:
+        futures = [pool.submit(writer, t) for t in range(n_threads)]
+        for f in futures:
+            f.result()
+
+    lines = ledger.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == n_threads * n_writes_per_thread
+    ids: set[str] = set()
+    for line in lines:
+        entry = json.loads(line)
+        ids.add(entry["task_id"])
+    assert len(ids) == n_threads * n_writes_per_thread

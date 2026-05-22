@@ -6,12 +6,21 @@ All classification is pure string matching against a loaded policy.
 """
 from __future__ import annotations
 
+import functools
 import json
 import re
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, NamedTuple
+
+# Module-top advisory_log import keeps the "advisory never raises" invariant
+# (R6 Minor M1). Falls back to a noop counter if advisory_log itself fails.
+try:
+    from scripts.advisory_log import record_advisory_failure as _record_advisory_failure
+except Exception:  # noqa: BLE001 - intentional last-resort fallback
+    def _record_advisory_failure(channel: str, exc: BaseException) -> None:
+        return None
 
 # ---------------------------------------------------------------------------
 # Public type aliases
@@ -334,6 +343,12 @@ class GuardDecision:
     task_goal: str | None = None
     policy_version: int = 1
     evaluated_at: str = ""
+    # Advisory Phase-A action-scope assessment derived from task_name +
+    # task_goal. Populated best-effort; failures degrade silently to ``None``
+    # (R2 I1). Consumers MUST treat this as advisory — the guard's ``action``
+    # is the authoritative decision; this field exists so operators see
+    # the action-scope module's lock decision in the same JSON payload.
+    advisory_action_scope: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +396,15 @@ def _load_policy(policy_path: Path | None) -> tuple[list[dict], list[dict], int]
 INTERPRETER_WRAPPERS: frozenset[str] = frozenset({"python3", "python", "perl", "ruby", "node"})
 INTERPRETER_EXEC_FLAGS: frozenset[str] = frozenset({"-c", "-e"})
 
+# Hoisted to module scope so we do not rely on Python's global re cache
+# (max 512 patterns, can be flushed by tests). Compiled once at import.
+_INTERPRETER_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"system\(['\"]([^'\"]+)['\"]\)"),
+    re.compile(r"subprocess\.\w+\(\[?['\"]([^'\"]+)['\"]\]?"),
+    re.compile(r"exec\(['\"]([^'\"]+)['\"]\)"),
+    re.compile(r"child_process[^'\"]*['\"]([^'\"]+)['\"]"),
+)
+
 
 def _extract_interpreter_inner(argv: list[str]) -> str | None:
     if not argv or argv[0].lower() not in INTERPRETER_WRAPPERS:
@@ -393,13 +417,9 @@ def _extract_interpreter_inner(argv: list[str]) -> str | None:
 
 def _extract_commands_from_interpreter(code: str) -> list[str]:
     """Extract shell command strings from interpreter code."""
-    import re
     commands: list[str] = []
-    for pattern in [r"system\(['\"]([^'\"]+)['\"]\)",
-                    r"subprocess\.\w+\(\[?['\"]([^'\"]+)['\"]\]?",
-                    r"exec\(['\"]([^'\"]+)['\"]\)",
-                    r"child_process[^'\"]*['\"]([^'\"]+)['\"]"]:
-        for match in re.finditer(pattern, code):
+    for pattern in _INTERPRETER_PATTERNS:
+        for match in pattern.finditer(code):
             commands.append(match.group(1))
     return commands
 
@@ -491,9 +511,21 @@ def _pipe_pattern_matches(text_lower: str, pattern_lower: str) -> bool:
     return False
 
 
+@functools.lru_cache(maxsize=512)
+def _compile_regex_cached(pattern: str) -> re.Pattern[str] | None:
+    """Cache compiled regex per pattern string.
+
+    Returns None if the pattern is malformed (legacy behaviour: silently
+    skip bad rules so a bad guard_policy.json entry cannot DoS the gate).
+    """
+    try:
+        return re.compile(pattern, re.IGNORECASE)
+    except re.error:
+        return None
+
+
 def _match_patterns(text: str, rules: list[dict]) -> list[tuple[str, str | None]]:
     """Return list of (rule_id, recommended_profile | None) for each matching rule."""
-    import re
     matches: list[tuple[str, str | None]] = []
     text_lower = text.lower()
     for rule in rules:
@@ -502,12 +534,12 @@ def _match_patterns(text: str, rules: list[dict]) -> list[tuple[str, str | None]
         rule_type: str = rule.get("type", "substring")
         for pattern in rule.get("patterns", []):
             if rule_type == "regex":
-                try:
-                    if re.search(pattern, text, re.IGNORECASE):
-                        matches.append((rule_id, recommended))
-                        break
-                except re.error:
+                compiled = _compile_regex_cached(pattern)
+                if compiled is None:
                     continue
+                if compiled.search(text):
+                    matches.append((rule_id, recommended))
+                    break
             else:
                 pat_lower = pattern.lower()
                 if pat_lower in text_lower:
@@ -952,7 +984,28 @@ def evaluate_command_guard(
         target_paths=classification.target_paths,
     )
 
-    from datetime import datetime, timezone
+    from scripts.time_helpers import utc_now_iso
+
+    # Advisory: surface the Phase-A action-scope decision for visibility in
+    # the guard payload. Best-effort, never mutates ``action``. Failure
+    # paths (missing module, malformed input, unexpected exception) leave
+    # ``advisory_action_scope`` as ``None`` so the guard remains the
+    # authoritative gate. See R2 I1.
+    advisory_action_scope: dict[str, Any] | None = None
+    try:
+        advisory_action_scope = _evaluate_advisory_action_scope(
+            task_name=task_name, task_goal=task_goal
+        )
+    except (ImportError, AttributeError) as exc:
+        # Module wiring problem — most likely an action_scope refactor
+        # in flight. Record so operators can correlate, then degrade.
+        advisory_action_scope = None
+        _record_advisory_failure("command_guard.action_scope.wiring", exc)
+    except Exception as exc:
+        # Any other unexpected raise from the advisory evaluator: still
+        # never break guard evaluation, but leave a breadcrumb.
+        advisory_action_scope = None
+        _record_advisory_failure("command_guard.action_scope", exc)
 
     return GuardDecision(
         action=action,
@@ -969,14 +1022,61 @@ def evaluate_command_guard(
         task_name=task_name,
         task_goal=task_goal,
         policy_version=policy_version,
-        evaluated_at=datetime.now(timezone.utc).isoformat(),
+        evaluated_at=utc_now_iso(),
+        advisory_action_scope=advisory_action_scope,
     )
 
 
-def decision_to_json(decision: GuardDecision) -> dict[str, Any]:
-    """Convert GuardDecision to JSON-serializable dict."""
-    c = decision.classification
+def _evaluate_advisory_action_scope(
+    *, task_name: str | None, task_goal: str | None
+) -> dict[str, Any] | None:
+    """Best-effort action-scope evaluation for the guard advisory channel.
+
+    Combines ``task_name`` and ``task_goal`` into the message argument to
+    :func:`scripts.action_scope.evaluate` and returns a minimal payload:
+
+        {"locked_scope": ..., "matched_verb": ..., "matches": [...], "allowed": bool}
+
+    Returns ``None`` when there is no text to evaluate, when the module
+    is unavailable, or when evaluation raises. The caller wraps this in
+    a defensive ``try/except`` so any failure here cannot block guard
+    evaluation.
+    """
+    parts = [s for s in (task_name, task_goal) if s]
+    if not parts:
+        return None
+    message = "\n".join(parts)
+    try:
+        from scripts.action_scope import evaluate as _scope_evaluate
+    except ImportError as exc:
+        # action_scope module unavailable — explicit ImportError keeps
+        # surprise unrelated failures from being mis-categorized.
+        _record_advisory_failure(
+            "command_guard.action_scope.import", exc
+        )
+        return None
+    decision = _scope_evaluate(message)
+    payload = decision.as_dict()
+    # Trim to the fields callers care about; the full payload is still
+    # available via ``helm action-scope evaluate`` for ad-hoc inspection.
     return {
+        "locked_scope": payload.get("locked_scope"),
+        "matched_verb": payload.get("matched_verb"),
+        "allowed": payload.get("allowed"),
+        "needs_live_source": payload.get("needs_live_source"),
+        "advisory_only": True,
+    }
+
+
+def decision_to_json(decision: GuardDecision) -> dict[str, Any]:
+    """Convert GuardDecision to JSON-serializable dict.
+
+    ``advisory_action_scope`` is emitted only when populated; old
+    consumers do not see a new key when the advisory evaluation
+    returned ``None`` (preserves the established JSON shape).
+    """
+    c = decision.classification
+    payload: dict[str, Any] = {
         "action": decision.action,
         "risk_score": decision.risk_score,
         "score_breakdown": decision.score_breakdown,
@@ -1006,3 +1106,6 @@ def decision_to_json(decision: GuardDecision) -> dict[str, Any]:
             "target_paths": list(c.target_paths),
         },
     }
+    if decision.advisory_action_scope is not None:
+        payload["advisory_action_scope"] = decision.advisory_action_scope
+    return payload

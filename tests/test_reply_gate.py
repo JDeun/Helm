@@ -305,3 +305,89 @@ def test_evaluate_result_contains_task_summary() -> None:
     assert result["task"]["skill"] == "my-skill"
     assert result["task"]["profile"] == "inspect_local"
     assert result["task"]["enforcement_level"] == "light"
+
+
+# ---------------------------------------------------------------------------
+# Advisory Phase-A / Phase-F wiring (R2 I1)
+# ---------------------------------------------------------------------------
+
+
+def test_evaluate_attaches_advisory_action_scope_when_task_name_has_verb() -> None:
+    """A task with a Korean verb in task_name surfaces an action_scope advisory."""
+    entry = {
+        "task_id": "t1",
+        "task_name": "회의록 수정합니다",  # contains an EDIT verb
+        "skill": "my-skill",
+        "profile": "workspace_edit",
+        "status": "completed",
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+    result = evaluate(entry)
+    advisory = result.get("advisory") or {}
+    # action_scope advisory should exist and identify the EDIT scope.
+    assert "action_scope" in advisory
+    assert advisory["action_scope"]["advisory_only"] is True
+    assert advisory["action_scope"]["locked_scope"] == "edit"
+
+
+def test_evaluate_advisory_failure_does_not_block_decision(monkeypatch) -> None:
+    """If the action_scope module raises, advisory is omitted but ok= still valid."""
+    entry = {
+        "task_id": "t1",
+        "task_name": "test",
+        "status": "completed",
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("synthetic action_scope failure")
+
+    import scripts.action_scope as scope
+    monkeypatch.setattr(scope, "evaluate", explode)
+
+    result = evaluate(entry)
+    # The reply decision must still be made.
+    assert result["ok"] in (True, False)
+    # action_scope advisory must have been swallowed.
+    advisory = result.get("advisory") or {}
+    assert "action_scope" not in advisory
+
+
+def test_evaluate_advisory_failure_increments_counter(monkeypatch) -> None:
+    """R5 M2: advisory swallow site records the failure for observability.
+
+    Pre-R5 the bare ``except Exception: pass`` made an advisory-channel
+    regression indistinguishable from "no advisory applicable". This
+    test pins the counter contract so a future refactor cannot drop
+    the breadcrumb.
+    """
+    from scripts.advisory_log import (
+        reset_advisory_failures,
+        snapshot_advisory_failures,
+    )
+
+    reset_advisory_failures()
+    entry = {
+        "task_id": "t1",
+        "task_name": "test",
+        "status": "completed",
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+
+    import scripts.action_scope as scope
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("synthetic action_scope failure")
+
+    monkeypatch.setattr(scope, "evaluate", explode)
+    evaluate(entry)
+
+    snapshot = snapshot_advisory_failures()
+    # Generic channel key counts the failure, regardless of exception type.
+    assert snapshot.get("reply_gate.action_scope", 0) >= 1
+    # Type-qualified key allows callers to attribute the failure.
+    assert snapshot.get("reply_gate.action_scope:RuntimeError", 0) >= 1
+    reset_advisory_failures()

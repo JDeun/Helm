@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable
+
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.time_helpers import utc_now_iso  # noqa: E402 — re-export
 
 
 PROFILE_SIGNAL_MAP = {
@@ -73,10 +80,6 @@ class CaptureContext:
     touched_paths: list[str]
     command_blob: str
     harness_meta: dict
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def task_timestamp(task: dict) -> str:

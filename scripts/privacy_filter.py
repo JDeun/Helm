@@ -7,7 +7,6 @@ import json
 import re
 import sys
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from helm_workspace import get_workspace_layout
 from scripts.state_io import append_jsonl_atomic
+from scripts.time_helpers import utc_now_iso
 
 
 SECRET_LABEL = "SECRET"
@@ -56,7 +56,8 @@ PATTERNS: tuple[tuple[str, re.Pattern[str], bool], ...] = (
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    # Thin wrapper around the shared helper so call sites need not change.
+    return utc_now_iso()
 
 
 def _state_root() -> Path:

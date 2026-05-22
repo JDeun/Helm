@@ -11,6 +11,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.jsonl_io import read_jsonl as _shared_read_jsonl
+from scripts.state_io import append_jsonl_atomic
+from scripts.time_helpers import utc_now_iso
 
 
 def _state_root() -> Path:
@@ -26,32 +29,29 @@ def _warn_parse_failure(path: Path, detail: str) -> None:
 
 
 def _read_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    rows: list[dict] = []
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            _warn_parse_failure(path, f"line {lineno}: {exc}")
-            continue
-        if not isinstance(payload, dict):
-            _warn_parse_failure(path, f"line {lineno}: expected JSON object")
-            continue
-        rows.append(payload)
-    return rows
+    """Read a JSONL state file.
+
+    Delegates to :func:`scripts.jsonl_io.read_jsonl` so warning policy
+    on malformed lines stays consistent across the repo.
+    """
+    return _shared_read_jsonl(path)
 
 
 def _append_jsonl(path: Path, row: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    """Append one JSONL row atomically.
+
+    Delegates to :func:`scripts.state_io.append_jsonl_atomic` so the
+    file-locking discipline (LOCK_EX on POSIX, msvcrt on Windows, fsync
+    after write) stays consistent with the rest of the codebase. R2 M7
+    convergence: a previous inline ``fcntl.flock`` block has been
+    removed in favor of the shared helper.
+    """
+    append_jsonl_atomic(path, row)
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    # Thin wrapper around the shared helper so call sites need not change.
+    return utc_now_iso()
 
 
 def _latest_tasks_for_state(state_root: Path) -> list[dict]:

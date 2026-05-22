@@ -13,6 +13,16 @@ if str(ROOT) not in sys.path:
 from commands import read_jsonl
 from helm_workspace import get_workspace_layout
 
+# Module-top import keeps the "advisory never raises" invariant: if
+# scripts.advisory_log itself is missing or malformed, we fall back to a
+# noop counter rather than letting ImportError escape from an except block
+# (R6 Minor M1).
+try:
+    from scripts.advisory_log import record_advisory_failure as _record_advisory_failure
+except Exception:  # noqa: BLE001 - intentional last-resort fallback
+    def _record_advisory_failure(channel: str, exc: BaseException) -> None:
+        return None
+
 
 def _get_task_ledger() -> Path:
     return get_workspace_layout().state_root / "task-ledger.jsonl"
@@ -43,6 +53,83 @@ def select_entry(task_id: str | None) -> dict | None:
         return next((entry for entry in entries if entry.get("task_id") == task_id), None)
     entries.sort(key=lambda item: item.get("finished_at") or item.get("started_at") or "")
     return entries[-1]
+
+
+def _advisory_phase_modules(entry: dict) -> dict:
+    """Return advisory Phase-A / Phase-F evaluations for ``entry``.
+
+    Advisory only: failures degrade silently. Never modifies the reply
+    decision. Wired here so the reply payload carries the action-scope
+    lock and the freshness gate verdict alongside the existing harness
+    checks (R2 I1).
+
+    The action-scope evaluation runs against the task name + (optional)
+    goal so the gate sees the same user-facing string a Telegram intake
+    would. The freshness gate runs against the canonical state file
+    when present.
+    """
+    advisory: dict = {}
+    try:
+        from scripts.action_scope import evaluate as _scope_evaluate
+        message_parts: list[str] = []
+        task_name = entry.get("task_name")
+        if isinstance(task_name, str) and task_name:
+            message_parts.append(task_name)
+        meta_goal = ((entry.get("meta") or {}).get("task_goal"))
+        if isinstance(meta_goal, str) and meta_goal:
+            message_parts.append(meta_goal)
+        if message_parts:
+            payload = _scope_evaluate("\n".join(message_parts)).as_dict()
+            advisory["action_scope"] = {
+                "locked_scope": payload.get("locked_scope"),
+                "matched_verb": payload.get("matched_verb"),
+                "allowed": payload.get("allowed"),
+                "needs_live_source": payload.get("needs_live_source"),
+                "advisory_only": True,
+            }
+    except (ImportError, AttributeError) as exc:
+        # Wiring failure (action_scope missing or refactored). Record
+        # so operators see a counter spike instead of a silent absence
+        # in the reply payload.
+        _record_advisory_failure(
+            "reply_gate.action_scope.wiring", exc
+        )
+    except Exception as exc:
+        _record_advisory_failure("reply_gate.action_scope", exc)
+    try:
+        from scripts.freshness_lib import (
+            assess_record,
+            list_records,
+            load_state,
+            utc_now,
+        )
+
+        state = load_state(None)
+        records = list_records(state)
+        now = utc_now()
+        rollup: dict = {"connectors": []}
+        any_stale = False
+        for record in records:
+            assessment = assess_record(record, now=now)
+            rollup["connectors"].append(
+                {
+                    "connector_id": record.connector_id,
+                    "fresh": assessment.fresh,
+                    "stale_reason": assessment.stale_reason,
+                }
+            )
+            if not assessment.fresh:
+                any_stale = True
+        rollup["any_stale"] = any_stale
+        rollup["advisory_only"] = True
+        advisory["freshness"] = rollup
+    except (ImportError, AttributeError) as exc:
+        _record_advisory_failure(
+            "reply_gate.freshness.wiring", exc
+        )
+    except Exception as exc:
+        _record_advisory_failure("reply_gate.freshness", exc)
+    return advisory
 
 
 def evaluate(entry: dict | None) -> dict:
@@ -102,7 +189,7 @@ def evaluate(entry: dict | None) -> dict:
         )
     else:
         checks.append({"name": "finalization", "ok": True, "detail": f"finalization_status={finalization}"})
-    return {
+    payload: dict = {
         "ok": all(check["ok"] for check in checks),
         "reason": "reply_allowed" if all(check["ok"] for check in checks) else "reply_blocked",
         "task": {
@@ -117,6 +204,11 @@ def evaluate(entry: dict | None) -> dict:
         },
         "checks": checks,
     }
+    # Advisory Phase-A / Phase-F wiring (R2 I1). Best-effort, never blocks.
+    advisory = _advisory_phase_modules(entry)
+    if advisory:
+        payload["advisory"] = advisory
+    return payload
 
 
 def main() -> int:

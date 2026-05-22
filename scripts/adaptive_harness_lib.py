@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import sys
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,20 +23,19 @@ from scripts.route_contract_lib import (
 from scripts.retrieval_policy_lib import build_retrieval_plan
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies as load_manifest_policies
 from scripts.state_io import append_jsonl_atomic
+from scripts.time_helpers import utc_now_iso
 
 
-# Module-level workspace paths: resolved once at import time.  Tests that need
-# a different workspace must monkeypatch these constants before calling any
+# Module-level workspace paths: resolved once at import time via a single
+# layout lookup (previously two separate calls).  Tests that need a
+# different workspace must monkeypatch these constants before calling any
 # function in this module.
-WORKSPACE = get_workspace_layout().root
+_LAYOUT = get_workspace_layout()
+WORKSPACE = _LAYOUT.root
 PROFILE_FILE = WORKSPACE / "references" / "execution_profiles.json"
 POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"
 HARNESS_POLICY_FILE = WORKSPACE / "references" / "adaptive_harness_policy.json"
-TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+TASK_LEDGER = _LAYOUT.state_root / "task-ledger.jsonl"
 
 
 def load_json(path: Path, default: object) -> object:

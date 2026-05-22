@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from helm_workspace import detect_layout
+from scripts.frontmatter_io import parse_frontmatter_str_only
 from scripts.state_io import append_jsonl_atomic
 
 
@@ -135,24 +136,19 @@ def append_event(paths: LifecyclePaths, event: dict[str, Any]) -> None:
     append_jsonl_atomic(paths.events_path, payload)
 
 
-_FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---", re.DOTALL)
-
-
 def _parse_frontmatter(skill_md: Path) -> dict[str, str]:
+    """Read SKILL.md frontmatter as ``dict[str, str]``.
+
+    Delegates to :func:`scripts.frontmatter_io.parse_frontmatter_str_only`
+    so the SKILL.md, memory_tree, and Obsidian-vault parsers share the
+    same YAML-subset grammar (see 2026-05-21 Helm full review
+    §Duplication Findings — Frontmatter schema duplication).
+    """
     try:
         text = skill_md.read_text(encoding="utf-8")
     except OSError:
         return {}
-    match = _FRONTMATTER_RE.match(text)
-    if not match:
-        return {}
-    block = match.group(1)
-    fields: dict[str, str] = {}
-    for line in block.splitlines():
-        if ":" in line:
-            key, _, value = line.partition(":")
-            fields[key.strip()] = value.strip()
-    return fields
+    return parse_frontmatter_str_only(text)
 
 
 def _classify_source(skill_dir: Path, frontmatter: dict[str, str]) -> str:

@@ -133,8 +133,8 @@ def build_capability_diff_payload(root: Path, older_task_id: str | None = None, 
 def build_session_card_payload(root: Path) -> dict:
     status = build_run_contract_payload(root)
     task = status.get("task") or {}
-    command_entries = read_jsonl(state_root_for(root) / "command-log.jsonl")
-    recent_failures = [entry for entry in command_entries[-50:] if entry.get("exit_code") not in (0, None)]
+    command_entries = read_jsonl(state_root_for(root) / "command-log.jsonl", tail=50)
+    recent_failures = [entry for entry in command_entries if entry.get("exit_code") not in (0, None)]
     finalization = None
     tasks = latest_tasks(read_jsonl(state_root_for(root) / "task-ledger.jsonl"))
     if task.get("task_id"):

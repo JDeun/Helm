@@ -5,7 +5,6 @@ import argparse
 import json
 import sys
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,13 +14,12 @@ if str(ROOT) not in sys.path:
 from helm_workspace import get_workspace_layout
 from scripts.memory_capture import build_memory_capture_plan
 from scripts.state_io import append_jsonl_atomic
+from scripts.time_helpers import utc_now_iso
 
-WORKSPACE = get_workspace_layout().root
-TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+# Single layout lookup at import time (was 2 separate calls).
+_LAYOUT = get_workspace_layout()
+WORKSPACE = _LAYOUT.root
+TASK_LEDGER = _LAYOUT.state_root / "task-ledger.jsonl"
 
 
 def build_task(args: argparse.Namespace) -> dict:

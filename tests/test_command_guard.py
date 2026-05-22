@@ -570,3 +570,109 @@ class TestImmutableTupleFields:
     def test_decision_matched_rules_is_tuple(self):
         decision = _guard(["rm", "-rf", "/"], "risky_edit")
         assert isinstance(decision.matched_rules, tuple)
+
+
+# ---------------------------------------------------------------------------
+# Advisory action-scope wiring (R2 I1)
+# ---------------------------------------------------------------------------
+
+
+class TestAdvisoryActionScopeWiring:
+    """The guard attaches a Phase-A action-scope decision when task strings exist."""
+
+    def test_advisory_action_scope_populated_with_korean_edit_verb(self):
+        decision = evaluate_command_guard(
+            command=["git", "status"],
+            selected_profile="inspect_local",
+            profiles=PROFILES,
+            workspace=Path("/tmp/test-workspace"),
+            task_name="회의록 수정합니다",
+        )
+        assert decision.advisory_action_scope is not None
+        assert decision.advisory_action_scope["advisory_only"] is True
+        assert decision.advisory_action_scope["locked_scope"] == "edit"
+
+    def test_advisory_action_scope_absent_when_no_task_strings(self):
+        decision = evaluate_command_guard(
+            command=["git", "status"],
+            selected_profile="inspect_local",
+            profiles=PROFILES,
+            workspace=Path("/tmp/test-workspace"),
+        )
+        assert decision.advisory_action_scope is None
+
+    def test_decision_to_json_omits_advisory_when_none(self):
+        decision = evaluate_command_guard(
+            command=["git", "status"],
+            selected_profile="inspect_local",
+            profiles=PROFILES,
+            workspace=Path("/tmp/test-workspace"),
+        )
+        payload = decision_to_json(decision)
+        # Old consumers must not see a new key when advisory is unavailable.
+        assert "advisory_action_scope" not in payload
+
+    def test_decision_to_json_includes_advisory_when_populated(self):
+        decision = evaluate_command_guard(
+            command=["git", "status"],
+            selected_profile="inspect_local",
+            profiles=PROFILES,
+            workspace=Path("/tmp/test-workspace"),
+            task_name="삭제할게요",  # delete verb
+        )
+        payload = decision_to_json(decision)
+        assert "advisory_action_scope" in payload
+        assert payload["advisory_action_scope"]["advisory_only"] is True
+
+    def test_advisory_failure_does_not_break_guard(self, monkeypatch):
+        """If action_scope.evaluate raises, the guard still returns a decision."""
+        import scripts.action_scope as scope
+
+        def explode(*_args, **_kwargs):
+            raise RuntimeError("synthetic failure")
+
+        monkeypatch.setattr(scope, "evaluate", explode)
+        decision = evaluate_command_guard(
+            command=["git", "status"],
+            selected_profile="inspect_local",
+            profiles=PROFILES,
+            workspace=Path("/tmp/test-workspace"),
+            task_name="회의록 수정합니다",
+        )
+        assert decision.advisory_action_scope is None
+        # The guard's own ``action`` must still be authoritative.
+        assert decision.action == "allow"
+
+    def test_advisory_failure_increments_observability_counter(self, monkeypatch):
+        """R5 M2: command_guard records advisory failures in the counter.
+
+        Pre-R5 the bare ``except Exception: pass`` left operators with
+        no signal when ``scripts.action_scope`` regressed. This test
+        pins the observability contract: the per-channel counter must
+        increment so the failure is no longer indistinguishable from
+        "no task strings supplied".
+        """
+        from scripts.advisory_log import (
+            reset_advisory_failures,
+            snapshot_advisory_failures,
+        )
+        import scripts.action_scope as scope
+
+        reset_advisory_failures()
+
+        def explode(*_args, **_kwargs):
+            raise RuntimeError("synthetic failure")
+
+        monkeypatch.setattr(scope, "evaluate", explode)
+        decision = evaluate_command_guard(
+            command=["git", "status"],
+            selected_profile="inspect_local",
+            profiles=PROFILES,
+            workspace=Path("/tmp/test-workspace"),
+            task_name="회의록 수정합니다",
+        )
+        assert decision.advisory_action_scope is None
+        snapshot = snapshot_advisory_failures()
+        assert snapshot.get("command_guard.action_scope", 0) >= 1
+        assert snapshot.get("command_guard.action_scope:RuntimeError", 0) >= 1
+        reset_advisory_failures()

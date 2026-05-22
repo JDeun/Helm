@@ -3,8 +3,15 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.jsonl_io import iter_jsonl_silent
+from scripts.time_helpers import utc_now_iso
 
 
 WORKSPACE = Path.home() / ".helm" / "workspace"
@@ -15,24 +22,14 @@ DEFAULT_MAX_REJECTS = 0
 SIGNATURE_MODES = {"simple", "contextual"}
 
 
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 def read_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    rows: list[dict] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
+    """Read a JSONL decision log file.
+
+    Uses the silent variant of the shared helper to preserve the
+    historical behavior of treating decision-log corruption as a
+    best-effort skip rather than a fatal stderr warning.
+    """
+    return list(iter_jsonl_silent(path))
 
 
 def append_jsonl(path: Path, payload: dict) -> None:

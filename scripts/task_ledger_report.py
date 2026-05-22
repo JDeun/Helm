@@ -15,8 +15,10 @@ from helm_workspace import get_workspace_layout
 from scripts.adaptive_harness_lib import entry_evidence_requirements, resolve_skill_contract
 
 
-WORKSPACE = get_workspace_layout().root
-TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
+# Single layout lookup at import time (was 2 separate calls).
+_LAYOUT = get_workspace_layout()
+WORKSPACE = _LAYOUT.root
+TASK_LEDGER = _LAYOUT.state_root / "task-ledger.jsonl"
 
 
 def load_entries() -> list[dict]:

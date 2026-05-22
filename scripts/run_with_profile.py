@@ -20,6 +20,14 @@ from scripts.memory_capture import build_memory_capture_plan
 from scripts.state_io import append_jsonl_atomic
 from scripts.command_guard import CommandClassification, GuardDecision, evaluate_command_guard, decision_to_json
 from scripts.state_snapshot import latest_snapshot_path, write_state_snapshot
+
+# Module-top advisory_log import keeps the "advisory never raises" invariant
+# (R6 Minor M1). Falls back to a noop counter if advisory_log itself fails.
+try:
+    from scripts.advisory_log import record_advisory_failure as _record_advisory_failure
+except Exception:  # noqa: BLE001 - intentional last-resort fallback
+    def _record_advisory_failure(channel: str, exc: BaseException) -> None:
+        return None
 from scripts.skill_manifest_lib import (
     load_skill_policies as load_manifest_policies,
     load_skill_contract_manifests,
@@ -29,22 +37,22 @@ from scripts.skill_manifest_lib import (
     validate_contract_manifest,
 )
 from scripts.skill_lifecycle_lib import record_runner_event
+from scripts.time_helpers import utc_now_iso
 
 
 EXIT_GUARD_REQUIRE_APPROVAL = 24
 EXIT_GUARD_DENY = 25
 
-WORKSPACE = get_workspace_layout().root
+# Single layout lookup at import time (was 4 separate calls; see 2026-05-21
+# Helm full review issue #9).
+_LAYOUT = get_workspace_layout()
+WORKSPACE = _LAYOUT.root
 PROFILE_FILE = WORKSPACE / "references" / "execution_profiles.json"
 POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"
 CHECKPOINT_SCRIPT = ROOT / "scripts" / "workspace_checkpoint.py"
-TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
-CHECKPOINT_INDEX = get_workspace_layout().checkpoints_root / "index.json"
-STATE_ROOT = get_workspace_layout().state_root
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+TASK_LEDGER = _LAYOUT.state_root / "task-ledger.jsonl"
+CHECKPOINT_INDEX = _LAYOUT.checkpoints_root / "index.json"
+STATE_ROOT = _LAYOUT.state_root
 
 
 _MINIMAL_ENV_KEYS = {
@@ -462,6 +470,46 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     return 0
 
 
+def _attach_advisory_action_scope(task: dict, args: argparse.Namespace) -> None:
+    """Attach a Phase-A action-scope evaluation to ``task`` for observability.
+
+    Advisory only — never blocks or modifies the run path. Failure of
+    any kind degrades silently (the field is omitted from the task
+    entry). Wired here so the task-ledger row carries the Phase-A
+    module's view of the user-supplied task name + goal, which lets
+    operators correlate guard decisions with the action-scope lock
+    after the fact (R2 I1).
+    """
+    try:
+        from scripts.action_scope import evaluate as _scope_evaluate
+        parts = [s for s in (getattr(args, "task_name", None), getattr(args, "task_goal", None)) if s]
+        if not parts:
+            return
+        decision = _scope_evaluate("\n".join(parts))
+        payload = decision.as_dict()
+        task["advisory_action_scope"] = {
+            "locked_scope": payload.get("locked_scope"),
+            "matched_verb": payload.get("matched_verb"),
+            "allowed": payload.get("allowed"),
+            "needs_live_source": payload.get("needs_live_source"),
+            "advisory_only": True,
+        }
+    except (ImportError, AttributeError) as exc:
+        # Module wiring failure (e.g. action_scope refactor in flight).
+        # Advisory mode: never raise out of the production hot path,
+        # but record so operators can spot a regression in the
+        # advisory channel via helm doctor or the counter snapshot.
+        _record_advisory_failure(
+            "run_with_profile.action_scope.wiring", exc
+        )
+    except Exception as exc:
+        # Unexpected raise from the evaluator itself. Still advisory:
+        # leave the breadcrumb, then degrade silently.
+        _record_advisory_failure(
+            "run_with_profile.action_scope", exc
+        )
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     profiles = load_profiles()
     if args.profile not in profiles:
@@ -476,6 +524,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     validate_skill_profile(args.skill, args.profile)
 
     task = task_stub(args.profile, args, command)
+    # Advisory Phase-A wiring (R2 I1): best-effort, silent on failure.
+    _attach_advisory_action_scope(task, args)
     append_ledger(task)
 
     checkpoint = run_checkpoint(args.profile, args)

@@ -22,9 +22,12 @@ if str(ROOT) not in sys.path:
 from helm_workspace import get_workspace_layout
 from scripts.discovery import discover_environment, snapshot_to_json
 from scripts.model_provider_probe import probe_api_providers_from_env, probe_local_providers
+from scripts.time_helpers import utc_now_iso
 
-WORKSPACE = get_workspace_layout().root
-STATE_ROOT = get_workspace_layout().state_root
+# Single layout lookup at import time (was 2 separate calls).
+_LAYOUT = get_workspace_layout()
+WORKSPACE = _LAYOUT.root
+STATE_ROOT = _LAYOUT.state_root
 POLICY_FILE = WORKSPACE / "references" / "model_recovery_policy.json"
 
 _DEFAULT_MODEL_REGISTRY: dict[str, dict[str, Any]] = {
@@ -63,10 +66,6 @@ class ProbeOutcome:
     status: str | None = None
     auth_status: str | None = None
     generation_status: str | None = None
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def parse_iso(value: str | None) -> float | None:

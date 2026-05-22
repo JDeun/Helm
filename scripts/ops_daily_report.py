@@ -12,27 +12,27 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.jsonl_io import iter_jsonl_silent
 
 
-WORKSPACE = get_workspace_layout().root
-STATE_ROOT = get_workspace_layout().state_root
+# Module-level workspace constants are computed once at import time
+# via a single layout lookup — the previous code called
+# ``get_workspace_layout()`` twice in a row which forced two cwd walks.
+_LAYOUT = get_workspace_layout()
+WORKSPACE = _LAYOUT.root
+STATE_ROOT = _LAYOUT.state_root
 DRAFTS_ROOT = WORKSPACE / "skill_drafts"
 
 
 def read_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    rows: list[dict] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
+    """Read a JSONL daily-report state file.
+
+    Uses the silent variant of the shared helper to preserve this
+    module's historical behavior of swallowing malformed lines without
+    warning (the report layer is best-effort and downstream tooling
+    already surfaces JSONL corruption via ``helm db verify``).
+    """
+    return list(iter_jsonl_silent(path))
 
 
 def latest_tasks() -> list[dict]:

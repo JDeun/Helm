@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from helm_context import ContextSource, configured_context_sources
 from helm_workspace import get_workspace_layout
+from scripts.jsonl_io import iter_jsonl as _shared_iter_jsonl
 
 
 WORKSPACE = get_workspace_layout().root
@@ -86,25 +87,19 @@ class SearchResult:
 
 
 def read_jsonl(path: Path) -> list[dict]:
+    """List-materializing wrapper around :func:`iter_jsonl`."""
     return list(iter_jsonl(path))
 
 
 def iter_jsonl(path: Path) -> Iterable[dict]:
-    if not path.exists():
-        return
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        for lineno, line in enumerate(handle, start=1):
-            if not line.strip():
-                continue
-            try:
-                payload = json.loads(line)
-            except json.JSONDecodeError as exc:
-                print(f"warning: ignoring malformed JSONL line {lineno} in {path}: {exc}", file=sys.stderr)
-                continue
-            if not isinstance(payload, dict):
-                print(f"warning: ignoring non-object JSONL line {lineno} in {path}", file=sys.stderr)
-                continue
-            yield payload
+    """Stream dicts from a JSONL state file.
+
+    Delegates to :func:`scripts.jsonl_io.iter_jsonl` so the
+    malformed-line warning policy is consistent with
+    ``commands.read_jsonl``, ``memory_ops._read_jsonl``, and
+    ``skill_capture.read_jsonl``.
+    """
+    yield from _shared_iter_jsonl(path)
 
 
 def read_json_array(path: Path) -> list[dict]:
@@ -269,13 +264,35 @@ def dedupe_results(results: list[SearchResult]) -> list[SearchResult]:
     return deduped
 
 
+# Memory tree walks (notes / memory) only ever consume these extensions.
+# Hoisting the tuple makes it visible to ``load_memory_results`` for an
+# early extension filter, replacing the prior ``rglob("*")`` (which
+# materialised every file in an Obsidian vault before filtering).
+_MEMORY_TEXT_EXTENSIONS: tuple[str, ...] = (".md", ".txt", ".json", ".jsonl")
+
+
 def text_files_under(root: Path) -> list[Path]:
     if not root.exists():
         return []
     files: list[Path] = []
-    for pattern in ("*.md", "*.txt", "*.json", "*.jsonl"):
-        files.extend(sorted(root.rglob(pattern)))
+    for ext in _MEMORY_TEXT_EXTENSIONS:
+        files.extend(sorted(root.rglob(f"*{ext}")))
     return sorted(dict.fromkeys(files))
+
+
+def iter_memory_text_files(root: Path) -> Iterable[Path]:
+    """Yield candidate text/structured files under ``root`` lazily.
+
+    Unlike ``text_files_under`` this does not materialise the full list
+    before returning. Callers that need a single sorted ordering should
+    still use ``text_files_under``; callers that filter+limit (e.g.
+    ``load_memory_results``) should prefer this iterator so very large
+    Obsidian vaults do not pay the full walk cost up front.
+    """
+    if not root.exists():
+        return
+    for ext in _MEMORY_TEXT_EXTENSIONS:
+        yield from root.rglob(f"*{ext}")
 
 
 def load_note_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
@@ -325,7 +342,13 @@ def load_memory_results(source: ContextSource, args: argparse.Namespace) -> Iter
         return
     queryless = args.query is None
     emitted = 0
-    paths = [path for path in memory_root.rglob("*") if path.is_file()]
+    # Prefilter by extension via iter_memory_text_files so we never
+    # materialise the entire subtree (Obsidian vaults can hold tens of
+    # thousands of files; the previous code did rglob("*") then filtered).
+    # Deduplicate via dict.fromkeys because an .md path can only appear
+    # once across extension globs, but the iterator may yield ordering
+    # variations on case-insensitive filesystems.
+    paths = list(dict.fromkeys(iter_memory_text_files(memory_root)))
     ordered_paths = sorted(paths, key=_safe_mtime, reverse=True) if queryless else sorted(paths)
     for path in ordered_paths:
         if not path.is_file():

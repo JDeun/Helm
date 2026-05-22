@@ -10,15 +10,12 @@ from pathlib import Path
 
 from commands import read_jsonl, state_root_for, target_root
 from scripts.state_io import append_jsonl_atomic
+from scripts.time_helpers import utc_now_iso
 
 
 TERMINAL_STATUSES = {"completed", "failed", "blocked", "timeout", "handoff_required", "archived", "stale"}
 ACTIVE_STATUSES = {"queued", "running", "ready", "triage"}
 TASK_STATE_SCHEMA_VERSION = 1
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _parse_ts(value: str | None) -> datetime | None:

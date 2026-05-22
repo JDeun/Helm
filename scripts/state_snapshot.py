@@ -4,12 +4,15 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+from scripts.time_helpers import utc_now_iso  # noqa: E402 — re-export
 
 
 def compact_timestamp(value: str | None = None) -> str:

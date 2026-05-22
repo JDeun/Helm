@@ -12,16 +12,19 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.jsonl_io import read_jsonl as _shared_read_jsonl
 from scripts.skill_manifest_lib import load_skill_policies as load_manifest_policies
 from scripts.skill_lifecycle_lib import record_runner_event
 
 
-WORKSPACE = get_workspace_layout().root
+# Single layout lookup at import time (was previously 3 separate calls).
+_LAYOUT = get_workspace_layout()
+WORKSPACE = _LAYOUT.root
 SKILLS_ROOT = WORKSPACE / "skills"
 DRAFTS_ROOT = WORKSPACE / "skill_drafts"
 TEMPLATE_PATH = WORKSPACE / "references" / "skill-capture-template.md"
-TASK_LEDGER = get_workspace_layout().state_root / "task-ledger.jsonl"
-COMMAND_LOG = get_workspace_layout().state_root / "command-log.jsonl"
+TASK_LEDGER = _LAYOUT.state_root / "task-ledger.jsonl"
+COMMAND_LOG = _LAYOUT.state_root / "command-log.jsonl"
 CONTRACT_TEMPLATE_PATH = WORKSPACE / "references" / "skill-contract-template.json"
 
 PLACEHOLDER_MARKERS = (
@@ -104,22 +107,13 @@ def create_skill(args: argparse.Namespace) -> int:
 
 
 def read_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    rows: list[dict] = []
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            print(f"warning: ignoring malformed JSONL line {lineno} in {path}: {exc}", file=sys.stderr)
-            continue
-        if not isinstance(payload, dict):
-            print(f"warning: ignoring non-object JSONL line {lineno} in {path}", file=sys.stderr)
-            continue
-        rows.append(payload)
-    return rows
+    """Read a JSONL state file.
+
+    Delegates to :func:`scripts.jsonl_io.read_jsonl`; warnings on
+    malformed lines are emitted via the shared helper so the format is
+    consistent across the repo.
+    """
+    return _shared_read_jsonl(path)
 
 
 def load_policies() -> dict[str, dict]:

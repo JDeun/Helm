@@ -18,8 +18,10 @@ if str(ROOT) not in sys.path:
 from helm_workspace import get_workspace_layout
 
 
-WORKSPACE = get_workspace_layout().root
-CHECKPOINT_ROOT = get_workspace_layout().checkpoints_root
+# Single layout lookup at import time (was 2 separate calls).
+_LAYOUT = get_workspace_layout()
+WORKSPACE = _LAYOUT.root
+CHECKPOINT_ROOT = _LAYOUT.checkpoints_root
 
 
 @dataclass
