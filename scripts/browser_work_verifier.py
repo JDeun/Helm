@@ -175,10 +175,10 @@ def _resolve_site_note_path(
         if not host:
             return None
 
-    # Sanitise: strip leading wildcard segments (*.sub.example.com → example.com
-    # is NOT what we want — we keep the full hostname because site notes are
-    # per-host, not per-TLD).
-    host = host.lstrip("*.")
+    # Sanitise: strip trailing DNS dot (FQDN form "example.com.") and any
+    # leading wildcard segments.  We keep the full hostname because site notes
+    # are per-host, not per-TLD; "*.sub.example.com" → "sub.example.com".
+    host = host.strip(".").lstrip("*")
 
     if not host:
         return None

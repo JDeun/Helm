@@ -2,6 +2,9 @@
 
 Wave 6 — harness-engineering rollout.
 
+See also :mod:`scripts.shadow_mode_report` for the aggregation layer whose
+output feeds into this module's :func:`recommend` function.
+
 Decision rules
 --------------
 Each rule is documented below.  Thresholds are defined as module-level

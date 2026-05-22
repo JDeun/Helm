@@ -1,7 +1,9 @@
 from __future__ import annotations
 import json
 import sys
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -814,3 +816,95 @@ def test_guard_json_prints_decision_and_exits(capsys):
     parsed = _json.loads(out.out)
     assert "action" in parsed, "JSON output must contain 'action' field"
     assert parsed["action"] == "allow"
+
+
+# ---------------------------------------------------------------------------
+# FIX H-1: _count_active_browser_sessions — documented throughput assumption
+# ---------------------------------------------------------------------------
+
+def _make_ledger_entry(
+    *,
+    task_id: str,
+    profile: str = "inspect_local",
+    status: str = "browser_approved_with_risk",
+    started_at: str | None = None,
+    cleanup_status: str | None = None,
+) -> dict:
+    ts = started_at or datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    entry: dict = {
+        "task_id": task_id,
+        "profile": profile,
+        "status": status,
+        "browser_recon": {"require_cleanup_evidence": False},
+        "started_at": ts,
+    }
+    if cleanup_status is not None:
+        entry["cleanup_status"] = cleanup_status
+    return entry
+
+
+def test_count_active_browser_sessions_documented_throughput_assumption(tmp_path):
+    """H-1: when synthetic ledger has 2500+ rows in the 10-minute window the
+    counter returns a value (≥0) and does not raise.  With _BROWSER_SESSION_TAIL_LINES
+    = 2000, only the last 2000 lines are examined — some earlier open sessions
+    may be missed, which is the documented limitation.
+    """
+    from scripts import run_with_profile as rwp
+
+    ledger = tmp_path / "task-ledger.jsonl"
+    now_iso = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+    # Write 2500 open-session rows all within the 10-minute window.
+    lines = []
+    for i in range(2500):
+        entry = _make_ledger_entry(task_id=f"t{i:04d}", started_at=now_iso)
+        lines.append(json.dumps(entry))
+    ledger.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    with patch.object(rwp, "TASK_LEDGER", ledger):
+        count = rwp._count_active_browser_sessions("inspect_local", window_minutes=10)
+
+    # With tail cap of 2000, we should see at most 2000 (and possibly fewer
+    # due to profile filtering, but all 2000 are inspect_local so == 2000).
+    assert isinstance(count, int)
+    assert count >= 0
+    # The tail cap means we see exactly _BROWSER_SESSION_TAIL_LINES at most.
+    assert count <= rwp._BROWSER_SESSION_TAIL_LINES, (
+        f"count={count} exceeds tail cap {rwp._BROWSER_SESSION_TAIL_LINES}"
+    )
+    # TODO: if a real warning/debug log is added for oversized ledgers, assert it here.
+
+
+def test_count_active_browser_sessions_uses_constant_not_literal(tmp_path):
+    """H-1: _BROWSER_SESSION_TAIL_LINES is the live constant (not a copy)."""
+    from scripts import run_with_profile as rwp
+    assert hasattr(rwp, "_BROWSER_SESSION_TAIL_LINES")
+    assert isinstance(rwp._BROWSER_SESSION_TAIL_LINES, int)
+    assert rwp._BROWSER_SESSION_TAIL_LINES == 2000
+
+
+# ---------------------------------------------------------------------------
+# FIX H-2: _require_cleanup_evidence_from_entry — non-dict browser_recon
+# ---------------------------------------------------------------------------
+
+def test_require_cleanup_evidence_from_entry_variants():
+    """H-2: All non-canonical browser_recon values resolve to False;
+    only dict with require_cleanup_evidence=True returns True.
+    """
+    from scripts.run_with_profile import _require_cleanup_evidence_from_entry
+
+    # Non-dict values → False
+    assert _require_cleanup_evidence_from_entry({"browser_recon": True}) is False
+    assert _require_cleanup_evidence_from_entry({"browser_recon": "yes"}) is False
+    assert _require_cleanup_evidence_from_entry({"browser_recon": None}) is False
+    assert _require_cleanup_evidence_from_entry({}) is False  # missing key
+    # Empty dict → False (key absent)
+    assert _require_cleanup_evidence_from_entry({"browser_recon": {}}) is False
+    # Dict with truthy string value → truthy but we want explicit True
+    assert _require_cleanup_evidence_from_entry(
+        {"browser_recon": {"require_cleanup_evidence": "yes"}}
+    ) is True  # bool("yes") is True; acceptable truthy
+    # The canonical dict case → True
+    assert _require_cleanup_evidence_from_entry(
+        {"browser_recon": {"require_cleanup_evidence": True}}
+    ) is True

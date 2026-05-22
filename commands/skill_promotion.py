@@ -1,5 +1,10 @@
 """Helm CLI commands for the skill-promotion pipeline (Wave 4).
 
+``skill_promotion_state``, ``skill_promotion_digest``, and
+``skill_promotion_approval`` form a single pipeline: state tracks candidates,
+digest builds and sends the Telegram payload, approval parses replies and
+applies state transitions.
+
 Subcommands
 -----------
 digest      Build and print the daily/weekly digest payload as JSON.
