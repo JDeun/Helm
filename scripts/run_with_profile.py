@@ -38,10 +38,24 @@ from scripts.skill_manifest_lib import (
 )
 from scripts.skill_lifecycle_lib import record_runner_event
 from scripts.time_helpers import utc_now_iso
+from scripts.state_io import build_ledger_entry
 
 
 EXIT_GUARD_REQUIRE_APPROVAL = 24
 EXIT_GUARD_DENY = 25
+EXIT_PAUSED = 26
+
+_PAUSE_GATE_TRUTHY = frozenset({"1", "true", "yes"})
+
+
+def _pause_gate_enabled() -> bool:
+    """Return True only when OPENCLAW_PAUSE_GATE is set to a truthy value.
+
+    Truthy values (case-insensitive): "1", "true", "yes".
+    All other values (including unset / "" / "0" / "false" / "no") return False.
+    """
+    raw = os.environ.get("OPENCLAW_PAUSE_GATE", "")
+    return raw.strip().lower() in _PAUSE_GATE_TRUTHY
 
 # Single layout lookup at import time (was 4 separate calls; see 2026-05-21
 # Helm full review issue #9).
@@ -558,6 +572,26 @@ def cmd_run(args: argparse.Namespace) -> int:
     command = args.command
     if not command:
         raise SystemExit("No command supplied. Use `-- <command> ...`")
+
+    # --- Pause gate (OPENCLAW_PAUSE_GATE) ---
+    # Feature flag check FIRST: no side effects when disabled.
+    if _pause_gate_enabled():
+        from scripts.profile_pause_resume import check_can_start, _default_path as _pause_default_path
+        can_start, pause_reason = check_can_start(args.profile, _pause_default_path())
+        if not can_start:
+            print(f"profile {args.profile} paused: {pause_reason}", file=sys.stderr)
+            ensure_ledger_dir()
+            blocked_entry = build_ledger_entry(
+                {
+                    "status": "blocked_by_pause",
+                    "profile": args.profile,
+                    "reason": pause_reason,
+                    "updated_at": utc_now_iso(),
+                },
+            )
+            append_ledger(blocked_entry)
+            return EXIT_PAUSED
+    # --- End pause gate ---
 
     validate_skill_profile(args.skill, args.profile)
 
