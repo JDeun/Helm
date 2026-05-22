@@ -11,8 +11,6 @@ Covers:
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
 import sys
 from pathlib import Path
@@ -99,14 +97,9 @@ class TestClassifyError:
         stderr = "Traceback (most recent call last): RuntimeError: something went wrong"
         assert classify_error(stderr) == "exit_nonzero"
 
-    def test_empty_returns_unknown(self):
-        assert classify_error("") == "unknown"
-
-    def test_none_returns_unknown(self):
-        assert classify_error(None) == "unknown"
-
-    def test_whitespace_returns_unknown(self):
-        assert classify_error("   ") == "unknown"
+    @pytest.mark.parametrize("value", ["", None, "   "])
+    def test_empty_inputs_return_unknown(self, value):
+        assert classify_error(value) == "unknown"
 
     def test_gws_auth(self):
         stderr = "gws: authentication failed: 401 Unauthorized"
@@ -150,11 +143,9 @@ class TestClassifyError:
 # ---------------------------------------------------------------------------
 
 class TestNormalizeTarget:
-    def test_none_returns_none(self):
-        assert normalize_target(None) is None
-
-    def test_empty_returns_none(self):
-        assert normalize_target("") is None
+    @pytest.mark.parametrize("value", [None, ""])
+    def test_empty_inputs_return_none(self, value):
+        assert normalize_target(value) is None
 
     def test_home_path_replaced(self):
         home = os.path.expanduser("~")
@@ -332,22 +323,12 @@ class TestSignatureFS004:
 class TestSignatureFS005:
     """FS-005: obsidian_link_maintenance.py → obsidian_link_maintenance"""
 
-    def test_error_class_exit1(self):
+    def test_error_class(self):
         event = _make_event(
             ["python3", "/workspace/scripts/obsidian_link_maintenance.py"],
             skill="knowledge-capture-ko",
             profile="workspace_edit",
             exit_code=1,
-        )
-        sig = signature(event)
-        assert sig["error_class"] == "obsidian_link_maintenance"
-
-    def test_error_class_exit2(self):
-        event = _make_event(
-            ["python3", "/workspace/scripts/obsidian_link_maintenance.py"],
-            skill="knowledge-capture-ko",
-            profile="workspace_edit",
-            exit_code=2,
         )
         sig = signature(event)
         assert sig["error_class"] == "obsidian_link_maintenance"
@@ -371,7 +352,7 @@ class TestSignatureFS006:
             exit_code=1,
         )
         sig = signature(event)
-        assert sig["error_class"] in ("exit_nonzero", "google_sheets_api", "gemini_video_api")
+        assert sig["error_class"] == "exit_nonzero"
 
     def test_error_class_workspace_edit(self):
         event = _make_event(
@@ -381,7 +362,7 @@ class TestSignatureFS006:
             exit_code=1,
         )
         sig = signature(event)
-        assert sig["error_class"] in ("exit_nonzero", "patch_failed")
+        assert sig["error_class"] == "exit_nonzero"
 
     def test_tool_python3(self):
         event = _make_event(["python3", "-c", "pass"])
@@ -493,7 +474,7 @@ class TestSignatureFS010:
             exit_code=2,
         )
         sig = signature(event)
-        assert sig["error_class"] in ("exit_nonzero", "google_sheets_api")
+        assert sig["error_class"] == "exit_nonzero"
 
     def test_tool_name(self):
         event = _make_event(

@@ -47,21 +47,6 @@ _RE_URL_QUERY = re.compile(r"\?.*$")
 
 
 # ---------------------------------------------------------------------------
-# Tool-name extraction rules (ordered — first match wins)
-# ---------------------------------------------------------------------------
-
-# Map: regex on command string → normalized tool name
-# Built from FS-001..FS-010 script names.
-_SCRIPT_TOOL_PATTERNS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"google_sheets_append_row"), "google_sheets_append_row"),
-    (re.compile(r"google_sheets_read_range"), "google_sheets_read_range"),
-    (re.compile(r"gemini_video_understand"), "gemini_video_understand"),
-    (re.compile(r"obsidian_link_maintenance"), "obsidian_link_maintenance"),
-    (re.compile(r"household_ledger_runner"), "household_ledger_runner"),
-]
-
-
-# ---------------------------------------------------------------------------
 # Error classification patterns (ordered — first match wins)
 # ---------------------------------------------------------------------------
 
@@ -136,6 +121,17 @@ _ERROR_CLASS_PATTERNS: list[tuple[re.Pattern, str]] = [
 
 # GWS CLI: exit code 3 is also a google_sheets_api indicator (FS-003)
 # This is handled inside signature() by cross-referencing the tool.
+
+# Map: normalized tool name → error_class for known external-API tools.
+# Used by _classify_from_event as a fallback when stderr/failure_reason
+# don't carry an explicit signal.
+_TOOL_TO_ERROR_CLASS: dict[str, str] = {
+    "google_sheets_append_row": "google_sheets_api",
+    "google_sheets_read_range": "google_sheets_api",
+    "gemini_video_understand": "gemini_video_api",
+    "obsidian_link_maintenance": "obsidian_link_maintenance",
+    "gws": "google_sheets_api",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -218,30 +214,19 @@ def _extract_tool(command: list[str]) -> str:
     if not command:
         return "unknown"
 
-    # Join command as a single string for pattern matching
-    cmd_str = " ".join(str(part) for part in command)
-
-    # Check for known script names first
-    for pattern, tool_name in _SCRIPT_TOOL_PATTERNS:
-        if pattern.search(cmd_str):
-            return tool_name
-
     # First token is the executable
     executable = str(command[0])
-    # If it's python3/python, look at the next argument
     basename = Path(executable).name
+
+    # If it's python/python3, walk argv for the script name and return its stem.
     if basename in ("python3", "python", "python2"):
-        # Walk argv to find the script
         for arg in command[1:]:
             arg_str = str(arg)
             if not arg_str.startswith("-") and (arg_str.endswith(".py") or "/" in arg_str):
                 return Path(arg_str).stem
         return basename
 
-    # For shell executables, return just the executable name
-    if basename in ("bash", "zsh", "sh", "fish"):
-        return basename
-
+    # For everything else (shells, CLIs like `gws`, etc.) return the basename.
     return basename
 
 
@@ -291,16 +276,9 @@ def _classify_from_event(event: dict) -> str:
             return cls
 
     # 5. Command-based heuristics (known scripts → fixed error_class)
-    script_to_class: dict[str, str] = {
-        "google_sheets_append_row": "google_sheets_api",
-        "google_sheets_read_range": "google_sheets_api",
-        "gemini_video_understand": "gemini_video_api",
-        "obsidian_link_maintenance": "obsidian_link_maintenance",
-        "gws": "google_sheets_api",
-    }
     tool = _extract_tool(command)
-    if tool in script_to_class and status == "failed":
-        return script_to_class[tool]
+    if tool in _TOOL_TO_ERROR_CLASS and status == "failed":
+        return _TOOL_TO_ERROR_CLASS[tool]
 
     # gws exit code 3 is a network/auth error (FS-003)
     if tool == "gws" and exit_code == 3:
