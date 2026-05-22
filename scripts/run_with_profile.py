@@ -73,6 +73,25 @@ _BROWSER_ACTIONS = frozenset({
     "crawl_batch", "fillform", "interact", "submit",
 })
 
+# Default tool-group names requested when no --tool-grant flag is present.
+# Used by _attach_tool_grant; defined at module level so tests and callers
+# can inspect or override without patching a closure.
+_DEFAULT_REQUESTED_TOOLS: list[str] = [
+    "read_file",
+    "apply_patch",
+    "focused_test",
+    "git_diff",
+    "broad_shell",
+    "external_network",
+    "secrets_read",
+    "destructive_git",
+]
+
+# Tail cap for _count_active_browser_sessions.  2000 lines covers a 10-minute
+# window at up to 200 task-starts per minute.  Raise this constant if your
+# throughput exceeds that rate.
+_BROWSER_SESSION_TAIL_LINES: int = 2000
+
 # Single layout lookup at import time (was 4 separate calls; see 2026-05-21
 # Helm full review issue #9).
 _LAYOUT = get_workspace_layout()
@@ -555,16 +574,6 @@ def _attach_tool_grant(task: dict, profile: str) -> None:
     if "tool_grant" in task:
         # Idempotent: already computed, do not overwrite.
         return
-    _DEFAULT_REQUESTED_TOOLS = [
-        "read_file",
-        "apply_patch",
-        "focused_test",
-        "git_diff",
-        "broad_shell",
-        "external_network",
-        "secrets_read",
-        "destructive_git",
-    ]
     try:
         from scripts.tool_groups import compute_grant
         grant = compute_grant(profile, _DEFAULT_REQUESTED_TOOLS)
@@ -594,6 +603,7 @@ def _count_active_browser_sessions(
     """Count open browser sessions for *profile* in the recent ledger window.
 
     OQ-3: Runner-side max_sessions enforcement via ledger counter.
+    Extracted for testability; called only from ``_evaluate_browser_gate``.
 
     A session is "open" when:
     - A ledger entry has ``browser_recon`` set (verifier was called)
@@ -605,6 +615,13 @@ def _count_active_browser_sessions(
 
     Returns the count of such open sessions.  Returns 0 on any read/
     parse error (fail-open so that ledger corruption never blocks work).
+
+    Throughput assumption
+    ---------------------
+    Only the last ``_BROWSER_SESSION_TAIL_LINES`` ledger lines are examined.
+    This covers a 10-minute window at up to 200 task-starts per minute.  At
+    higher throughput the tail cap may miss older still-open sessions; raise
+    ``_BROWSER_SESSION_TAIL_LINES`` accordingly.
     """
     from scripts.time_helpers import utc_now_iso
     try:
@@ -613,8 +630,9 @@ def _count_active_browser_sessions(
 
         lines = TASK_LEDGER.read_text(encoding="utf-8").splitlines()
         # Parse all entries, keep only the last N lines for performance
-        # (10-minute window; tasks rarely exceed 1 line/second).
-        tail_lines = lines[-2000:]
+        # (10-minute window; see _BROWSER_SESSION_TAIL_LINES for the
+        # throughput assumption).
+        tail_lines = lines[-_BROWSER_SESSION_TAIL_LINES:]
 
         now_ts = utc_now_iso()
         # Build a simple ISO-comparable window cutoff.
@@ -681,10 +699,25 @@ def _count_active_browser_sessions(
         return 0
 
 
+def _require_cleanup_evidence_from_entry(entry: dict) -> bool:
+    """Return True iff *entry* has ``browser_recon.require_cleanup_evidence == True``.
+
+    Defensively handles the case where ``browser_recon`` is None, missing, or
+    any non-dict type (boolean, string, int, …) — all resolve to False.
+    Only a ``dict`` with ``require_cleanup_evidence`` set to a truthy value
+    returns True.
+    """
+    recon = entry.get("browser_recon")
+    if not isinstance(recon, dict):
+        return False
+    return bool(recon.get("require_cleanup_evidence"))
+
+
 def _check_cleanup_required_satisfied(task_id: str) -> tuple[bool, str | None]:
     """Check whether cleanup evidence is recorded for *task_id*.
 
     OQ-7: Finalization gate.
+    Extracted for testability; called only from ``cmd_run``.
 
     Returns ``(satisfied, reason)`` where:
     - ``satisfied=True`` means cleanup is not required OR evidence exists.
@@ -716,7 +749,7 @@ def _check_cleanup_required_satisfied(task_id: str) -> tuple[bool, str | None]:
 
         # Check if any entry required cleanup evidence.
         cleanup_required = any(
-            entry.get("browser_recon", {}).get("require_cleanup_evidence")
+            _require_cleanup_evidence_from_entry(entry)
             for entry in entries_for_task
         )
         if not cleanup_required:
