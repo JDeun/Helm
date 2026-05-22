@@ -69,19 +69,11 @@ from typing import Any
 # Default state-file location
 # ---------------------------------------------------------------------------
 
-_DEFAULT_STATE_PATH = Path(
-    os.environ.get(
-        "OPENCLAW_PAUSE_STATE",
-        str(Path.home() / ".openclaw" / "workspace" / ".openclaw" / "profile-pause-state.json"),
-    )
-)
-
-
 def _default_path() -> Path:
     """Return the effective default state-file path (re-evaluates env var each call)."""
     env = os.environ.get("OPENCLAW_PAUSE_STATE")
     if env:
-        return Path(env)
+        return Path(env).expanduser()
     return Path.home() / ".openclaw" / "workspace" / ".openclaw" / "profile-pause-state.json"
 
 

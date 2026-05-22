@@ -1,7 +1,8 @@
 # tests/test_profile_pause_resume.py
 """Tests for scripts/profile_pause_resume.py — profile-level hard-stop.
 
-Test inventory (10 tests):
+Test inventory (11 tests):
+  0. OPENCLAW_PAUSE_STATE env var with leading ~ expands to home directory.
   1. pause_profile creates an entry; subsequent is_paused returns True.
   2. Calling pause_profile for an already-paused profile updates the entry
      (new reason, new token, new paused_at) but does not duplicate.
@@ -31,6 +32,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.profile_pause_resume import (
+    _default_path,
     check_can_start,
     is_paused,
     list_paused,
@@ -38,6 +40,15 @@ from scripts.profile_pause_resume import (
     pause_session_summary,
     resume_profile,
 )
+
+
+# ---------------------------------------------------------------------------
+# Test 0: OPENCLAW_PAUSE_STATE env var expands ~ to the user's home directory
+# ---------------------------------------------------------------------------
+
+def test_OPENCLAW_PAUSE_STATE_env_expands_tilde(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENCLAW_PAUSE_STATE", "~/custom-pause-state.json")
+    assert _default_path() == Path.home() / "custom-pause-state.json"
 
 
 # ---------------------------------------------------------------------------
