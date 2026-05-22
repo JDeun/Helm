@@ -4,9 +4,10 @@
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>장기 실행 코딩 에이전트를 위한 로컬 운영 레이어.</strong></p>
+<p align="center"><strong>장기 실행 AI 에이전트를 위한 로컬 운영 레이어.</strong></p>
 
 <p align="center">
+  코딩, 운영, 리서치, 자동화 — 같은 workspace에서 몇 시간씩 도는 어떤 agent든.<br/>
   명령 전 profile · 위험 작업 전 checkpoint · chat이 사라진 뒤에도 남는 durable task history.
 </p>
 
@@ -54,19 +55,19 @@ helm dashboard
 
 ## 왜 Helm인가
 
-장기 실행 코딩 에이전트는 drift 합니다. 이전 결정을 잊고, 막을 새도 없이 위험한 수정을 실행하고, 일주일 뒤에는 아무도 audit할 수 없는 chat log만 남깁니다.
+장기 실행 AI 에이전트는 drift 합니다. 이전 결정을 잊고, 막을 새도 없이 위험한 행동을 실행하고, 일주일 뒤에는 아무도 audit할 수 없는 chat log만 남깁니다 — agent가 코드 편집을 하든, ops를 돌리든, 노트를 정리하든, 사이트를 탐색하든, tool 체인을 호출하든.
 
 Helm은 기존 agent runtime 주변을 감싸는 얇은 file-backed 운영 레이어입니다. agent를 **대체하지 않습니다**. agent의 작업이 **경계 안에서, 복구 가능하게, 검토 가능하게** 일어나도록 만듭니다.
 
 | Helm 없이 | Helm으로 |
 | --- | --- |
 | agent가 결정하는 즉시 위험한 명령 실행 | 선언된 execution profile + guard 검사를 거친 실행 |
-| 다중 파일 수정 후 무엇이 바뀌었는지 추측 | 작업 전 checkpoint 생성, 명확한 rollback 지점 |
+| 다단계 / 다중 파일 변경 후 무엇이 바뀌었는지 추측 | 작업 전 checkpoint 생성, 명확한 rollback 지점 |
 | "어제 agent가 뭐 했지?" → chat 스크롤 | 로컬 task ledger, command log, dashboard, markdown report |
 | context가 chat window에만 존재 | file-backed memory + ranked retrieval로 다음 세션 재구성 |
 | skill 규칙이 prompt 안에만 있음 | `SKILL.md` + `contract.json`이 실행 시점에 정책 적용 |
 
-agent가 일회성 데모만 돌린다면 Helm 필요 없음. 같은 프로젝트에 몇 시간씩 돌린다면 필요함.
+agent가 일회성 데모만 돌린다면 Helm 필요 없음. 같은 workspace에 몇 시간씩 돌린다면 — 코딩이든 ops든 지식 캡처든 — 필요함.
 
 ---
 
