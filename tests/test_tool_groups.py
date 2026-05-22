@@ -408,3 +408,21 @@ def test_runner_ledger_entry_has_tool_grant_for_inspect_local():
     assert len(tg["granted"]) > 0, "tool_grant.granted must be non-empty for inspect_local"
     assert isinstance(tg.get("requires_approval"), list)
     assert isinstance(tg.get("denied"), list)
+
+
+# ---------------------------------------------------------------------------
+# Fix 5 — copy-on-read test for load_tool_groups
+# ---------------------------------------------------------------------------
+
+def test_load_tool_groups_returns_independent_copy():
+    """Mutating the returned dict does not corrupt the cache for the next call."""
+    from scripts.tool_groups import load_tool_groups
+    g1 = load_tool_groups("inspect_local")
+    # Mutate the returned dict and its nested list
+    g1["__injected__"] = ["poison"]
+    if "allow" in g1:
+        g1["allow"].append("__evil__")
+    g2 = load_tool_groups("inspect_local")
+    assert "__injected__" not in g2
+    if "allow" in g2:
+        assert "__evil__" not in g2["allow"]

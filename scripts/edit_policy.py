@@ -11,6 +11,7 @@ No external dependencies; uses only stdlib + json.
 """
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -56,7 +57,7 @@ def load_edit_policy(*, reload: bool = False) -> dict[str, Any]:
             )
         with _POLICY_PATH.open("r", encoding="utf-8") as fh:
             _cached_policy = json.load(fh)
-    return _cached_policy
+    return copy.deepcopy(_cached_policy)
 
 
 def should_create_checkpoint(target_kind: str) -> bool:

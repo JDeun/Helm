@@ -14,6 +14,7 @@ Design constraints:
 """
 from __future__ import annotations
 
+import copy
 import json
 import subprocess
 from pathlib import Path
@@ -62,7 +63,7 @@ def _load_gate_policy(*, reload: bool = False) -> dict[str, list[str]]:
             )
         with _POLICY_PATH.open("r", encoding="utf-8") as fh:
             _cached_gate_policy = json.load(fh)
-    return _cached_gate_policy
+    return copy.deepcopy(_cached_gate_policy)
 
 
 def _ext_for_path(path: str) -> str:
