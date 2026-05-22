@@ -29,7 +29,6 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import sys
 from pathlib import Path
 
 
@@ -44,7 +43,6 @@ _WORKSPACE_PATH = os.environ.get("OPENCLAW_WORKSPACE") or os.path.join(_HOME, ".
 
 # Compiled regexes for normalize_target
 _RE_GIT_SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
-_RE_TMP_DIGITS = re.compile(r"(?<=[/\-_])\d{4,}")  # digit runs ≥4 inside /tmp paths
 _RE_URL_QUERY = re.compile(r"\?.*$")
 
 
@@ -85,7 +83,6 @@ _ERROR_CLASS_PATTERNS: list[tuple[re.Pattern, str]] = [
         r"|HttpError \d{3}.*sheet"
         r"|gws:.*auth"
         r"|google.*api.*error"
-        r"|sheets:.*range"
         r"|google.*transport.*error",
         re.I,
     ), "google_sheets_api"),
@@ -104,7 +101,7 @@ _ERROR_CLASS_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(
         r"obsidian"
         r"|wikilink"
-        r"|vault.*not found"
+        r"|obsidian.*vault.*not found"
         r"|malformed.*wikilink"
         r"|obsidian_link_maintenance",
         re.I,
@@ -150,10 +147,13 @@ def classify_error(stderr_or_message: str | None) -> str:
 
     Matches against ``_ERROR_CLASS_PATTERNS`` in order; returns ``'unknown'``
     when the input is empty or no pattern matches.
+
+    Input is capped at 8 KiB to bound regex scan cost on pathologically
+    large stderr blobs.
     """
-    if not stderr_or_message or not stderr_or_message.strip():
+    text = (stderr_or_message or "")[:8192]
+    if not text.strip():
         return "unknown"
-    text = stderr_or_message
     for pattern, error_class in _ERROR_CLASS_PATTERNS:
         if pattern.search(text):
             return error_class
