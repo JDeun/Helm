@@ -1,29 +1,11 @@
 """Browser work verifier — minimum viable per Task 13 design.
 
-Reads a `BrowserTaskSpec` request and returns a `BrowserReconDecision` dict
-with bool flags (allow_single_session, allow_parallel, require_user_login,
-require_confirmation, block_mutation, pause_profile) plus a diagnostic
-`reason` and a per-check `checks` map.
-
-This module has NO callers yet — wiring into `run_with_profile.py` is a
-later Wave (Task 13 → Wave 3). It is a pure function: stdlib only, no
-global state, no I/O. Future work will load profile policies from a YAML
-file at `~/Helm/references/browser_profile_policy.yaml`; for now the
-policies are inline constants derived from `docs/harness-engineering/
-04-browser-profile-policy.md` §3.
-
-Open questions from 04-browser-profile-policy.md §6 that are NOT yet
-resolved here (default to `require_confirmation` with the OQ number in
-the reason string):
-
-- OQ-1: `allow_mutation: gated` — confirmation + site note, or either?
-        Current default: require_confirmation when site note absent.
-- OQ-2: risky_edit + logged-in escalation path.
-        Current default: block (allow_logged_in_profile: false).
-- OQ-3: max_sessions enforcement location.
-        Current default: verifier emits the cap; runner-side enforcement
-        is a Wave 3 task.
-- OQ-4..8: see design doc.
+Pure function `verify(request)` returns a BrowserReconDecision dict with
+six bool flags (per docs/harness-engineering/03-browser-work-verifier.md §3)
+plus `reason` and `checks`. No callers yet — wiring is Wave 3. Profile
+policies are inline constants mirroring 04-browser-profile-policy.md §3;
+unresolved open questions (OQ-1..8) default to `require_confirmation`
+with the OQ number in the reason. stdlib only, no I/O.
 """
 from __future__ import annotations
 
@@ -98,7 +80,6 @@ def _malformed(reason: str) -> dict[str, Any]:
 
 
 def _check_action_class(intended_action: str) -> str:
-    """Return 'mutation', 'read', or 'unknown' for the action."""
     if intended_action in _MUTATION_ACTIONS:
         return "mutation"
     if intended_action in _READ_ACTIONS:
@@ -109,23 +90,18 @@ def _check_action_class(intended_action: str) -> str:
 def _check_login_compat(
     logged_in_required: bool, policy: dict[str, Any] | None
 ) -> tuple[bool, str]:
-    """Return (compatible, reason). False means the profile cannot satisfy the login need."""
     if not logged_in_required:
         return True, ""
     if policy is None:
         return False, "logged-in required but no browser policy for this profile"
     if not policy.get("allow_logged_in_profile", False):
-        return (
-            False,
-            "logged-in required but profile.allow_logged_in_profile=false",
-        )
+        return False, "logged-in required but profile.allow_logged_in_profile=false"
     return True, ""
 
 
 def _check_mutation_allowed(
     action_class: str, policy: dict[str, Any] | None
 ) -> tuple[str, str]:
-    """Return (mode, reason) where mode is 'block', 'gated', 'allow', or 'na'."""
     if action_class != "mutation":
         return "na", ""
     if policy is None:
@@ -146,7 +122,6 @@ def _check_parallel_safe(
     existing_site_note_path: str | None,
     policy: dict[str, Any] | None,
 ) -> tuple[bool, str]:
-    """Return (parallel_ok, reason)."""
     if not parallel_requested:
         return False, ""
     if policy is None:
@@ -155,34 +130,21 @@ def _check_parallel_safe(
         return False, "profile.max_sessions <= 1"
     if action_class == "mutation":
         return False, "mutation actions are not parallel-safe"
-    if existing_site_note_path is None:
-        # No site note + read-only is the documented permissive case
-        # (design doc §4 Check 6): allow.
-        return True, ""
-    # Site note present — we cannot read it from this stub, so default to
-    # the permissive read-only case. Future verifier will inspect the note.
+    # Read-only + parallel + max_sessions>1: permissive per design §4 Check 6,
+    # whether or not a site note exists (future verifier may inspect the note).
     return True, ""
 
 
 def verify(request: dict[str, Any]) -> dict[str, Any]:
-    """Evaluate a browser task request and return a `BrowserReconDecision` dict.
+    """Evaluate a browser task and return a BrowserReconDecision dict.
 
-    Required keys in `request`:
-      - url_pattern (str)
-      - intended_action (str — one of the documented vocabulary in design doc §2)
-      - logged_in_account_required (bool)
-      - parallel_requested (bool)
-      - execution_profile (str — one of the 5 OpenClaw profiles)
+    Required keys in ``request``: ``url_pattern``, ``intended_action``,
+    ``logged_in_account_required``, ``parallel_requested``,
+    ``execution_profile``. Optional: ``existing_site_note_path``.
 
-    Optional:
-      - existing_site_note_path (str | None)
-
-    Returns a dict with all six decision flags, `reason` (str), and `checks`
-    (dict) with per-check outcomes. `decision_keys() == DECISION_KEYS`.
-
-    Defensive: on a malformed request (missing key, wrong type), returns a
-    safe-default decision (`allow_single_session=False, require_confirmation=True`)
-    rather than raising. `reason` documents why.
+    Returns a dict with the six DECISION_KEYS flags + ``reason`` + ``checks``.
+    Defensive: malformed input returns safe-default decision rather than
+    raising.
     """
     missing = _REQUIRED_REQUEST_KEYS - set(request.keys())
     if missing:
