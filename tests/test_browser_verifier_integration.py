@@ -585,3 +585,572 @@ def test_pause_gate_wins_before_browser_gate(
     assert blocked, f"Expected blocked_by_pause ledger entry; statuses={[e.get('status') for e in ledger_calls]}"
     shadow = [e for e in ledger_calls if e.get("status") == "browser_recon_shadow"]
     assert not shadow, f"No browser_recon_shadow entry expected when pause wins; found: {shadow}"
+
+
+# ---------------------------------------------------------------------------
+# Wave 3b new tests
+# ---------------------------------------------------------------------------
+
+# A gated decision WITH a site note present in checks (simulates OQ-5 auto-resolve).
+_DECISION_SUBMIT_GATED_WITH_SITE_NOTE = {
+    "allow_single_session": True,
+    "allow_parallel": False,
+    "require_user_login": True,
+    "require_confirmation": True,
+    "block_mutation": False,
+    "pause_profile": False,
+    "require_cleanup_evidence": False,
+    "reason": "profile.allow_mutation=gated (OQ-1 resolved: require_confirmation=True; satisfied by --approve-risk OR existing site note)",
+    "checks": {
+        "profile_policy": "present",
+        "action_class": "mutation",
+        "mutation_mode": "gated",
+        "existing_site_note": "present",
+    },
+}
+
+# A risky_edit read decision (require_cleanup_evidence=True).
+_DECISION_RISKY_EDIT_READ = {
+    "allow_single_session": True,
+    "allow_parallel": False,
+    "require_user_login": False,
+    "require_confirmation": False,
+    "block_mutation": False,
+    "pause_profile": False,
+    "require_cleanup_evidence": True,
+    "reason": "ok",
+    "checks": {
+        "profile_policy": "present",
+        "action_class": "read",
+        "require_cleanup_evidence": True,
+        "existing_site_note": "absent",
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# OQ-1: site-note satisfies gated confirmation gate (no --approve-risk needed)
+# ---------------------------------------------------------------------------
+
+def test_oq1_site_note_satisfies_gated_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OQ-1: service_ops submit with site note present → proceeds without --approve-risk.
+
+    Verifier emits require_confirmation=True AND existing_site_note=present.
+    Runner must treat this as satisfied and log browser_approved_by_site_note.
+    """
+    monkeypatch.setenv("OPENCLAW_BROWSER_GATE", "1")
+
+    ledger_calls: list[dict] = []
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger",
+               side_effect=lambda e: ledger_calls.append(dict(e))), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("scripts.run_with_profile.finalize_task",
+               side_effect=lambda t: ledger_calls.append(dict(t))), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run",
+               return_value=_sp.CompletedProcess(args=[], returncode=0)), \
+         patch("scripts.browser_work_verifier.verify",
+               return_value=_DECISION_SUBMIT_GATED_WITH_SITE_NOTE):
+
+        from scripts.run_with_profile import cmd_run
+        rc = cmd_run(
+            _make_args(
+                browser_action="submit",
+                profile="service_ops",
+                browser_logged_in=True,
+                approve_risk=False,  # NOT passing --approve-risk
+                browser_site_note="/some/note.md",  # site note present
+            )
+        )
+
+    assert rc == 0, f"Expected exit 0 when site note satisfies gate; got {rc}"
+
+    approved_entries = [e for e in ledger_calls if e.get("status") == "browser_approved_by_site_note"]
+    assert approved_entries, (
+        f"Expected browser_approved_by_site_note ledger entry; "
+        f"statuses={[e.get('status') for e in ledger_calls]}"
+    )
+
+
+def test_oq1_neither_approval_nor_site_note_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """OQ-1: gated gate with no site note and no --approve-risk → exit 24."""
+    monkeypatch.setenv("OPENCLAW_BROWSER_GATE", "1")
+
+    ledger_calls: list[dict] = []
+
+    # Use the gated decision WITHOUT site note
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger",
+               side_effect=lambda e: ledger_calls.append(dict(e))), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("scripts.browser_work_verifier.verify",
+               return_value=_DECISION_SUBMIT_GATED):
+
+        from scripts.run_with_profile import cmd_run, EXIT_GUARD_REQUIRE_APPROVAL
+        rc = cmd_run(
+            _make_args(
+                browser_action="submit",
+                profile="service_ops",
+                browser_logged_in=True,
+                approve_risk=False,
+                browser_site_note=None,
+            )
+        )
+
+    assert rc == EXIT_GUARD_REQUIRE_APPROVAL == 24, (
+        f"Expected EXIT_GUARD_REQUIRE_APPROVAL (24); got {rc}"
+    )
+    mock_subprocess.assert_not_called()
+
+    requires_entries = [e for e in ledger_calls if e.get("status") == "browser_requires_approval"]
+    assert requires_entries, (
+        f"Expected browser_requires_approval ledger entry; "
+        f"statuses={[e.get('status') for e in ledger_calls]}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# OQ-3: max_sessions counter blocks 6th inspect_local browser session
+# ---------------------------------------------------------------------------
+
+def test_oq3_max_sessions_blocks_when_at_cap(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """OQ-3: runner blocks when active session count >= max_sessions.
+
+    Populate a synthetic ledger with 5 open inspect_local browser sessions
+    (max_sessions=5 for inspect_local).  The 6th attempt → EXIT_BROWSER_BLOCKED.
+    """
+    monkeypatch.setenv("OPENCLAW_BROWSER_GATE", "1")
+
+    import datetime as _dt
+    import uuid as _uuid
+
+    # Build a synthetic ledger with 5 open sessions within the 10-minute window.
+    ledger_file = tmp_path / "state" / "task-ledger.jsonl"
+    ledger_file.parent.mkdir(parents=True)
+
+    now_dt = _dt.datetime.now(_dt.timezone.utc)
+
+    open_entries = []
+    for i in range(5):
+        entry = {
+            "task_id": str(_uuid.uuid4()),
+            "profile": "inspect_local",
+            "status": "running",
+            "started_at": (now_dt - _dt.timedelta(minutes=2 + i)).isoformat(),
+            "browser_recon": {"allow_single_session": True, "require_cleanup_evidence": False},
+        }
+        open_entries.append(json.dumps(entry))
+
+    ledger_file.write_text("\n".join(open_entries) + "\n", encoding="utf-8")
+
+    ledger_calls: list[dict] = []
+
+    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger",
+               side_effect=lambda e: ledger_calls.append(dict(e))), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("scripts.browser_work_verifier.verify",
+               return_value=_DECISION_READ_ALLOWED):
+
+        from scripts.run_with_profile import cmd_run, EXIT_BROWSER_BLOCKED
+        rc = cmd_run(_make_args(browser_action="read", profile="inspect_local"))
+
+    assert rc == EXIT_BROWSER_BLOCKED == 27, (
+        f"Expected EXIT_BROWSER_BLOCKED (27) when max_sessions reached; got {rc}"
+    )
+    mock_subprocess.assert_not_called()
+
+    captured = capsys.readouterr()
+    assert "max_sessions" in captured.err.lower(), (
+        f"Expected 'max_sessions' in stderr; got: {captured.err!r}"
+    )
+
+    blocked_entries = [e for e in ledger_calls if e.get("status") == "browser_blocked"]
+    assert blocked_entries, (
+        f"Expected browser_blocked ledger entry; statuses={[e.get('status') for e in ledger_calls]}"
+    )
+    assert blocked_entries[0].get("browser_block_reason") == "max_sessions_reached"
+
+
+def test_oq3_max_sessions_allows_when_under_cap(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """OQ-3: runner proceeds when active session count < max_sessions."""
+    monkeypatch.setenv("OPENCLAW_BROWSER_GATE", "1")
+
+    import datetime as _dt
+    import uuid as _uuid
+
+    # Only 2 open sessions — under cap of 5 for inspect_local.
+    ledger_file = tmp_path / "state" / "task-ledger.jsonl"
+    ledger_file.parent.mkdir(parents=True)
+
+    now_dt = _dt.datetime.now(_dt.timezone.utc)
+
+    open_entries = []
+    for i in range(2):
+        entry = {
+            "task_id": str(_uuid.uuid4()),
+            "profile": "inspect_local",
+            "status": "running",
+            "started_at": (now_dt - _dt.timedelta(minutes=2 + i)).isoformat(),
+            "browser_recon": {"allow_single_session": True, "require_cleanup_evidence": False},
+        }
+        open_entries.append(json.dumps(entry))
+
+    ledger_file.write_text("\n".join(open_entries) + "\n", encoding="utf-8")
+
+    ledger_calls: list[dict] = []
+
+    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger",
+               side_effect=lambda e: ledger_calls.append(dict(e))), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("scripts.run_with_profile.finalize_task",
+               side_effect=lambda t: ledger_calls.append(dict(t))), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run",
+               return_value=_sp.CompletedProcess(args=[], returncode=0)), \
+         patch("scripts.browser_work_verifier.verify",
+               return_value=_DECISION_READ_ALLOWED):
+
+        from scripts.run_with_profile import cmd_run
+        rc = cmd_run(_make_args(browser_action="read", profile="inspect_local"))
+
+    assert rc == 0, f"Expected exit 0 when under max_sessions cap; got {rc}"
+
+
+def test_oq3_max_sessions_ignores_sessions_with_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """OQ-3: sessions that have cleanup_status don't count toward the cap."""
+    monkeypatch.setenv("OPENCLAW_BROWSER_GATE", "1")
+
+    import datetime as _dt
+    import uuid as _uuid
+
+    ledger_file = tmp_path / "state" / "task-ledger.jsonl"
+    ledger_file.parent.mkdir(parents=True)
+
+    now_dt = _dt.datetime.now(_dt.timezone.utc)
+
+    # 5 sessions, but all with cleanup_status = "confirmed"
+    lines = []
+    for i in range(5):
+        tid = str(_uuid.uuid4())
+        open_entry = {
+            "task_id": tid,
+            "profile": "inspect_local",
+            "status": "running",
+            "started_at": (now_dt - _dt.timedelta(minutes=2 + i)).isoformat(),
+            "browser_recon": {"allow_single_session": True, "require_cleanup_evidence": False},
+        }
+        cleanup_entry = {
+            "task_id": tid,
+            "profile": "inspect_local",
+            "status": "completed",
+            "cleanup_status": "confirmed",
+            "started_at": (now_dt - _dt.timedelta(minutes=1 + i)).isoformat(),
+        }
+        lines.append(json.dumps(open_entry))
+        lines.append(json.dumps(cleanup_entry))
+
+    ledger_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    ledger_calls: list[dict] = []
+
+    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger",
+               side_effect=lambda e: ledger_calls.append(dict(e))), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("scripts.run_with_profile.finalize_task",
+               side_effect=lambda t: ledger_calls.append(dict(t))), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run",
+               return_value=_sp.CompletedProcess(args=[], returncode=0)), \
+         patch("scripts.browser_work_verifier.verify",
+               return_value=_DECISION_READ_ALLOWED):
+
+        from scripts.run_with_profile import cmd_run
+        rc = cmd_run(_make_args(browser_action="read", profile="inspect_local"))
+
+    assert rc == 0, (
+        f"Expected exit 0 when all sessions have cleanup_status; got {rc}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# OQ-7: finalization gate — task with require_cleanup_evidence and no cleanup_status
+# ---------------------------------------------------------------------------
+
+def test_oq7_finalization_gate_blocks_when_cleanup_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """OQ-7: task with prior browser_recon.require_cleanup_evidence=True and no
+    cleanup_status → finalization refuses with EXIT_CLEANUP_REQUIRED (28).
+    """
+    monkeypatch.setenv("OPENCLAW_BROWSER_GATE", "1")
+
+    import uuid as _uuid
+    import datetime as _dt
+
+    task_id = str(_uuid.uuid4())
+
+    # Pre-populate ledger with a browser_recon entry for this task that
+    # had require_cleanup_evidence=True but no cleanup_status.
+    ledger_file = tmp_path / "state" / "task-ledger.jsonl"
+    ledger_file.parent.mkdir(parents=True)
+    prior_entry = {
+        "task_id": task_id,
+        "profile": "risky_edit",
+        "status": "browser_recon",
+        "started_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "browser_recon": {
+            "allow_single_session": True,
+            "require_cleanup_evidence": True,
+        },
+    }
+    ledger_file.write_text(json.dumps(prior_entry) + "\n", encoding="utf-8")
+
+    ledger_calls: list[dict] = []
+
+    # Use a fake risky_edit profile that allows writes.
+    fake_profiles_with_risky = {
+        **_FAKE_PROFILES,
+        "risky_edit": {
+            "description": "Risky editing profile.",
+            "backend": "local",
+            "runtime_backend": "local-shell",
+            "runtime_target_kind": "workspace",
+            "isolation": "shared-session",
+            "handoff_required": False,
+            "writes_allowed": True,
+            "network_allowed": True,
+            "checkpoint": "never",
+        },
+    }
+
+    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("scripts.run_with_profile.load_profiles", return_value=fake_profiles_with_risky), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger",
+               side_effect=lambda e: ledger_calls.append(dict(e))), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run",
+               return_value=_sp.CompletedProcess(args=[], returncode=0)), \
+         patch("scripts.browser_work_verifier.verify",
+               return_value=_DECISION_RISKY_EDIT_READ):
+
+        from scripts.run_with_profile import cmd_run, EXIT_CLEANUP_REQUIRED
+
+        # Override the task_id so that _check_cleanup_required_satisfied
+        # finds the pre-populated ledger entry.
+        args = _make_args(browser_action="read", profile="risky_edit")
+        args.task_id = task_id
+
+        rc = cmd_run(args)
+
+    assert rc == EXIT_CLEANUP_REQUIRED == 28, (
+        f"Expected EXIT_CLEANUP_REQUIRED (28); got {rc}"
+    )
+
+    captured = capsys.readouterr()
+    assert "cleanup" in captured.err.lower(), (
+        f"Expected 'cleanup' in stderr; got: {captured.err!r}"
+    )
+
+    cleanup_blocked = [e for e in ledger_calls if e.get("status") == "browser_cleanup_required"]
+    assert cleanup_blocked, (
+        f"Expected browser_cleanup_required ledger entry; "
+        f"statuses={[e.get('status') for e in ledger_calls]}"
+    )
+
+
+def test_oq7_finalization_gate_passes_when_cleanup_recorded(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """OQ-7: task with require_cleanup_evidence=True AND cleanup_status recorded → proceeds."""
+    monkeypatch.setenv("OPENCLAW_BROWSER_GATE", "1")
+
+    import uuid as _uuid
+    import datetime as _dt
+
+    task_id = str(_uuid.uuid4())
+
+    # Pre-populate ledger with both a browser_recon entry AND a cleanup entry.
+    ledger_file = tmp_path / "state" / "task-ledger.jsonl"
+    ledger_file.parent.mkdir(parents=True)
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    prior_entry = {
+        "task_id": task_id,
+        "profile": "risky_edit",
+        "status": "browser_recon",
+        "started_at": now,
+        "browser_recon": {
+            "allow_single_session": True,
+            "require_cleanup_evidence": True,
+        },
+    }
+    cleanup_entry = {
+        "task_id": task_id,
+        "profile": "risky_edit",
+        "status": "browser_cleanup_recorded",
+        "cleanup_status": "confirmed",
+        "started_at": now,
+    }
+    ledger_file.write_text(
+        json.dumps(prior_entry) + "\n" + json.dumps(cleanup_entry) + "\n",
+        encoding="utf-8",
+    )
+
+    ledger_calls: list[dict] = []
+
+    fake_profiles_with_risky = {
+        **_FAKE_PROFILES,
+        "risky_edit": {
+            "description": "Risky editing profile.",
+            "backend": "local",
+            "runtime_backend": "local-shell",
+            "runtime_target_kind": "workspace",
+            "isolation": "shared-session",
+            "handoff_required": False,
+            "writes_allowed": True,
+            "network_allowed": True,
+            "checkpoint": "never",
+        },
+    }
+
+    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("scripts.run_with_profile.load_profiles", return_value=fake_profiles_with_risky), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger",
+               side_effect=lambda e: ledger_calls.append(dict(e))), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("scripts.run_with_profile.finalize_task",
+               side_effect=lambda t: ledger_calls.append(dict(t))), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run",
+               return_value=_sp.CompletedProcess(args=[], returncode=0)), \
+         patch("scripts.browser_work_verifier.verify",
+               return_value=_DECISION_RISKY_EDIT_READ):
+
+        from scripts.run_with_profile import cmd_run
+
+        args = _make_args(browser_action="read", profile="risky_edit")
+        args.task_id = task_id
+
+        rc = cmd_run(args)
+
+    assert rc == 0, f"Expected exit 0 when cleanup_status recorded; got {rc}"
+
+
+def test_oq7_finalization_gate_off_does_not_enforce(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """OQ-7: when OPENCLAW_BROWSER_GATE is off, finalization gate does not enforce."""
+    monkeypatch.delenv("OPENCLAW_BROWSER_GATE", raising=False)
+
+    import uuid as _uuid
+    import datetime as _dt
+
+    task_id = str(_uuid.uuid4())
+
+    ledger_file = tmp_path / "state" / "task-ledger.jsonl"
+    ledger_file.parent.mkdir(parents=True)
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    prior_entry = {
+        "task_id": task_id,
+        "profile": "risky_edit",
+        "status": "browser_recon",
+        "started_at": now,
+        "browser_recon": {
+            "allow_single_session": True,
+            "require_cleanup_evidence": True,
+        },
+    }
+    ledger_file.write_text(json.dumps(prior_entry) + "\n", encoding="utf-8")
+
+    ledger_calls: list[dict] = []
+
+    fake_profiles_with_risky = {
+        **_FAKE_PROFILES,
+        "risky_edit": {
+            "description": "Risky editing profile.",
+            "backend": "local",
+            "runtime_backend": "local-shell",
+            "runtime_target_kind": "workspace",
+            "isolation": "shared-session",
+            "handoff_required": False,
+            "writes_allowed": True,
+            "network_allowed": True,
+            "checkpoint": "never",
+        },
+    }
+
+    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("scripts.run_with_profile.load_profiles", return_value=fake_profiles_with_risky), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger",
+               side_effect=lambda e: ledger_calls.append(dict(e))), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("scripts.run_with_profile.finalize_task",
+               side_effect=lambda t: ledger_calls.append(dict(t))), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run",
+               return_value=_sp.CompletedProcess(args=[], returncode=0)), \
+         patch("scripts.browser_work_verifier.verify",
+               return_value=_DECISION_RISKY_EDIT_READ):
+
+        from scripts.run_with_profile import cmd_run
+
+        args = _make_args(browser_action="read", profile="risky_edit")
+        args.task_id = task_id
+
+        rc = cmd_run(args)
+
+    # Gate off → shadow mode; cleanup gate not enforced; completes exit 0.
+    assert rc == 0, (
+        f"Expected exit 0 when browser gate is off (shadow mode); got {rc}"
+    )
