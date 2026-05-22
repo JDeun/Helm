@@ -34,3 +34,5 @@ docs/superpowers/
 
 .claude
 claude/
+
+.worktrees/
