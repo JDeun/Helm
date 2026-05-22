@@ -311,3 +311,38 @@ class TestCandidateIdFor:
     def test_separator_prevents_collision(self):
         # ("ab", "cde") must differ from ("abc", "de")
         assert candidate_id_for("ab", "cde") != candidate_id_for("abc", "de")
+
+
+# ---------------------------------------------------------------------------
+# FIX M-3: candidate_id_for rejects NUL-byte inputs
+# ---------------------------------------------------------------------------
+
+class TestCandidateIdForNulByte:
+    """M-3: NUL bytes in skill or task_name raise ValueError."""
+
+    def test_nul_in_skill_raises(self):
+        with pytest.raises(ValueError, match=r"NUL"):
+            candidate_id_for("skill\x00evil", "task")
+
+    def test_nul_in_task_name_raises(self):
+        with pytest.raises(ValueError, match=r"NUL"):
+            candidate_id_for("skill", "task\x00evil")
+
+    def test_nul_only_skill_raises(self):
+        with pytest.raises(ValueError, match=r"NUL"):
+            candidate_id_for("\x00", "task")
+
+    def test_nul_only_task_name_raises(self):
+        with pytest.raises(ValueError, match=r"NUL"):
+            candidate_id_for("skill", "\x00")
+
+    def test_normal_inputs_still_work(self):
+        """Regression: valid inputs are unaffected by the guard."""
+        cid = candidate_id_for("my-skill", "do the thing")
+        assert len(cid) == 8
+        assert all(c in "0123456789abcdef" for c in cid)
+
+    def test_none_skill_with_valid_task_does_not_raise(self):
+        """None skill is normalised to '' (no NUL) — should not raise."""
+        cid = candidate_id_for(None, "my-task")
+        assert isinstance(cid, str)

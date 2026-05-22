@@ -577,6 +577,18 @@ class TestToMarkdown:
         assert "<class" not in md
         assert "object at 0x" not in md
 
+    def test_window_truncated_surfaced_in_markdown(self, tmp_path):
+        report = _default_report(tmp_path)
+        report["data_freshness"]["window_truncated"] = True
+        md = to_markdown(report)
+        assert "window truncated" in md.lower()
+
+    def test_window_truncated_absent_when_false(self, tmp_path):
+        report = _default_report(tmp_path)
+        report["data_freshness"]["window_truncated"] = False
+        md = to_markdown(report)
+        assert "window truncated" not in md.lower()
+
 
 # ---------------------------------------------------------------------------
 # Test 16: to_markdown with empty report
@@ -737,3 +749,77 @@ class TestAggSkillPromotionMissingFile:
         report = self._report_with_state(tmp_path, state_path)
         sp = report["features"]["skill_promotion"]
         assert sp["candidates_notified"] == 0
+
+
+# ---------------------------------------------------------------------------
+# FIX M-2: tail_lines truncation — window_truncated flag + documented behaviour
+# ---------------------------------------------------------------------------
+
+class TestTailLinesTruncation:
+    """M-2: synthetic ledger with 6000 lines + tail_lines=5000 → only last 5000
+    scanned, and data_freshness.window_truncated is True."""
+
+    def test_window_truncated_true_when_ledger_hits_cap(self, tmp_path):
+        """Writing 6000 rows and reading with tail_lines=5000 sets window_truncated."""
+        rows = [
+            {"status": "browser_recon_shadow", "task_id": f"t{i}", "updated_at": _iso_now()}
+            for i in range(6000)
+        ]
+        ledger = tmp_path / "ledger.jsonl"
+        _write_jsonl(ledger, rows)
+        proxy = tmp_path / "proxy.jsonl"
+        _write_jsonl(proxy, [])
+        report = generate_report(
+            ledger_path=ledger,
+            proxy_events_path=proxy,
+            skill_state_path=tmp_path / "no-state.json",
+            tail_lines=5000,
+        )
+        assert report["data_freshness"]["ledger_lines_scanned"] == 5000
+        assert report["data_freshness"]["window_truncated"] is True
+
+    def test_only_last_5000_scanned(self, tmp_path):
+        """Only the last 5000 of 6000 rows appear in feature counts."""
+        # First 1000 rows have a distinct status that would be counted
+        # if they were scanned; if window_truncated works, they won't be.
+        old_rows = [
+            {"status": "blocked_by_pause", "task_id": f"old{i}", "updated_at": _iso_now()}
+            for i in range(1000)
+        ]
+        # Remaining 5000 rows have a different status
+        new_rows = [
+            {"status": "browser_recon_shadow", "task_id": f"new{i}", "updated_at": _iso_now()}
+            for i in range(5000)
+        ]
+        ledger = tmp_path / "ledger.jsonl"
+        _write_jsonl(ledger, old_rows + new_rows)
+        proxy = tmp_path / "proxy.jsonl"
+        _write_jsonl(proxy, [])
+        report = generate_report(
+            ledger_path=ledger,
+            proxy_events_path=proxy,
+            skill_state_path=tmp_path / "no-state.json",
+            tail_lines=5000,
+        )
+        # The last 5000 rows are all browser_recon_shadow; the first 1000
+        # (blocked_by_pause) are outside the tail cap and not scanned.
+        assert report["features"]["browser_verifier"]["shadow_count"] == 5000
+        assert report["features"]["pause_gate"]["blocked_count"] == 0
+
+    def test_window_truncated_false_when_under_cap(self, tmp_path):
+        """window_truncated is False when ledger has fewer rows than tail_lines."""
+        rows = [
+            {"status": "x", "task_id": f"t{i}", "updated_at": _iso_now()}
+            for i in range(10)
+        ]
+        ledger = tmp_path / "ledger.jsonl"
+        _write_jsonl(ledger, rows)
+        proxy = tmp_path / "proxy.jsonl"
+        _write_jsonl(proxy, [])
+        report = generate_report(
+            ledger_path=ledger,
+            proxy_events_path=proxy,
+            skill_state_path=tmp_path / "no-state.json",
+            tail_lines=5000,
+        )
+        assert report["data_freshness"]["window_truncated"] is False
