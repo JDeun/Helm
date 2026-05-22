@@ -16,6 +16,7 @@ from adaptive_harness_lib import (
     mark_task_needs_verification,
     postflight_payload_from_task,
     postflight_check_failed,
+    record_failure_with_policy_check,
     record_task_evidence,
     resolve_skill_contract,
     preflight_payload,
@@ -172,6 +173,19 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(json.dumps(output, indent=2, ensure_ascii=False))
         return 124
     ensure_task_evidence(payload["task_id"], payload["contract"])
+    # Policy-transition hook (Task 4): check repeated-failure rules on non-zero exit.
+    policy_transition = None
+    if result.returncode != 0:
+        failure_event = {
+            "task_id": payload["task_id"],
+            "task_name": args.task_name,
+            "skill": args.skill,
+            "status": "failed",
+            "exit_code": result.returncode,
+            "command": args.command,
+            "profile": args.profile,
+        }
+        policy_transition = record_failure_with_policy_check(payload["task_id"], failure_event)
     postflight = postflight_payload(payload["task_id"], payload["contract"], payload["enforcement_level"])
     completion_failure = postflight_check_failed(postflight, "completion_policy")
     if result.returncode == 0 and completion_failure:
@@ -182,8 +196,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         "preflight": payload,
         "hydration": hydration_outputs,
         "run_exit_code": result.returncode,
-        "postflight": postflight
+        "postflight": postflight,
     }
+    if policy_transition is not None:
+        output["policy_transition"] = policy_transition
     print(json.dumps(output, indent=2, ensure_ascii=False))
     if result.returncode != 0:
         return result.returncode

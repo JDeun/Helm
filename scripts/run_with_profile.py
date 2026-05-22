@@ -510,6 +510,44 @@ def _attach_advisory_action_scope(task: dict, args: argparse.Namespace) -> None:
         )
 
 
+def _attach_tool_grant(task: dict, profile: str) -> None:
+    """Compute and attach the tool_grant block to a task dict (idempotent).
+
+    The grant is recorded in the ledger for observability only.  Denied tools
+    are NOT blocked at runner level — that is Task #4's responsibility.
+    Calling this function again on a task that already has ``tool_grant`` is a
+    no-op (the existing block is preserved unchanged).
+
+    A default set of the eight canonical tool-group names is used because no
+    ``--tool-grant`` CLI flag exists yet.  When that flag lands (future task),
+    this call site can be made lazy/conditional.
+    """
+    if "tool_grant" in task:
+        # Idempotent: already computed, do not overwrite.
+        return
+    _DEFAULT_REQUESTED_TOOLS = [
+        "read_file",
+        "apply_patch",
+        "focused_test",
+        "git_diff",
+        "broad_shell",
+        "external_network",
+        "secrets_read",
+        "destructive_git",
+    ]
+    try:
+        from scripts.tool_groups import compute_grant
+        grant = compute_grant(profile, _DEFAULT_REQUESTED_TOOLS)
+        task["tool_grant"] = {
+            "profile": profile,
+            "granted": grant["granted"],
+            "requires_approval": grant["requires_approval"],
+            "denied": grant["denied"],
+        }
+    except Exception:  # noqa: BLE001 — advisory; never block the hot path
+        pass
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     profiles = load_profiles()
     if args.profile not in profiles:
@@ -526,6 +564,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     task = task_stub(args.profile, args, command)
     # Advisory Phase-A wiring (R2 I1): best-effort, silent on failure.
     _attach_advisory_action_scope(task, args)
+    # Tool-grant wiring (Task #3): records grant for the profile before execution.
+    # NOTE: denied tools are NOT blocked here — that is Task #4's responsibility.
+    _attach_tool_grant(task, args.profile)
     append_ledger(task)
 
     checkpoint = run_checkpoint(args.profile, args)

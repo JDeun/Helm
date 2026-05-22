@@ -22,6 +22,8 @@ from scripts.route_contract_lib import (
 )
 from scripts.retrieval_policy_lib import build_retrieval_plan
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies as load_manifest_policies
+from scripts.failure_signature import signature as failure_sig
+from scripts.policy_transition import evaluate as pt_evaluate, transition_record as pt_record
 from scripts.state_io import append_jsonl_atomic
 from scripts.time_helpers import utc_now_iso
 
@@ -36,6 +38,10 @@ PROFILE_FILE = WORKSPACE / "references" / "execution_profiles.json"
 POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"
 HARNESS_POLICY_FILE = WORKSPACE / "references" / "adaptive_harness_policy.json"
 TASK_LEDGER = _LAYOUT.state_root / "task-ledger.jsonl"
+
+# Maximum number of trailing ledger entries loaded per read; keeps memory
+# bounded on multi-MB ledgers without slurping the full file.
+_LEDGER_TAIL_DEFAULT = 200
 
 
 def load_json(path: Path, default: object) -> object:
@@ -748,7 +754,7 @@ def preflight_payload(
 
 
 def latest_task_entry(task_id: str) -> dict | None:
-    entries = read_jsonl(TASK_LEDGER)
+    entries = read_jsonl(TASK_LEDGER, tail=_LEDGER_TAIL_DEFAULT)
     for entry in reversed(entries):
         if entry.get("task_id") == task_id:
             return entry
@@ -940,7 +946,7 @@ def backfill_task_evidence(
     limit: int | None = None,
     latest_only: bool = True,
 ) -> dict:
-    entries = read_jsonl(TASK_LEDGER)
+    entries = read_jsonl(TASK_LEDGER, tail=_LEDGER_TAIL_DEFAULT)
     if latest_only:
         latest_map: dict[str, dict] = {}
         for entry in entries:
@@ -1012,3 +1018,80 @@ def backfill_task_evidence(
         "skipped_without_inference": skipped_without_inference,
         "task_ids": touched_task_ids,
     }
+
+
+# ---------------------------------------------------------------------------
+# Policy-transition hook (harness-engineering Task 4)
+# ---------------------------------------------------------------------------
+
+def _ledger_failure_history(
+    task_id: str,
+    *,
+    limit: int = 20,
+) -> list[dict]:
+    """Return recent failure events for *task_id* from the ledger as history dicts.
+
+    Each returned element has ``"signature"``, ``"task_name"``, ``"skill"``,
+    and ``"occurred_at"`` as expected by ``policy_transition.evaluate()``.
+    """
+    entries = read_jsonl(TASK_LEDGER, tail=_LEDGER_TAIL_DEFAULT)
+    history: list[dict] = []
+    for entry in entries:
+        if entry.get("task_id") != task_id:
+            continue
+        status = str(entry.get("status") or "")
+        if status not in {"failed", "timeout", "blocked", "needs_verification"}:
+            continue
+        history.append({
+            "signature": failure_sig(entry),
+            "task_name": entry.get("task_name"),
+            "skill": entry.get("skill"),
+            "occurred_at": entry.get("occurred_at") or entry.get("updated_at") or "",
+        })
+    return history[-limit:]
+
+
+def record_failure_with_policy_check(
+    task_id: str,
+    failure_event: dict,
+) -> dict | None:
+    """Record a failure event and check whether a policy transition is triggered.
+
+    Builds a history from the ledger for *task_id*, appends *failure_event*
+    (enriched with a computed signature), then calls
+    ``policy_transition.evaluate()``.  If a transition fires, appends a new
+    ledger row with the ``policy_transition`` field set.
+
+    Returns the ``policy_transition`` dict if a transition was written, else
+    ``None``.
+    """
+    sig = failure_sig(failure_event)
+    current = {
+        "signature": sig,
+        "task_name": failure_event.get("task_name"),
+        "skill": failure_event.get("skill"),
+        "occurred_at": failure_event.get("occurred_at") or utc_now_iso(),
+    }
+    history = _ledger_failure_history(task_id)
+    history.append(current)
+
+    transition = pt_evaluate(history)
+    if transition is None:
+        return None
+
+    pt = pt_record(
+        action=transition["action"],
+        reason=transition["reason"],
+        signature=transition["signature"],
+    )
+    entry: dict = {
+        "task_id": task_id,
+        "status": "policy_transition",
+        "policy_transition": pt,
+        "updated_at": utc_now_iso(),
+    }
+    for field in ("task_name", "skill"):
+        if failure_event.get(field):
+            entry[field] = failure_event[field]
+    append_jsonl_atomic(TASK_LEDGER, entry)
+    return pt
