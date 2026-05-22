@@ -272,6 +272,11 @@ Positioning:
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
 - [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
 
+Harness engineering principles:
+
+- [`docs/harness-engineering/05-control-flow-is-not-memory.md`](docs/harness-engineering/05-control-flow-is-not-memory.md) — why workflow completion state must live outside the transcript, how the task-state container enforces this, and the anti-patterns to avoid.
+- [`docs/harness-engineering/06-helm-vs-forge.md`](docs/harness-engineering/06-helm-vs-forge.md) — side-by-side comparison of Helm and Forge, what Helm absorbs from Forge's design, and where the two layers do not overlap.
+
 Release details:
 
 - [`CHANGELOG.md`](CHANGELOG.md)
