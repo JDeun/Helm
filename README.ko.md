@@ -1,296 +1,371 @@
 <p align="center">
-  <img src="assets/helm-icon-v2.png" alt="Helm icon" width="108" />
+  <img src="assets/helm-icon-v2.png" alt="Helm icon" width="120" />
 </p>
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>장기 실행 코딩 에이전트가 context를 잃거나, 위험한 수정을 너무 빨리 실행하거나, 나중에 감사할 수 없는 상태가 되는 것을 막습니다.</strong></p>
-
-<p align="center">Helm은 AI agent workspace를 위한 로컬 운영 레이어입니다. 명령 전 profile, 위험 작업 전 checkpoint, chat이 사라진 뒤에도 남는 durable task history를 제공합니다.</p>
-
-<p align="center"><strong>현재 릴리즈: v0.10.0</strong></p>
+<p align="center"><strong>장기 실행 코딩 에이전트를 위한 로컬 운영 레이어.</strong></p>
 
 <p align="center">
-  <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
-  <a href="README.md">English README</a>
+  명령 전 profile · 위험 작업 전 checkpoint · chat이 사라진 뒤에도 남는 durable task history.
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/helm-agent-ops?style=flat-square"></a>
-  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="PyPI Python versions" src="https://img.shields.io/pypi/pyversions/helm-agent-ops?style=flat-square"></a>
-  <a href="https://github.com/JDeun/Helm/actions/workflows/publish.yml"><img alt="Publish to PyPI" src="https://img.shields.io/github/actions/workflow/status/JDeun/Helm/publish.yml?branch=main&label=publish&style=flat-square"></a>
-  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f172a?style=flat-square">
-  <img alt="Stability first" src="https://img.shields.io/badge/focus-stability--first-334155?style=flat-square">
-  <img alt="Runtime agnostic" src="https://img.shields.io/badge/runtime-agnostic-475569?style=flat-square">
+  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="PyPI" src="https://img.shields.io/pypi/v/helm-agent-ops?style=flat-square&color=0f172a"></a>
+  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/helm-agent-ops?style=flat-square&color=334155"></a>
+  <a href="https://github.com/JDeun/Helm/actions/workflows/publish.yml"><img alt="Publish" src="https://img.shields.io/github/actions/workflow/status/JDeun/Helm/publish.yml?branch=main&label=publish&style=flat-square"></a>
+  <a href="https://github.com/JDeun/Helm/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/JDeun/Helm/ci.yml?branch=main&label=tests&style=flat-square"></a>
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-475569?style=flat-square">
+  <a href="https://arxiv.org/abs/2605.12129"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2605.12129-b31b1b?style=flat-square"></a>
 </p>
 
 <p align="center">
+  <a href="https://v0-helm-agent-ops.vercel.app/">Landing</a> ·
   <a href="#quickstart">Quickstart</a> ·
-  <a href="#왜-helm인가">왜 Helm인가</a> ·
-  <a href="#helm이-더하는-것">Helm이 더하는 것</a> ·
+  <a href="#helm이-하는-일">Helm이 하는 일</a> ·
   <a href="#워크플로우">워크플로우</a> ·
   <a href="#문서">문서</a> ·
-  <a href="https://v0-helm-agent-ops.vercel.app/">Landing Page</a>
+  <a href="README.md">English</a>
 </p>
+
+---
 
 ## Quickstart
 
-PyPI에서 설치:
-
 ```bash
-python -m pip install helm-agent-ops
-helm --help
+pip install helm-agent-ops
+helm init --path ~/.helm/workspace
+export HELM_WORKSPACE=~/.helm/workspace
 ```
 
-또는 workspace bootstrap installer 사용:
+선언된 risk profile 아래에서 첫 inspection 실행:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
-helm doctor --path ~/.helm/workspace
-helm profile --path ~/.helm/workspace run inspect_local --task-name "first Helm inspection" -- git status --short
-helm status --path ~/.helm/workspace --brief
-helm dashboard --path ~/.helm/workspace
+helm profile run inspect_local --task-name "first look" -- git status --short
+helm status --brief
+helm dashboard
 ```
 
-installer는 Helm을 설치하고 `~/.helm/workspace`를 만듭니다. 설치 후 `helm` 명령을 찾지 못하면 installer가 출력한 PATH 설정을 적용하세요.
+첫 명령은 guard를 거친 실행 기록을 남깁니다. 두 번째 명령은 방금 일어난 일을 평이한 문장으로 보여줍니다. 세 번째 명령은 workspace 상태를 한 페이지로 보여줍니다.
 
-다른 workspace 경로를 쓰려면:
+> **PyPI 없이?** bootstrap installer 사용: `curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash`
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- \
-  --workspace ~/work/helm
-```
+---
 
 ## 왜 Helm인가
 
-Helm은 코딩 에이전트를 실제 작업에 반복적으로 쓰는 개발자를 위한 도구입니다. 목표는 chat history보다 오래 남는 운영 상태를 만드는 것입니다.
+장기 실행 코딩 에이전트는 drift 합니다. 이전 결정을 잊고, 막을 새도 없이 위험한 수정을 실행하고, 일주일 뒤에는 아무도 audit할 수 없는 chat log만 남깁니다.
 
-Helm은 이런 상황에 맞습니다.
+Helm은 기존 agent runtime 주변을 감싸는 얇은 file-backed 운영 레이어입니다. agent를 **대체하지 않습니다**. agent의 작업이 **경계 안에서, 복구 가능하게, 검토 가능하게** 일어나도록 만듭니다.
 
-- agent 주변 명령을 명시적인 risk profile 아래 실행하고 싶을 때
-- destructive command나 profile 밖 명령을 실행 전에 막고 싶을 때
-- 넓은 수정 전에 눈에 보이는 복구 지점을 만들고 싶을 때
-- task history와 command history를 로컬 파일에 남기고 싶을 때
-- 다음 실행이 기억에만 의존하지 않고 workspace state에서 이어지게 하고 싶을 때
-- 긴 session이 끝난 뒤 무슨 일이 있었는지 검토하고 싶을 때
+| Helm 없이 | Helm으로 |
+| --- | --- |
+| agent가 결정하는 즉시 위험한 명령 실행 | 선언된 execution profile + guard 검사를 거친 실행 |
+| 다중 파일 수정 후 무엇이 바뀌었는지 추측 | 작업 전 checkpoint 생성, 명확한 rollback 지점 |
+| "어제 agent가 뭐 했지?" → chat 스크롤 | 로컬 task ledger, command log, dashboard, markdown report |
+| context가 chat window에만 존재 | file-backed memory + ranked retrieval로 다음 세션 재구성 |
+| skill 규칙이 prompt 안에만 있음 | `SKILL.md` + `contract.json`이 실행 시점에 정책 적용 |
 
-Helm은 또 하나의 agent runtime이 아닙니다. 이미 쓰고 있는 runtime 주변의 운영 레이어입니다.
+agent가 일회성 데모만 돌린다면 Helm 필요 없음. 같은 프로젝트에 몇 시간씩 돌린다면 필요함.
 
-OpenClaw/Hermes 스타일 workspace나 유사한 self-hosted agent service가 데모를 넘어 반복 운영 단계에 들어갔다면 Helm이 필요해집니다.
+---
 
-- 명시적 execution profile로 작업 범위 제한
-- checkpoint 기반 복구 경로
-- task log와 command log 기반 추적성
-- chat history가 아니라 file state에서 이어지는 다음 실행
-- skill contract와 local policy 기반 운영 규칙
+## Helm이 하는 일
 
-에이전트가 일회성 데모만 수행한다면 Helm은 과할 수 있습니다.
+<table>
+<tr>
+<td width="33%" valign="top">
 
-## 연구 배경
+### 🛡️ 실행 전 guard
 
-Helm의 설계 방향은 [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129) 논문에서 다룬 문제의식과 맞닿아 있습니다. 이 논문은 small language model의 운영 안정성이 모델 자체뿐 아니라 planning, verification, recovery를 포함한 harness 설계에 크게 좌우된다는 점을 실험적으로 분석합니다.
+- **Execution profile**로 blast radius 선언 (`inspect_local`, `workspace_edit`, `risky_edit`, `service_ops`, `remote_handoff`)
+- **Command guard**가 destructive하거나 profile 벗어난 동작을 사전 차단
+- **Tool-group grant**가 각 profile이 노출하는 capability 제한
 
-논문과 Helm의 workspace-level operations layer가 어떻게 연결되는지는 [`docs/research-background.md`](docs/research-background.md)를 참고하세요.
+</td>
+<td width="33%" valign="top">
+
+### 💾 사후 복구
+
+- 광범위한 수정 전 **Checkpoint** 생성으로 명확한 rollback target
+- **Task ledger** & **command log**가 chat과 무관하게 durable history 유지
+- **Browser & profile gate**로 runaway 작업 중지 + cleanup 증거 요구
+
+</td>
+<td width="33%" valign="top">
+
+### 🧭 시간에 걸친 운영
+
+- **File-backed memory** + ranked retrieval (`helm context --explain-ranking`)
+- **Skill lifecycle**이 skill 규칙의 promote / decay 관리
+- **Adaptive harness**가 failure signature → policy transition 연결
+
+</td>
+</tr>
+</table>
+
+<p align="center">
+  <img src="assets/helm-architecture-diagram.png" alt="Helm architecture" width="720" />
+</p>
+
+---
 
 ## 3분 데모
 
 ![Helm three-minute demo terminal capture](https://raw.githubusercontent.com/JDeun/Helm/main/assets/helm-three-minute-demo.gif)
 
 ```bash
-helm profile --path ~/.helm/workspace run inspect_local \
-  --task-name "inspect current repository" \
-  -- git status --short
-
-helm checkpoint create --path ~/.helm/workspace \
-  --label before-risky-work \
-  --include ~/.helm/workspace
-
-helm report --path ~/.helm/workspace --format markdown
-helm dashboard --path ~/.helm/workspace
+helm profile run inspect_local --task-name "inspect current repository" -- git status --short
+helm checkpoint create --label before-risky-work --include $HELM_WORKSPACE
+helm report --format markdown
+helm dashboard
 ```
 
-이 흐름은 task ledger, command log, checkpoint record, dashboard summary를 파일로 남깁니다.
+각 명령은 디스크에 구조화된 기록을 남깁니다: task ledger, command log, checkpoint 기록, dashboard 요약. agent가 아무것도 기억할 필요 없습니다.
 
-## Helm의 위치
-
-| 분류 | 더 잘하는 것 | Helm이 더하는 것 |
-| --- | --- | --- |
-| Agent framework | prompt, planner, tool loop, agent graph | profile, guard decision, checkpoint, task ledger |
-| Observability tool | hosted trace, service metric, telemetry correlation | 실행 전 policy와 로컬 복구 상태 |
-| Eval tool | model output 또는 task success 평가 | 반복 human-agent 작업의 운영 이력 |
-| Shell wrapper | 명령 실행 편의성 | workspace state, memory capture, report, recovery discipline |
-
-## Helm이 더하는 것
-
-핵심 개념:
-
-- **Profile**: 명령 실행 전에 허용 범위를 정합니다. 예를 들어 조회 전용, workspace 수정, risky edit를 구분합니다.
-- **Guardrail**: 실행 전에 명령 형태를 local policy와 비교해 위험하거나 profile을 벗어난 행동을 막습니다.
-- **Checkpoint**: rollback이 필요할 수 있는 작업 전에 복구 지점을 눈에 보이게 남깁니다.
-- **Audit trail**: 어떤 명령이 어떤 profile과 guard decision 아래 어떤 task로 실행됐는지 기록합니다.
-- **File-backed memory**: 다음 실행이 chat history가 아니라 파일에 남은 durable state에서 이어지게 합니다.
-- **Context retrieval**: notes, memory, ontology, tasks, commands, checkpoints를 하나의 inspectable query surface로 정렬합니다.
-- **Privacy boundary**: private text가 tool, API, report, remote handoff 경계를 넘기 전에 scan/tokenize합니다.
-- **Operations digest**: capture 상태, artifact fingerprint, connector freshness, review pressure를 private workspace 내용 없이 요약합니다.
-
-| 반복 에이전트 운영 문제 | Helm이 더하는 것 |
-| --- | --- |
-| 에이전트가 이전 작업을 잊음 | notes, memory, tasks, commands, checkpoints 기반 context hydration |
-| risky edit가 너무 빠르게 진행됨 | profile, command guard, checkpoint discipline |
-| 나중에 실행 이유를 설명하기 어려움 | task ledger, command log, status, dashboard, report |
-| private context가 tool로 새어 나갈 수 있음 | local vault와 audit event를 쓰는 `helm privacy` scan/tokenize/restore |
-| retrieval ranking이 black box처럼 보임 | field, recency, graph, adapter, source score를 보여주는 `helm context --explain-ranking` |
-| skill 규칙이 프롬프트에만 남음 | `SKILL.md` guidance와 `contract.json` 실행 정책 |
-| model fallback이 즉흥적으로 결정됨 | file-backed health check와 fallback selection |
-| 운영 상태가 흩어짐 | workspace layout, adopted sources, SQLite query index |
-| 장기 연동이 조용히 stale 상태가 됨 | connector freshness probe와 daily digest review queue |
-
-Helm은 원칙적으로 runtime-agnostic이지만, state, memory, profiles, checkpoints, task history가 있는 persistent workspace를 1차 대상으로 설계되었습니다.
-
-![Helm 설명 카툰](assets/helm-explainer-cartoon-ko.png)
+---
 
 ## 워크플로우
 
-workspace 점검.
+<details>
+<summary><b>Workspace 점검</b></summary>
 
 ```bash
-helm doctor --path ~/.helm/workspace
-helm status --path ~/.helm/workspace --brief
-helm dashboard --path ~/.helm/workspace
+helm doctor
+helm status --brief
+helm dashboard
 ```
 
-명시 profile로 명령 실행.
+</details>
+
+<details>
+<summary><b>선언된 profile 아래 명령 실행</b></summary>
 
 ```bash
-helm profile --path ~/.helm/workspace run inspect_local \
-  --task-name "inspect repository state" \
-  -- git status --short
+helm profile run inspect_local --task-name "inspect repository state" -- git status --short
+helm profile run workspace_edit --task-name "tighten typing in api/" -- ruff check api/
 ```
 
-기존 시스템을 context source로 연결.
+</details>
+
+<details>
+<summary><b>기존 시스템을 context source로 채택</b></summary>
 
 ```bash
-helm survey --path ~/.helm/workspace
-helm onboard --path ~/.helm/workspace --use-detected --dry-run
-helm onboard --path ~/.helm/workspace --use-detected
+helm survey
+helm onboard --use-detected --dry-run
+helm onboard --use-detected
 ```
 
-rollback 후보와 최근 운영 상태 확인.
+</details>
+
+<details>
+<summary><b>Rollback 및 최근 상태 확인</b></summary>
 
 ```bash
-helm checkpoint-recommend --path ~/.helm/workspace
-helm checkpoint list --path ~/.helm/workspace
-helm report --path ~/.helm/workspace --format markdown
+helm checkpoint-recommend
+helm checkpoint list
+helm task list --status running
+helm task doctor
+helm report --format markdown
 ```
 
-durable context를 ranking 설명과 함께 조회.
+</details>
+
+<details>
+<summary><b>Inspectable ranking으로 durable context 조회</b></summary>
 
 ```bash
-helm context --path ~/.helm/workspace --mode decisions --explain-ranking --json
-helm context --path ~/.helm/workspace --mode timeline --since 2026-05-01
-helm context --path ~/.helm/workspace --mode entity --entity project_helm
-helm context --path ~/.helm/workspace --mode reflect-candidates
+helm context --mode decisions --explain-ranking --json
+helm context --mode timeline --since 2026-05-01
+helm context --mode entity --entity project_helm
+helm context --mode reflect-candidates
 ```
 
-privacy boundary preflight 실행.
+</details>
+
+<details>
+<summary><b>Privacy boundary preflight</b></summary>
 
 ```bash
-helm privacy --path ~/.helm/workspace scan --text "Contact alice@example.com" --json
-helm privacy --path ~/.helm/workspace tokenize --scope task-123 --text "Contact alice@example.com"
+helm privacy scan --text "Contact alice@example.com" --json
+helm privacy tokenize --scope task-123 --text "Contact alice@example.com"
 ```
 
-skill instruction 안의 오래된 negative claim 검토.
+</details>
+
+<details>
+<summary><b>오래된 skill claim 검토</b></summary>
 
 ```bash
-helm skill-lifecycle negative-claims --path ~/.helm/workspace --persist
-helm skill-lifecycle revalidation-due --path ~/.helm/workspace
-helm skill-lifecycle revalidate-claim --path ~/.helm/workspace \
+helm skill-lifecycle negative-claims --persist
+helm skill-lifecycle revalidation-due
+helm skill-lifecycle revalidate-claim \
   --skill old-skill \
   --claim-id sha256:abc123 \
   --status resolved \
   --note "command now exists"
 ```
 
-model health 확인.
+</details>
+
+<details>
+<summary><b>Model health probe</b></summary>
 
 ```bash
-helm health --path ~/.helm/workspace state --json
-helm health --path ~/.helm/workspace select --json
+helm health state --json
+helm health select --json
 ```
 
-demo workspace 실행.
+</details>
 
-```bash
-helm doctor --path examples/demo-workspace
-helm dashboard --path examples/demo-workspace
-```
+> 모든 명령은 `--path /custom/workspace` 도 받습니다 — `$HELM_WORKSPACE` 안 쓸 때. `examples/demo-workspace`에 데모 workspace가 있어 안전하게 지정 가능.
+
+---
+
+## v0.10.0 — harness-engineering 레이어
+
+*현재 릴리즈: v0.10.0 — 2026-05-22 릴리즈.* 모든 신규 기능은 기본 shadow mode — 결정은 기록되지만 enforce 안 됨. opt-in 시점은 누적 데이터 기반으로.
+
+- **Failure signature 분류** — 모든 failure event를 `{component, tool, profile, error_class, target, fingerprint}`로 정규화, 같은 실패가 run을 가로질러 식별 가능.
+- **Profile → tool-group grant** — 각 profile이 노출하는 도구 제한; runner가 매 ledger row에 grant 기록.
+- **반복 실패 policy transition** — same-fingerprint / patch-failed / same-skill / credential-invalid 패턴이 자동으로 다음 action 선택 (stop / decompose / repair / re-auth).
+- **Patch-first edit 정책 + validation gate** — 파일 수정은 patch 우선; 확장자별 validation 명령이 write 후 실행.
+- **Task-state 컨트롤 컨테이너** — Forge "Control Flow Is Not Memory" 원칙: required_steps, completed_steps, blockers, approval, recovered_messages가 transcript와 분리된 구조화 상태로 존재.
+- **Trace recorder → trace replay → skill candidate** — 각 run이 JSON trace 생성; 반복 성공 패턴은 skill draft 후보, 반복 실패는 repair 후보.
+- **Profile pause / resume** — profile 단위 secret-token-gated hard stop, `OPENCLAW_PAUSE_GATE` flag.
+- **Browser work verifier** — 사전 결정 (`allow_single_session`, `block_mutation`, `require_user_login`, `require_confirmation`, `pause_profile`, `require_cleanup_evidence`) + runner enforcement gate.
+- **Model repair + synthetic respond hook** — 소형 모델 fallback proxy 위한 library 진입점; `HELM_MODEL_REPAIR` / `HELM_SYNTHETIC_RESPOND`.
+- **Shadow-mode reporter** — `helm shadow-report --since 14d --with-recommendations`로 14일 신호 집계 + feature별 `ready_to_enforce / needs_more_data / caution / no_signal` 추천.
+
+자세한 내용은 [v0.10.0 릴리즈 노트](docs/releases/0.10.0.md)와 13개 [`docs/harness-engineering/`](docs/harness-engineering/) 문서 참조.
+
+---
 
 ## Workspace 모델
 
-Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context source로 붙이는 것이 안전합니다.
+Helm은 dedicated workspace에서 동작하며, 기존 시스템을 read-only context source로 채택합니다.
 
-- Helm state는 `.helm/` 아래에 둡니다
-- profiles, notes, policies, skill rules는 명시 파일로 유지합니다
-- OpenClaw, Hermes, notes vault는 overwrite하지 않고 adopt해서 연결합니다
-- JSONL은 append-only 원본이고, SQLite는 query index입니다
+- Helm 상태는 workspace 안 `.helm/`에 위치.
+- Profile, note, 정책, skill 규칙은 explicit 파일로 유지.
+- OpenClaw, Hermes, notes vault는 덮어쓰지 않고 **채택**.
+- JSONL이 append-only source of truth, SQLite는 query index.
+
+---
+
+## 비교
+
+| 카테고리 | 어떤 도구가 더 적합한가 | Helm이 더하는 것 |
+| --- | --- | --- |
+| **Agent framework** (LangChain, AutoGen 등) | prompt, planner, tool loop, agent graph | profile, guard 결정, checkpoint, task ledger |
+| **Observability** (Langfuse, Helicone 등) | hosted trace, service metric | 실행 전 정책 + 로컬 복구 상태 |
+| **Evaluation** (DeepEval, Phoenix 등) | 모델 출력 스코어링 | 반복 human-agent 작업 운영 history |
+| **Shell wrapper** (명령 보조 도구) | 명령 편의성 | workspace 상태, memory 캡처, report, 복구 규율 |
+
+더 깊은 비교는 [`docs/comparisons/`](docs/comparisons/) 참조.
+
+---
 
 ## 문서
 
-먼저 볼 문서:
+<table>
+<tr>
+<th align="left">시작하기</th>
+<th align="left">핵심 개념</th>
+<th align="left">심화</th>
+</tr>
+<tr>
+<td valign="top">
 
-- [`docs/three-minute-demo.md`](docs/three-minute-demo.md)
-- [`docs/first-run.md`](docs/first-run.md)
-- [`docs/onboarding.md`](docs/onboarding.md)
-- [`docs/demos.md`](docs/demos.md)
-- [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
-- [`docs/integrations/existing-agent-workspace.md`](docs/integrations/existing-agent-workspace.md)
+- [3분 데모](docs/three-minute-demo.md)
+- [첫 실행](docs/first-run.md)
+- [온보딩](docs/onboarding.md)
+- [데모 모음](docs/demos.md)
+- [OpenClaw 통합](docs/integrations/openclaw.md)
+- [기존 agent workspace](docs/integrations/existing-agent-workspace.md)
 
-핵심 개념:
+</td>
+<td valign="top">
 
-- [`docs/execution-profiles.md`](docs/execution-profiles.md)
-- [`docs/memory-operations-policy.md`](docs/memory-operations-policy.md)
-- [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
-- [`docs/privacy-boundary.md`](docs/privacy-boundary.md)
-- [`docs/task-finalization.md`](docs/task-finalization.md)
-- [`docs/task-state.md`](docs/task-state.md)
-- [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
-- [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
-- [`docs/evidence-label-convention.md`](docs/evidence-label-convention.md)
-- [`docs/hitl-decision-patterns.md`](docs/hitl-decision-patterns.md)
-- [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
+- [Execution profile](docs/execution-profiles.md)
+- [Privacy boundary](docs/privacy-boundary.md)
+- [Task state](docs/task-state.md)
+- [Task finalization](docs/task-finalization.md)
+- [Memory operations 정책](docs/memory-operations-policy.md)
+- [Ops memory query](docs/ops-memory-query.md)
+- [Adaptive harness](docs/adaptive-harness.md)
+- [Skill quality & policy](docs/skill-quality-and-policy.md)
 
-포지셔닝:
+</td>
+<td valign="top">
 
-- [`docs/opensource-product-definition.md`](docs/opensource-product-definition.md)
-- [`docs/opensource-module-split.md`](docs/opensource-module-split.md)
-- [`docs/helm-dogfooding-reference.md`](docs/helm-dogfooding-reference.md)
-- [`docs/research-background.md`](docs/research-background.md)
-- [`docs/public-launch-checklist.md`](docs/public-launch-checklist.md)
-- [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
-- [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
-- [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
+- [Harness engineering — 인덱스](docs/harness-engineering/)
+- [Control Flow Is Not Memory](docs/harness-engineering/05-control-flow-is-not-memory.md)
+- [Helm vs Forge](docs/harness-engineering/06-helm-vs-forge.md)
+- [HITL 결정 패턴](docs/hitl-decision-patterns.md)
+- [Evidence label convention](docs/evidence-label-convention.md)
+- [Helm dogfooding 참고](docs/helm-dogfooding-reference.md)
+- [연구 배경](docs/research-background.md)
 
-Harness engineering 원칙:
+</td>
+</tr>
+</table>
 
-- [`docs/harness-engineering/05-control-flow-is-not-memory.md`](docs/harness-engineering/05-control-flow-is-not-memory.md) — workflow 완료 상태가 transcript 밖에 있어야 하는 이유, task-state container가 이를 어떻게 강제하는지, 피해야 할 anti-pattern.
-- [`docs/harness-engineering/06-helm-vs-forge.md`](docs/harness-engineering/06-helm-vs-forge.md) — Helm과 Forge의 비교, Helm이 Forge 설계에서 흡수하는 것, 두 레이어가 겹치지 않는 지점.
+---
 
-릴리즈:
+## 연구 배경
 
-- [`CHANGELOG.md`](CHANGELOG.md)
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- [`SECURITY.md`](SECURITY.md)
-- 최신: [`docs/releases/0.10.0.md`](docs/releases/0.10.0.md)
-- 최근: [`0.9.6`](docs/releases/0.9.6.md), [`0.9.5`](docs/releases/0.9.5.md)
+Helm의 설계 방향은 [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129) 의 결과와 일치합니다. 이 논문은 planning, verification, recovery harness가 소형 언어 모델의 운영 안정성에 어떻게 영향을 주는지 실험적으로 연구합니다.
 
-이전 릴리즈 노트는 [`docs/releases/`](docs/releases/)에 있습니다.
+Helm 인용:
 
-## 현재 상태
+```bibtex
+@software{helm_2026,
+  title  = {Helm: A stability-first operations layer for long-lived agent workspaces},
+  author = {Cho, Yong Eun},
+  year   = {2026},
+  url    = {https://github.com/JDeun/Helm},
+  version = {0.10.0}
+}
+```
 
-Helm v0.10.0은 harness-engineering 레이어를 추가합니다: failure-signature 분류, profile→tool-group grant, 반복 실패 policy transition, patch-first edit 정책, task-state 컨트롤 컨테이너(Forge "Control Flow Is Not Memory" 원칙), agent reliability eval scenario, trace recorder/replay 및 후보 promotion, profile pause/resume, browser work verifier와 policy decision, model repair / synthetic respond 라이브러리 hook, shadow-mode reporter (enforce 결정 보조). 자세한 내용은 [`docs/releases/0.10.0.md`](docs/releases/0.10.0.md) 참고.
+machine-readable 형식은 [`CITATION.cff`](CITATION.cff) 참조.
 
-Helm에는 private memory, personal agent overlay, credential, private task history가 포함되지 않습니다.
+---
+
+## Contributing
+
+Issue와 PR 환영합니다.
+
+- PR 전에 [`CONTRIBUTING.md`](CONTRIBUTING.md) 읽기.
+- 테스트 실행: `python -m pytest -q` (현재 1,372 tests).
+- Release 검사: `python scripts/release_version_check.py --version <next>`.
+- 보안 보고: [`SECURITY.md`](SECURITY.md) 참조.
+
+---
+
+## 릴리즈 이력
+
+- **최신**: [v0.10.0](docs/releases/0.10.0.md) — harness-engineering 레이어 (2026-05-22)
+- **이전**: [v0.9.6](docs/releases/0.9.6.md), [v0.9.5](docs/releases/0.9.5.md), [v0.9.0](docs/releases/0.9.0.md)
+- **전체 changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [이전 릴리즈 노트](docs/releases/)
+
+---
+
+## Helm에 포함되지 **않는** 것
+
+Helm은 public 운영 레이어만 ship합니다. 다음은 포함되지 **않습니다**:
+
+- Private memory 내용
+- Personal agent overlay
+- Credential, secret
+- 특정 workspace의 raw task 내용
+- Live connector token
+
+저장소는 fork, clone, 검토 모두 안전합니다.
+
+---
 
 ## 라이선스
 
-MIT
+[MIT](LICENSE) © Yong Eun Cho ([JDeun](https://github.com/JDeun))

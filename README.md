@@ -1,298 +1,371 @@
 <p align="center">
-  <img src="assets/helm-icon-v2.png" alt="Helm icon" width="108" />
+  <img src="assets/helm-icon-v2.png" alt="Helm icon" width="120" />
 </p>
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>Stop long-running coding agents from losing context, making unsafe edits, and becoming impossible to audit.</strong></p>
-
-<p align="center">Helm is a local operations layer for AI agent workspaces: profiles before commands, checkpoints before risky work, durable task history after the chat is gone.</p>
-
-<p align="center"><strong>Current release: v0.10.0</strong></p>
+<p align="center"><strong>The local operations layer for long-running coding agents.</strong></p>
 
 <p align="center">
-  <a href="https://v0-helm-agent-ops.vercel.app/">Landing page</a> ·
-  <a href="README.ko.md">한국어 README</a>
+  Profiles before commands · Checkpoints before risky work · Durable history after the chat is gone.
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/helm-agent-ops?style=flat-square"></a>
-  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="PyPI Python versions" src="https://img.shields.io/pypi/pyversions/helm-agent-ops?style=flat-square"></a>
-  <a href="https://github.com/JDeun/Helm/actions/workflows/publish.yml"><img alt="Publish to PyPI" src="https://img.shields.io/github/actions/workflow/status/JDeun/Helm/publish.yml?branch=main&label=publish&style=flat-square"></a>
-  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f172a?style=flat-square">
-  <img alt="Stability first" src="https://img.shields.io/badge/focus-stability--first-334155?style=flat-square">
-  <img alt="Runtime agnostic" src="https://img.shields.io/badge/runtime-agnostic-475569?style=flat-square">
+  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="PyPI" src="https://img.shields.io/pypi/v/helm-agent-ops?style=flat-square&color=0f172a"></a>
+  <a href="https://pypi.org/project/helm-agent-ops/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/helm-agent-ops?style=flat-square&color=334155"></a>
+  <a href="https://github.com/JDeun/Helm/actions/workflows/publish.yml"><img alt="Publish" src="https://img.shields.io/github/actions/workflow/status/JDeun/Helm/publish.yml?branch=main&label=publish&style=flat-square"></a>
+  <a href="https://github.com/JDeun/Helm/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/JDeun/Helm/ci.yml?branch=main&label=tests&style=flat-square"></a>
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-475569?style=flat-square">
+  <a href="https://arxiv.org/abs/2605.12129"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2605.12129-b31b1b?style=flat-square"></a>
 </p>
 
 <p align="center">
+  <a href="https://v0-helm-agent-ops.vercel.app/">Landing</a> ·
   <a href="#quickstart">Quickstart</a> ·
-  <a href="#why-helm">Why Helm</a> ·
-  <a href="#what-helm-adds">What Helm Adds</a> ·
+  <a href="#what-helm-does">What Helm does</a> ·
   <a href="#workflows">Workflows</a> ·
-  <a href="#docs">Docs</a> ·
-  <a href="https://v0-helm-agent-ops.vercel.app/">Landing Page</a>
+  <a href="#documentation">Docs</a> ·
+  <a href="README.ko.md">한국어</a>
 </p>
+
+---
 
 ## Quickstart
 
-Install from PyPI:
-
 ```bash
-python -m pip install helm-agent-ops
-helm --help
+pip install helm-agent-ops
+helm init --path ~/.helm/workspace
+export HELM_WORKSPACE=~/.helm/workspace
 ```
 
-Or use the workspace bootstrap installer:
+Run your first inspection under a declared risk profile:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash
-helm doctor --path ~/.helm/workspace
-helm profile --path ~/.helm/workspace run inspect_local --task-name "first Helm inspection" -- git status --short
-helm status --path ~/.helm/workspace --brief
-helm dashboard --path ~/.helm/workspace
+helm profile run inspect_local --task-name "first look" -- git status --short
+helm status --brief
+helm dashboard
 ```
 
-The installer installs Helm and creates `~/.helm/workspace`. If `helm` is not found afterward, use the PATH line printed by the installer.
+The first command produces a guarded execution record. The second shows what just happened in plain English. The third lays out the workspace state on one page.
 
-Need a different workspace?
+> **No PyPI?** Use the bootstrap installer: `curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash`
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/JDeun/Helm/main/install.sh | bash -s -- \
-  --workspace ~/work/helm
-```
+---
 
 ## Why Helm
 
-Helm is for developers who already use coding agents for real work and need the session to leave behind something more durable than chat history.
+Long-running coding agents drift. They forget prior decisions, execute risky edits before you can stop them, and leave behind a chat log nobody can audit a week later.
 
-Use Helm when you want to:
+Helm is a thin, file-backed operations layer that sits around your existing agent runtime. It does **not** replace your agent. It makes the agent's work boundable, recoverable, and reviewable.
 
-- run agent-adjacent commands under explicit risk profiles
-- block destructive or out-of-profile commands before they execute
-- create visible recovery points before broad edits
-- keep task and command history in local files
-- rehydrate future runs from workspace state instead of memory alone
-- review what happened after a long session ends
+| Without Helm | With Helm |
+| --- | --- |
+| Risky commands run as soon as the agent decides | Commands run under a declared execution profile with a guard check |
+| Multi-file edits leave you guessing what changed | Checkpoint created before the work; visible rollback point |
+| "What did the agent do yesterday?" → scroll the chat | Local task ledger, command log, dashboard, markdown report |
+| Context lives in the chat window | File-backed memory + ranked retrieval rehydrates the next session |
+| Skill rules live in prompts | `SKILL.md` + `contract.json` enforce policy at run time |
 
-Helm is not another agent runtime. It is the operating layer around the one you already run.
+If your agent only runs one-off demos, you do not need Helm. If you run it for hours on the same project, you do.
 
-Use it when an OpenClaw/Hermes-style workspace, or a similar self-hosted agent service, has moved past demos and needs repeated work to stay:
+---
 
-- bounded by explicit execution profiles
-- recoverable through checkpoints
-- inspectable through task and command logs
-- resumable from files instead of chat history
-- governed by skill contracts and local policy
+## What Helm does
 
-If the agent only runs one-off demos, Helm is probably unnecessary.
+<table>
+<tr>
+<td width="33%" valign="top">
 
-## Research Background
+### 🛡️ Guard before execution
 
-Helm's design direction is aligned with the findings in [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129), which experimentally studies how planning, verification, and recovery harnesses affect the operational stability of small language models.
+- **Execution profiles** declare blast radius (`inspect_local`, `workspace_edit`, `risky_edit`, `service_ops`, `remote_handoff`)
+- **Command guard** blocks destructive or out-of-profile actions before they run
+- **Tool-group grants** restrict which capabilities each profile exposes
 
-See [`docs/research-background.md`](docs/research-background.md) for the connection between the paper and Helm's workspace-level operations layer.
+</td>
+<td width="33%" valign="top">
 
-## Three-Minute Demo
+### 💾 Recover after the fact
+
+- **Checkpoints** before broad edits give a clear rollback target
+- **Task ledger** & **command log** keep durable history independent of the chat
+- **Browser & profile gates** can pause runaway work and require evidence of cleanup
+
+</td>
+<td width="33%" valign="top">
+
+### 🧭 Operate over time
+
+- **File-backed memory** with ranked retrieval (`helm context --explain-ranking`)
+- **Skill lifecycle** governs how skill rules promote / decay
+- **Adaptive harness** integrates failure signatures → policy transitions
+
+</td>
+</tr>
+</table>
+
+<p align="center">
+  <img src="assets/helm-architecture-diagram.png" alt="Helm architecture" width="720" />
+</p>
+
+---
+
+## A three-minute demo
 
 ![Helm three-minute demo terminal capture](https://raw.githubusercontent.com/JDeun/Helm/main/assets/helm-three-minute-demo.gif)
 
 ```bash
-helm profile --path ~/.helm/workspace run inspect_local \
-  --task-name "inspect current repository" \
-  -- git status --short
-
-helm checkpoint create --path ~/.helm/workspace \
-  --label before-risky-work \
-  --include ~/.helm/workspace
-
-helm report --path ~/.helm/workspace --format markdown
-helm dashboard --path ~/.helm/workspace
+helm profile run inspect_local --task-name "inspect current repository" -- git status --short
+helm checkpoint create --label before-risky-work --include $HELM_WORKSPACE
+helm report --format markdown
+helm dashboard
 ```
 
-This leaves a task ledger, command log, checkpoint record, and dashboard summary on disk.
+Each command leaves a structured record on disk: task ledger, command log, checkpoint record, dashboard summary. None of it requires the agent to remember anything.
 
-## How Helm Fits
-
-| Category | Better for | Helm adds |
-| --- | --- | --- |
-| Agent frameworks | prompts, planners, tool loops, agent graphs | profiles, guard decisions, checkpoints, task ledgers |
-| Observability tools | hosted traces, service metrics, telemetry correlation | pre-execution policy and local recovery state |
-| Eval tools | scoring model output or task success | operational history around repeated human-agent work |
-| Shell wrappers | command convenience | workspace state, memory capture, reports, and recovery discipline |
-
-## What Helm Adds
-
-Core ideas:
-
-- **Profile**: declares the allowed blast radius before a command runs, such as inspect-only, workspace edit, or risky edit.
-- **Guardrail**: checks command shape against local policy before execution, blocking dangerous or out-of-profile actions.
-- **Checkpoint**: preserves a visible recovery point before work that may need rollback.
-- **Audit trail**: records what ran, under which profile, with what guard decision, and what task it belonged to.
-- **File-backed memory**: keeps reusable context in files so later runs resume from durable state instead of chat history.
-- **Context retrieval**: ranks notes, memory, ontology, tasks, commands, and checkpoints through one inspectable query surface.
-- **Privacy boundary**: scans and tokenizes private text before it crosses tool, API, report, or remote handoff boundaries.
-- **Operations digest**: summarizes capture status, artifact fingerprints, connector freshness, and review pressure without exposing private workspace contents.
-
-| Repeated-agent problem | Helm adds |
-| --- | --- |
-| The agent forgets prior work | Context hydration from notes, memory, tasks, commands, and checkpoints |
-| Risky edits happen too fast | Profiles, command guard, and checkpoint discipline |
-| Runs are hard to explain later | Task ledger, command log, status, dashboard, and reports |
-| Private context may leak into tools | `helm privacy` scan/tokenize/restore with local vault and audit events |
-| Retrieval feels like a black box | `helm context --explain-ranking` with field, recency, graph, adapter, and source scores |
-| Skill rules live in prompts | `SKILL.md` guidance plus `contract.json` execution policy |
-| Model fallback is ad hoc | File-backed health checks and fallback selection |
-| Operational state is scattered | Workspace layout, adopted sources, and SQLite query index |
-| Long-lived integrations silently go stale | Connector freshness probes and daily digest review queues |
-
-Helm is runtime-agnostic, but it is built first for persistent workspaces with state, memory, profiles, checkpoints, and task history.
-
-![Helm explainer cartoon](assets/helm-explainer-cartoon-ko.png)
+---
 
 ## Workflows
 
-Inspect the workspace.
+<details>
+<summary><b>Inspect the workspace</b></summary>
 
 ```bash
-helm doctor --path ~/.helm/workspace
-helm status --path ~/.helm/workspace --brief
-helm dashboard --path ~/.helm/workspace
+helm doctor
+helm status --brief
+helm dashboard
 ```
 
-Run under a declared profile.
+</details>
+
+<details>
+<summary><b>Run a command under a declared profile</b></summary>
 
 ```bash
-helm profile --path ~/.helm/workspace run inspect_local \
-  --task-name "inspect repository state" \
-  -- git status --short
+helm profile run inspect_local --task-name "inspect repository state" -- git status --short
+helm profile run workspace_edit --task-name "tighten typing in api/" -- ruff check api/
 ```
 
-Adopt existing systems as context sources.
+</details>
+
+<details>
+<summary><b>Adopt existing systems as context sources</b></summary>
 
 ```bash
-helm survey --path ~/.helm/workspace
-helm onboard --path ~/.helm/workspace --use-detected --dry-run
-helm onboard --path ~/.helm/workspace --use-detected
+helm survey
+helm onboard --use-detected --dry-run
+helm onboard --use-detected
 ```
 
-Check rollback and recent state.
+</details>
+
+<details>
+<summary><b>Check rollback and recent state</b></summary>
 
 ```bash
-helm checkpoint-recommend --path ~/.helm/workspace
-helm checkpoint list --path ~/.helm/workspace
-helm task list --path ~/.helm/workspace --status running
-helm task doctor --path ~/.helm/workspace
-helm report --path ~/.helm/workspace --format markdown
+helm checkpoint-recommend
+helm checkpoint list
+helm task list --status running
+helm task doctor
+helm report --format markdown
 ```
 
-Query durable context with inspectable ranking.
+</details>
+
+<details>
+<summary><b>Query durable context with inspectable ranking</b></summary>
 
 ```bash
-helm context --path ~/.helm/workspace --mode decisions --explain-ranking --json
-helm context --path ~/.helm/workspace --mode timeline --since 2026-05-01
-helm context --path ~/.helm/workspace --mode entity --entity project_helm
-helm context --path ~/.helm/workspace --mode reflect-candidates
+helm context --mode decisions --explain-ranking --json
+helm context --mode timeline --since 2026-05-01
+helm context --mode entity --entity project_helm
+helm context --mode reflect-candidates
 ```
 
-Run a privacy boundary preflight.
+</details>
+
+<details>
+<summary><b>Run a privacy boundary preflight</b></summary>
 
 ```bash
-helm privacy --path ~/.helm/workspace scan --text "Contact alice@example.com" --json
-helm privacy --path ~/.helm/workspace tokenize --scope task-123 --text "Contact alice@example.com"
+helm privacy scan --text "Contact alice@example.com" --json
+helm privacy tokenize --scope task-123 --text "Contact alice@example.com"
 ```
 
-Review stale negative claims in skill instructions.
+</details>
+
+<details>
+<summary><b>Review stale skill claims</b></summary>
 
 ```bash
-helm skill-lifecycle negative-claims --path ~/.helm/workspace --persist
-helm skill-lifecycle revalidation-due --path ~/.helm/workspace
-helm skill-lifecycle revalidate-claim --path ~/.helm/workspace \
+helm skill-lifecycle negative-claims --persist
+helm skill-lifecycle revalidation-due
+helm skill-lifecycle revalidate-claim \
   --skill old-skill \
   --claim-id sha256:abc123 \
   --status resolved \
   --note "command now exists"
 ```
 
-Probe model health.
+</details>
+
+<details>
+<summary><b>Probe model health</b></summary>
 
 ```bash
-helm health --path ~/.helm/workspace state --json
-helm health --path ~/.helm/workspace select --json
+helm health state --json
+helm health select --json
 ```
 
-Try the demo workspace.
+</details>
 
-```bash
-helm doctor --path examples/demo-workspace
-helm dashboard --path examples/demo-workspace
+> Every command also accepts `--path /custom/workspace` if you do not want to use `$HELM_WORKSPACE`. The demo workspace at `examples/demo-workspace` is safe to point at.
+
+---
+
+## v0.10.0 — harness-engineering layer
+
+*Current release: v0.10.0 — released 2026-05-22.* Everything new ships in shadow mode by default — decisions are logged but not enforced until you opt in.
+
+- **Failure signature classification** — every failure event normalizes to `{component, tool, profile, error_class, target, fingerprint}` so the same failure is recognizable across runs.
+- **Profile → tool-group grants** — each execution profile exposes only the tools it should; runner records the grant in every ledger row.
+- **Repeated-failure policy transitions** — same-fingerprint, patch-failed, same-skill, and credential-invalid-grant patterns automatically pick a next action (stop / decompose / repair / re-auth).
+- **Patch-first edit policy + validation gates** — file edits prefer patch operations; per-extension validation commands run after writes.
+- **Task-state control container** — Forge's "Control Flow Is Not Memory" principle: required-steps, completed-steps, blockers, approvals, and recovered messages live as structured state, not transcript content.
+- **Trace recorder → trace replay → skill candidate** — every run produces a JSON trace; recurring success patterns surface as skill drafts; recurring failures surface as repair candidates.
+- **Profile pause / resume** — secret-token-gated hard stop per profile, gated by `OPENCLAW_PAUSE_GATE`.
+- **Browser work verifier** — pre-flight decision (`allow_single_session`, `block_mutation`, `require_user_login`, `require_confirmation`, `pause_profile`, `require_cleanup_evidence`) with a runner-side enforcement gate.
+- **Model repair + synthetic respond hooks** — library entry points for small-model fallback proxies; gated by `HELM_MODEL_REPAIR` and `HELM_SYNTHETIC_RESPOND`.
+- **Shadow-mode reporter** — `helm shadow-report --since 14d --with-recommendations` aggregates 14 days of signals and emits `ready_to_enforce / needs_more_data / caution / no_signal` per feature.
+
+See [the full v0.10.0 notes](docs/releases/0.10.0.md) and the 13-document [`docs/harness-engineering/`](docs/harness-engineering/) directory for the design.
+
+---
+
+## Workspace model
+
+Helm runs in a dedicated workspace, treating existing systems as read-only context sources first.
+
+- Helm state lives under `.helm/` inside the workspace.
+- Profiles, notes, policies, and skill rules stay as explicit files.
+- OpenClaw, Hermes, and notes vaults can be **adopted** instead of overwritten.
+- JSONL is the append-only source of truth; SQLite is a query index.
+
+---
+
+## How Helm compares
+
+| Category | Better for | Helm adds |
+| --- | --- | --- |
+| **Agent frameworks** (LangChain, AutoGen, etc.) | prompts, planners, tool loops, agent graphs | profiles, guard decisions, checkpoints, task ledgers |
+| **Observability** (Langfuse, Helicone, etc.) | hosted traces, service metrics | pre-execution policy + local recovery state |
+| **Evaluation** (DeepEval, Phoenix, etc.) | scoring model output | operational history around repeated human-agent work |
+| **Shell wrappers** (cmd helpers) | command convenience | workspace state, memory capture, reports, recovery discipline |
+
+See deeper comparisons in [`docs/comparisons/`](docs/comparisons/).
+
+---
+
+## Documentation
+
+<table>
+<tr>
+<th align="left">Get started</th>
+<th align="left">Core concepts</th>
+<th align="left">Advanced</th>
+</tr>
+<tr>
+<td valign="top">
+
+- [Three-minute demo](docs/three-minute-demo.md)
+- [First run](docs/first-run.md)
+- [Onboarding](docs/onboarding.md)
+- [Demos](docs/demos.md)
+- [OpenClaw integration](docs/integrations/openclaw.md)
+- [Existing agent workspace](docs/integrations/existing-agent-workspace.md)
+
+</td>
+<td valign="top">
+
+- [Execution profiles](docs/execution-profiles.md)
+- [Privacy boundary](docs/privacy-boundary.md)
+- [Task state](docs/task-state.md)
+- [Task finalization](docs/task-finalization.md)
+- [Memory operations policy](docs/memory-operations-policy.md)
+- [Ops memory query](docs/ops-memory-query.md)
+- [Adaptive harness](docs/adaptive-harness.md)
+- [Skill quality & policy](docs/skill-quality-and-policy.md)
+
+</td>
+<td valign="top">
+
+- [Harness engineering — index](docs/harness-engineering/)
+- [Control Flow Is Not Memory](docs/harness-engineering/05-control-flow-is-not-memory.md)
+- [Helm vs Forge](docs/harness-engineering/06-helm-vs-forge.md)
+- [HITL decision patterns](docs/hitl-decision-patterns.md)
+- [Evidence label convention](docs/evidence-label-convention.md)
+- [Helm dogfooding reference](docs/helm-dogfooding-reference.md)
+- [Research background](docs/research-background.md)
+
+</td>
+</tr>
+</table>
+
+---
+
+## Research background
+
+Helm's design follows the findings in [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129), which experimentally studies how planning, verification, and recovery harnesses affect operational stability.
+
+Cite Helm:
+
+```bibtex
+@software{helm_2026,
+  title  = {Helm: A stability-first operations layer for long-lived agent workspaces},
+  author = {Cho, Yong Eun},
+  year   = {2026},
+  url    = {https://github.com/JDeun/Helm},
+  version = {0.10.0}
+}
 ```
 
-## Workspace Model
+See [`CITATION.cff`](CITATION.cff) for the machine-readable form.
 
-Keep Helm in a dedicated workspace. Treat existing systems as read-only context sources first.
+---
 
-- Helm state lives under `.helm/`
-- profiles, notes, policies, and skill rules stay as explicit files
-- OpenClaw, Hermes, and notes vaults can be adopted instead of overwritten
-- JSONL remains the append-only source of truth; SQLite is a query index
+## Contributing
 
-## Docs
+Issues and pull requests welcome.
 
-Start here:
+- Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a PR.
+- Run the test suite: `python -m pytest -q` (currently 1,372 tests).
+- Run the release checks: `python scripts/release_version_check.py --version <next>`.
+- Security reports: see [`SECURITY.md`](SECURITY.md).
 
-- [`docs/three-minute-demo.md`](docs/three-minute-demo.md)
-- [`docs/first-run.md`](docs/first-run.md)
-- [`docs/onboarding.md`](docs/onboarding.md)
-- [`docs/demos.md`](docs/demos.md)
-- [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
-- [`docs/integrations/existing-agent-workspace.md`](docs/integrations/existing-agent-workspace.md)
+---
 
-Core concepts:
+## Release history
 
-- [`docs/execution-profiles.md`](docs/execution-profiles.md)
-- [`docs/memory-operations-policy.md`](docs/memory-operations-policy.md)
-- [`docs/ops-memory-query.md`](docs/ops-memory-query.md)
-- [`docs/privacy-boundary.md`](docs/privacy-boundary.md)
-- [`docs/task-finalization.md`](docs/task-finalization.md)
-- [`docs/task-state.md`](docs/task-state.md)
-- [`docs/integrations/openclaw.md`](docs/integrations/openclaw.md)
-- [`docs/adaptive-harness.md`](docs/adaptive-harness.md)
-- [`docs/evidence-label-convention.md`](docs/evidence-label-convention.md)
-- [`docs/hitl-decision-patterns.md`](docs/hitl-decision-patterns.md)
-- [`docs/skill-quality-and-policy.md`](docs/skill-quality-and-policy.md)
+- **Latest**: [v0.10.0](docs/releases/0.10.0.md) — harness-engineering layer (2026-05-22)
+- **Previous**: [v0.9.6](docs/releases/0.9.6.md), [v0.9.5](docs/releases/0.9.5.md), [v0.9.0](docs/releases/0.9.0.md)
+- **Full changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [older release notes](docs/releases/)
 
-Positioning:
+---
 
-- [`docs/opensource-product-definition.md`](docs/opensource-product-definition.md)
-- [`docs/opensource-module-split.md`](docs/opensource-module-split.md)
-- [`docs/helm-dogfooding-reference.md`](docs/helm-dogfooding-reference.md)
-- [`docs/research-background.md`](docs/research-background.md)
-- [`docs/public-launch-checklist.md`](docs/public-launch-checklist.md)
-- [`docs/comparisons/agent-frameworks.md`](docs/comparisons/agent-frameworks.md)
-- [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
-- [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
+## What Helm does NOT include
 
-Harness engineering principles:
+Helm ships only the public operations layer. It does **not** include:
 
-- [`docs/harness-engineering/05-control-flow-is-not-memory.md`](docs/harness-engineering/05-control-flow-is-not-memory.md) — why workflow completion state must live outside the transcript, how the task-state container enforces this, and the anti-patterns to avoid.
-- [`docs/harness-engineering/06-helm-vs-forge.md`](docs/harness-engineering/06-helm-vs-forge.md) — side-by-side comparison of Helm and Forge, what Helm absorbs from Forge's design, and where the two layers do not overlap.
+- Private memory contents
+- Personal agent overlays
+- Credentials or secrets
+- Raw task content from any specific workspace
+- Live connector tokens
 
-Release details:
+The repository is safe to fork, clone, and inspect.
 
-- [`CHANGELOG.md`](CHANGELOG.md)
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- [`SECURITY.md`](SECURITY.md)
-- Latest: [`docs/releases/0.10.0.md`](docs/releases/0.10.0.md)
-- Recent: [`0.9.6`](docs/releases/0.9.6.md), [`0.9.5`](docs/releases/0.9.5.md)
-
-Older release notes live in [`docs/releases/`](docs/releases/).
-
-## Status
-
-Helm v0.10.0 lands the harness-engineering layer: failure-signature classification, profile→tool-group grants, repeated-failure policy transitions, patch-first edit policy, the task-state control container (Forge "Control Flow Is Not Memory"), agent-reliability eval scenarios, trace recording / replay / candidate promotion, profile pause/resume, browser-work verifier with policy decisions, model-repair and synthetic-respond library hooks, and the shadow-mode reporter that drives enforce-readiness decisions. See [`docs/releases/0.10.0.md`](docs/releases/0.10.0.md).
-
-Helm does not include private memory, personal agent overlays, credentials, or private task history.
+---
 
 ## License
 
-MIT
+[MIT](LICENSE) © Yong Eun Cho ([JDeun](https://github.com/JDeun))
