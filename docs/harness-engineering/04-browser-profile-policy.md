@@ -225,4 +225,25 @@ These are unresolved design questions for Kevin to weigh in on. No answers are p
 
 ---
 
+## 7. Resolution
+
+Wave 3b (`feat/wave3b-policy-resolve-2026-05-22`) encoded the following decisions for all open
+questions from §6.
+
+| OQ | Decision | Code location |
+|---|---|---|
+| OQ-1 | `gated` mutation: `--approve-risk` OR `existing_site_note_path` satisfies the gate. Verifier always emits `require_confirmation=True`; runner checks both paths. | `scripts/run_with_profile.py` `_evaluate_browser_gate` |
+| OQ-2 | `risky_edit` + `logged_in_required`: permanent block (`allow_logged_in_profile=false`). Reason string names `service_ops` upgrade path. | `scripts/browser_work_verifier.py` `_check_login_compat` |
+| OQ-3 | `max_sessions` enforced runner-side via ledger counter. Helper `_count_active_browser_sessions` reads last 2000 lines of `task-ledger.jsonl`, counts rows with `browser_recon` set and no `cleanup_status` within a 10-minute window. Caps: `inspect_local=5`, `service_ops=3`, `risky_edit=2`. | `scripts/run_with_profile.py` `_count_active_browser_sessions` |
+| OQ-4 | `remote_handoff` + any browser action: hard block (`allow_single_session=False`). NOT a soft confirmation gate. | `scripts/browser_work_verifier.py` `_HARD_BLOCK_PROFILES` |
+| OQ-5 | Site note fixed path: `<workspace>/skills/browser-site-notes/<host>.md`. Verifier auto-resolves when `existing_site_note_path` is absent. `workspace_root` overrideable via kwarg / `OPENCLAW_WORKSPACE` env / `~/.openclaw/workspace`. | `scripts/browser_work_verifier.py` `_resolve_site_note_path` |
+| OQ-6 | (Wave 3a) `browser_recon` is a top-level sibling key alongside `guard`. | `scripts/run_with_profile.py` `_evaluate_browser_gate` |
+| OQ-7 | `require_cleanup_evidence` → finalization gate. Verifier emits `require_cleanup_evidence=True` for `risky_edit`. Runner checks at completion (exit 0 path) via `_check_cleanup_required_satisfied`; blocks with `EXIT_CLEANUP_REQUIRED=28` if no `cleanup_status` row exists. | `scripts/run_with_profile.py` `_check_cleanup_required_satisfied` |
+| OQ-8 | `workspace_edit` + any browser action: hard block (`allow_single_session=False`). NOT a soft confirmation gate. | `scripts/browser_work_verifier.py` `_HARD_BLOCK_PROFILES` |
+
+All enforcement is gated by `OPENCLAW_BROWSER_GATE`. When the flag is off the verifier still
+runs and logs in shadow mode (`browser_recon_shadow`), but no enforcement exits fire.
+
+---
+
 *End of browser profile policy design. Implementation: Task 14.*

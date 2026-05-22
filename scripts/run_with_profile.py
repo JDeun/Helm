@@ -46,6 +46,7 @@ EXIT_GUARD_REQUIRE_APPROVAL = 24
 EXIT_GUARD_DENY = 25
 EXIT_PAUSED = 26
 EXIT_BROWSER_BLOCKED = 27
+EXIT_CLEANUP_REQUIRED = 28  # OQ-7: finalization blocked — cleanup evidence missing
 
 def _pause_gate_enabled() -> bool:
     """Return True only when OPENCLAW_PAUSE_GATE is truthy ('1', 'true', 'yes').
@@ -577,6 +578,167 @@ def _attach_tool_grant(task: dict, profile: str) -> None:
         pass
 
 
+# Per-profile session cap constants for OQ-3 max_sessions enforcement.
+# Mirrors _PROFILE_POLICIES in browser_work_verifier.py.
+_BROWSER_MAX_SESSIONS: dict[str, int] = {
+    "inspect_local": 5,
+    "service_ops": 3,
+    "risky_edit": 2,
+}
+
+
+def _count_active_browser_sessions(
+    profile: str,
+    window_minutes: int = 10,
+) -> int:
+    """Count open browser sessions for *profile* in the recent ledger window.
+
+    OQ-3: Runner-side max_sessions enforcement via ledger counter.
+
+    A session is "open" when:
+    - A ledger entry has ``browser_recon`` set (verifier was called)
+    - The entry's ``status`` is ``browser_recon`` or ``running`` or
+      ``browser_approved_with_risk`` or ``browser_approved_by_site_note``
+      (i.e. a session was authorised to open)
+    - The entry's ``started_at`` is within ``window_minutes`` of now
+    - No later entry for the same ``task_id`` has ``cleanup_status`` set
+
+    Returns the count of such open sessions.  Returns 0 on any read/
+    parse error (fail-open so that ledger corruption never blocks work).
+    """
+    from scripts.time_helpers import utc_now_iso
+    try:
+        if not TASK_LEDGER.exists():
+            return 0
+
+        lines = TASK_LEDGER.read_text(encoding="utf-8").splitlines()
+        # Parse all entries, keep only the last N lines for performance
+        # (10-minute window; tasks rarely exceed 1 line/second).
+        tail_lines = lines[-2000:]
+
+        now_ts = utc_now_iso()
+        # Build a simple ISO-comparable window cutoff.
+        import datetime as _dt
+        now_dt = _dt.datetime.fromisoformat(now_ts.replace("Z", "+00:00"))
+        cutoff_dt = now_dt - _dt.timedelta(minutes=window_minutes)
+
+        _OPEN_STATUSES = frozenset({
+            "browser_recon",
+            "running",
+            "browser_approved_with_risk",
+            "browser_approved_by_site_note",
+            "browser_recon_shadow",
+        })
+
+        # First pass: collect all entries.
+        all_entries: list[dict] = []
+        for line in tail_lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(entry, dict):
+                all_entries.append(entry)
+
+        # Identify task_ids that have cleanup evidence.
+        tasks_with_cleanup: set[str] = set()
+        for entry in all_entries:
+            task_id = entry.get("task_id")
+            if task_id and entry.get("cleanup_status"):
+                tasks_with_cleanup.add(task_id)
+
+        # Count open sessions.
+        open_count = 0
+        for entry in all_entries:
+            if entry.get("profile") != profile:
+                continue
+            if not entry.get("browser_recon"):
+                continue
+            status = entry.get("status", "")
+            if status not in _OPEN_STATUSES:
+                continue
+            started_at = entry.get("started_at", "")
+            if not started_at:
+                continue
+            try:
+                entry_dt = _dt.datetime.fromisoformat(
+                    started_at.replace("Z", "+00:00")
+                )
+            except ValueError:
+                continue
+            if entry_dt < cutoff_dt:
+                continue
+            task_id = entry.get("task_id")
+            if task_id and task_id in tasks_with_cleanup:
+                continue
+            open_count += 1
+
+        return open_count
+    except Exception:  # noqa: BLE001 — fail-open; never block on ledger errors
+        return 0
+
+
+def _check_cleanup_required_satisfied(task_id: str) -> tuple[bool, str | None]:
+    """Check whether cleanup evidence is recorded for *task_id*.
+
+    OQ-7: Finalization gate.
+
+    Returns ``(satisfied, reason)`` where:
+    - ``satisfied=True`` means cleanup is not required OR evidence exists.
+    - ``satisfied=False, reason=str`` means cleanup was required but no
+      ``cleanup_status`` row exists for this task.
+
+    Reads the task ledger and examines all rows for this task_id.
+    Fail-open: any ledger read error returns ``(True, None)`` so that
+    ledger corruption never permanently blocks task completion.
+    """
+    try:
+        if not TASK_LEDGER.exists():
+            return True, None
+
+        entries_for_task: list[dict] = []
+        for line in TASK_LEDGER.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(entry, dict) and entry.get("task_id") == task_id:
+                entries_for_task.append(entry)
+
+        if not entries_for_task:
+            return True, None
+
+        # Check if any entry required cleanup evidence.
+        cleanup_required = any(
+            entry.get("browser_recon", {}).get("require_cleanup_evidence")
+            for entry in entries_for_task
+        )
+        if not cleanup_required:
+            return True, None
+
+        # Check if any entry has cleanup_status recorded.
+        has_cleanup = any(
+            entry.get("cleanup_status")
+            for entry in entries_for_task
+        )
+        if has_cleanup:
+            return True, None
+
+        return False, (
+            f"task {task_id} required browser cleanup evidence "
+            "(require_cleanup_evidence=True) but no cleanup_status is recorded; "
+            "record cleanup_status before marking complete"
+        )
+    except Exception:  # noqa: BLE001 — fail-open
+        return True, None
+
+
 def _evaluate_browser_gate(
     args: argparse.Namespace,
     task: dict,
@@ -620,6 +782,7 @@ def _evaluate_browser_gate(
             "require_confirmation": True,
             "block_mutation": False,
             "pause_profile": False,
+            "require_cleanup_evidence": False,
             "reason": f"verifier exception: {exc}",
             "checks": {},
         }
@@ -639,6 +802,26 @@ def _evaluate_browser_gate(
         return None
 
     # Enforce mode — honor the decision.
+
+    # OQ-3: max_sessions check — BEFORE session open.
+    # Only enforce when gate is on; shadow mode always proceeds.
+    _profile = args.profile
+    _max_sessions = _BROWSER_MAX_SESSIONS.get(_profile)
+    if _max_sessions is not None:
+        _active = _count_active_browser_sessions(_profile)
+        if _active >= _max_sessions:
+            task["status"] = "browser_blocked"
+            task["finished_at"] = utc_now_iso()
+            task["browser_recon"] = decision
+            task["browser_block_reason"] = "max_sessions_reached"
+            append_ledger(dict(task))
+            print(
+                f"BROWSER GATE BLOCKED: max_sessions reached for profile "
+                f"{_profile!r} (active={_active}, cap={_max_sessions})",
+                file=sys.stderr,
+            )
+            return EXIT_BROWSER_BLOCKED
+
     block = (
         decision.get("block_mutation") is True
         or decision.get("allow_single_session") is False
@@ -654,27 +837,46 @@ def _evaluate_browser_gate(
         )
         return EXIT_BROWSER_BLOCKED
 
-    if decision.get("require_confirmation") and not getattr(args, "approve_risk", False):
-        task["status"] = "browser_requires_approval"
-        task["finished_at"] = utc_now_iso()
-        task["browser_recon"] = decision
-        append_ledger(dict(task))
-        print(
-            f"BROWSER GATE REQUIRES APPROVAL: {decision.get('reason', '')}. "
-            "Pass --approve-risk to proceed.",
-            file=sys.stderr,
+    if decision.get("require_confirmation"):
+        # OQ-1: gated mutation gate is satisfied by EITHER --approve-risk OR an
+        # existing site note (caller-supplied or auto-resolved by verifier).
+        _site_note_in_decision = decision.get("checks", {}).get("existing_site_note")
+        _site_note_present = (
+            _site_note_in_decision == "present"
+            or bool(request.get("existing_site_note_path"))
+            or bool(getattr(args, "browser_site_note", None))
         )
-        return EXIT_GUARD_REQUIRE_APPROVAL
 
-    if decision.get("require_confirmation") and getattr(args, "approve_risk", False):
-        task["browser_approved_with_risk"] = True
-        task["status_browser"] = "browser_approved_with_risk"
-        # Ledger row records approval visibly.
-        _browser_recon_entry = dict(task)
-        _browser_recon_entry["status"] = "browser_approved_with_risk"
-        _browser_recon_entry["browser_recon"] = decision
-        append_ledger(_browser_recon_entry)
-        # task continues; do NOT set status yet — normal flow takes over.
+        if _site_note_present:
+            # Site note satisfies the gate (OQ-1).
+            task["browser_approved_by_site_note"] = True
+            task["status_browser"] = "browser_approved_by_site_note"
+            _browser_recon_entry = dict(task)
+            _browser_recon_entry["status"] = "browser_approved_by_site_note"
+            _browser_recon_entry["browser_recon"] = decision
+            append_ledger(_browser_recon_entry)
+            # task continues; do NOT set status yet — normal flow takes over.
+        elif getattr(args, "approve_risk", False):
+            # --approve-risk satisfies the gate.
+            task["browser_approved_with_risk"] = True
+            task["status_browser"] = "browser_approved_with_risk"
+            _browser_recon_entry = dict(task)
+            _browser_recon_entry["status"] = "browser_approved_with_risk"
+            _browser_recon_entry["browser_recon"] = decision
+            append_ledger(_browser_recon_entry)
+            # task continues; do NOT set status yet — normal flow takes over.
+        else:
+            # Neither approval nor site note — require human approval.
+            task["status"] = "browser_requires_approval"
+            task["finished_at"] = utc_now_iso()
+            task["browser_recon"] = decision
+            append_ledger(dict(task))
+            print(
+                f"BROWSER GATE REQUIRES APPROVAL: {decision.get('reason', '')}. "
+                "Pass --approve-risk or provide a site note to proceed.",
+                file=sys.stderr,
+            )
+            return EXIT_GUARD_REQUIRE_APPROVAL
         return None
 
     # All clear: embed recon into the task dict for the normal finalize path.
@@ -873,6 +1075,27 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     task["finished_at"] = utc_now_iso()
     task["exit_code"] = result.returncode
+
+    # OQ-7: Finalization gate — check cleanup evidence before marking complete.
+    # Only enforced when gate is on AND the task requires cleanup evidence.
+    # Fail-open: if _check_cleanup_required_satisfied errors it returns True.
+    if result.returncode == 0 and _browser_gate_enabled():
+        _cleanup_ok, _cleanup_reason = _check_cleanup_required_satisfied(
+            task["task_id"]
+        )
+        if not _cleanup_ok:
+            task["status"] = "browser_cleanup_required"
+            task["failure_stage"] = "finalization"
+            task["failure_reason"] = _cleanup_reason or "cleanup evidence required"
+            _cleanup_entry = dict(task)
+            _cleanup_entry["status"] = "browser_cleanup_required"
+            append_ledger(_cleanup_entry)
+            print(
+                f"BROWSER CLEANUP REQUIRED: {_cleanup_reason}",
+                file=sys.stderr,
+            )
+            return EXIT_CLEANUP_REQUIRED
+
     task["status"] = "completed" if result.returncode == 0 else "failed"
     finalize_task(task)
     record_runner_event(
