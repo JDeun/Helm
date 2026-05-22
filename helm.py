@@ -81,6 +81,7 @@ from commands.task import (
 from commands.validate import cmd_validate
 from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status, cmd_db_query
 from commands.skill_promotion import cmd_skill_promotion
+from commands.shadow_report import cmd_shadow_report
 from commands.phase_modules import (
     cmd_action_scope_evaluate,
     cmd_compression_profiles,
@@ -812,6 +813,38 @@ def build_parser() -> argparse.ArgumentParser:
     sp_state_path = sp_sub.add_parser("state-path", help="Print the state file path in use.")
     sp_state_path.add_argument("--state-path", dest="state_path", default=None)
     sp_state_path.set_defaults(func=cmd_skill_promotion, skill_promotion_command="state-path")
+
+    # ---- Wave 6: Shadow-mode report ------------------------------------------
+    shadow_report = subparsers.add_parser(
+        "shadow-report",
+        help="Produce a shadow-mode aggregation report for enforce-readiness decisions (Wave 6).",
+    )
+    shadow_report.add_argument(
+        "--since", type=int, default=14, metavar="DAYS",
+        help="Reporting window in days (default: 14).",
+    )
+    shadow_report.add_argument(
+        "--feature", action="append", default=None, dest="feature", metavar="NAME",
+        help=(
+            "Include only this feature. Repeatable. Default: all. "
+            "Choices: browser_verifier, pause_gate, model_repair, "
+            "synthetic_respond_inferred, skill_promotion, max_sessions_hits, "
+            "cleanup_evidence_gate, all."
+        ),
+    )
+    shadow_report.add_argument(
+        "--format", choices=["md", "json"], default="md",
+        help="Output format: md (default) or json.",
+    )
+    shadow_report.add_argument(
+        "--with-recommendations", action="store_true",
+        help="Append enforce-readiness recommendations to the output.",
+    )
+    shadow_report.add_argument(
+        "--out", default=None, metavar="PATH",
+        help="Write output to this path instead of stdout.",
+    )
+    shadow_report.set_defaults(func=cmd_shadow_report)
 
     return parser
 
