@@ -18,22 +18,28 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REPLAY_SCRIPT = ROOT / "scripts" / "trace_replay.py"
 
+# Make `scripts.*` importable for helpers below.  Done at module-load
+# time (guarded) instead of inside helpers so it doesn't run on every
+# call.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.trace_recorder import (  # noqa: E402
+    record_changed_file,
+    record_tool_call,
+    record_validation_gate,
+    save_trace,
+    set_outcome,
+    start_trace,
+)
+from scripts.trace_replay import build_parser  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _make_and_save_trace(traces_dir: Path, task_id: str = "replay-test-001") -> dict:
     """Create a minimal populated trace and save it to traces_dir."""
-    sys.path.insert(0, str(ROOT))
-    from scripts.trace_recorder import (
-        record_changed_file,
-        record_tool_call,
-        record_validation_gate,
-        save_trace,
-        set_outcome,
-        start_trace,
-    )
-
     trace = start_trace(
         task_id=task_id,
         profile="service_ops",
@@ -198,3 +204,18 @@ class TestReplayCLIHelp:
     def test_help_output_nonempty(self):
         result = _run_replay(["--help"])
         assert len(result.stdout.strip()) > 10
+
+
+# ---------------------------------------------------------------------------
+# Tilde expansion in --traces-dir
+# ---------------------------------------------------------------------------
+
+class TestTracesDirTildeExpansion:
+    def test_traces_dir_cli_expands_tilde(self):
+        """``--traces-dir ~/x`` must expand to ``$HOME/x`` after argparse."""
+        parser = build_parser()
+        args = parser.parse_args(["--task-id", "irrelevant", "--traces-dir", "~/some-cli-traces"])
+        resolved = Path(args.traces_dir).expanduser()
+        assert resolved == Path.home() / "some-cli-traces"
+        # And it must NOT be a literal `~` path.
+        assert "~" not in str(resolved)
