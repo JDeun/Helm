@@ -87,6 +87,16 @@ def _build_summary(candidates: list[dict], total_available: int) -> str:
 
     A "+ N more" line is appended when *total_available* exceeds the number
     of candidates included.
+
+    Truncation strategy
+    -------------------
+    When the UTF-8 encoding of the assembled text exceeds ``_SUMMARY_BYTE_BUDGET``
+    bytes, the text is truncated at the byte budget using
+    ``errors='ignore'``, which silently drops any partial multi-byte sequence
+    at the cut point.  A ``"..."`` suffix is then appended.  Because the
+    partial sequence is dropped rather than replaced, the ``"..."`` may appear
+    slightly earlier than the byte budget for non-ASCII content — the output is
+    always valid UTF-8 with no mojibake.
     """
     lines: list[str] = ["Skill Promotion Digest\n"]
     for c in candidates:
