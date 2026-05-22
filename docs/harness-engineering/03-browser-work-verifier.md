@@ -229,6 +229,9 @@ decision. "Profile" refers to the Helm execution profile, not the Chrome profile
   `site_note_update` ledger fields (currently absent per `01-inventory.md` §3) are populated
   by the browser skill post-run, not by the verifier.
 
+For the resolution of all open questions (OQ-1..8) that were encoded in Wave 3b, see
+`04-browser-profile-policy.md` §7 "Resolution".
+
 ---
 
 *End of browser work verifier design. Implementation: Task 14.*
