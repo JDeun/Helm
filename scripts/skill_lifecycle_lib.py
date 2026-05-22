@@ -86,6 +86,12 @@ def utc_now_iso() -> str:
 
 
 def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    # Not migrated to scripts.io_utils.atomic_write_json: this function uses a
+    # deterministic sibling-path temp file (path.with_suffix(".tmp")) rather
+    # than a randomly-named tempfile from mkstemp.  The pattern differs enough
+    # (no fd, no random name, adds a trailing newline, no except-cleanup) that
+    # a silent migration could change observable behaviour.  Consolidate in a
+    # future pass once callers have been audited.
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     text = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n"

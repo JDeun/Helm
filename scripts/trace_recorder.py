@@ -60,13 +60,13 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from scripts.io_utils import atomic_write_json  # noqa: E402
 from scripts.time_helpers import utc_now_iso  # noqa: E402
 
 __all__ = [
@@ -245,25 +245,10 @@ def save_trace(trace: dict, traces_dir: Path) -> Path:
         The final path of the written trace file.
     """
     traces_dir = Path(traces_dir)
-    traces_dir.mkdir(parents=True, exist_ok=True)
-
     dest = traces_dir / f"{trace['taskId']}.json"
-    payload = json.dumps(trace, indent=2, ensure_ascii=False)
-
-    # Atomic write: tmp file in the same directory → rename.
-    fd, tmp_path = tempfile.mkstemp(dir=traces_dir, suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(payload)
-        os.replace(tmp_path, dest)
-    except Exception:
-        # Clean up the temp file if anything goes wrong before the rename.
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
-
+    # Atomic write via shared helper (same-dir tempfile → os.replace).
+    # atomic_write_json also creates the parent directory if missing.
+    atomic_write_json(dest, trace, indent=2)
     return dest
 
 
