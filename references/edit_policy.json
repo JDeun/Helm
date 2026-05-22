@@ -1,0 +1,6 @@
+{
+  "default": "patch_first",
+  "max_patch_failures_per_file": 2,
+  "on_repeated_patch_failure": "reload_context_then_decompose",
+  "requires_checkpoint_for": ["shared_workflow", "skill_router", "automation"]
+}
