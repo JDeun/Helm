@@ -39,6 +39,10 @@ POLICY_FILE = WORKSPACE / "references" / "skill_profile_policies.json"
 HARNESS_POLICY_FILE = WORKSPACE / "references" / "adaptive_harness_policy.json"
 TASK_LEDGER = _LAYOUT.state_root / "task-ledger.jsonl"
 
+# Maximum number of trailing ledger entries loaded per read; keeps memory
+# bounded on multi-MB ledgers without slurping the full file.
+_LEDGER_TAIL_DEFAULT = 200
+
 
 def load_json(path: Path, default: object) -> object:
     if not path.exists():
@@ -750,7 +754,7 @@ def preflight_payload(
 
 
 def latest_task_entry(task_id: str) -> dict | None:
-    entries = read_jsonl(TASK_LEDGER)
+    entries = read_jsonl(TASK_LEDGER, tail=_LEDGER_TAIL_DEFAULT)
     for entry in reversed(entries):
         if entry.get("task_id") == task_id:
             return entry
@@ -942,7 +946,7 @@ def backfill_task_evidence(
     limit: int | None = None,
     latest_only: bool = True,
 ) -> dict:
-    entries = read_jsonl(TASK_LEDGER)
+    entries = read_jsonl(TASK_LEDGER, tail=_LEDGER_TAIL_DEFAULT)
     if latest_only:
         latest_map: dict[str, dict] = {}
         for entry in entries:
@@ -1030,7 +1034,7 @@ def _ledger_failure_history(
     Each returned element has ``"signature"``, ``"task_name"``, ``"skill"``,
     and ``"occurred_at"`` as expected by ``policy_transition.evaluate()``.
     """
-    entries = read_jsonl(TASK_LEDGER)
+    entries = read_jsonl(TASK_LEDGER, tail=_LEDGER_TAIL_DEFAULT)
     history: list[dict] = []
     for entry in entries:
         if entry.get("task_id") != task_id:
