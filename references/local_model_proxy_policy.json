@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "description": "Retry and abort policy for the local model guard proxy (Task 15 spike).",
+  "max_retries": 2,
+  "nudge_on": [
+    "malformed_tool_call",
+    "non_json_when_tool_required",
+    "invalid_json_in_arguments",
+    "empty_response"
+  ],
+  "abort_on": [
+    "terminal_without_tool"
+  ]
+}
