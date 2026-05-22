@@ -32,6 +32,7 @@ Open-question resolution status (Wave 3b — 2026-05-22):
 """
 from __future__ import annotations
 
+import functools
 import os
 from pathlib import Path
 from typing import Any
@@ -132,9 +133,10 @@ def _resolve_workspace_root(workspace_root: str | Path | None) -> Path:
     return _DEFAULT_WORKSPACE_FALLBACK
 
 
+@functools.lru_cache(maxsize=256)
 def _resolve_site_note_path(
     host_or_url_pattern: str,
-    workspace_root: str | Path | None = None,
+    workspace_root: str | None = None,
 ) -> Path | None:
     """Return the fixed-path site note for *host_or_url_pattern* if it exists.
 
@@ -144,6 +146,15 @@ def _resolve_site_note_path(
     Where ``<host>`` is extracted from the URL/pattern by stripping the
     scheme and any leading ``*./`` characters, then taking the hostname
     component.  Returns ``None`` when the file does not exist.
+
+    Resolution is cached (``functools.lru_cache(maxsize=256)``); if a
+    site-note file is added or removed at runtime, the cache won't see it.
+    Restart the process or call ``_resolve_site_note_path.cache_clear()``
+    to force re-resolution.
+
+    The ``workspace_root`` parameter accepts ``str`` (or ``None``); callers
+    passing a ``pathlib.Path`` should convert it with ``str(path)`` first to
+    ensure the argument is hashable and cache keys are consistent.
 
     Examples::
 
@@ -335,8 +346,10 @@ def verify(
     checks["profile_policy"] = "present"
 
     # OQ-5: Auto-resolve site note path when caller did not supply one.
+    # Convert workspace_root to str for lru_cache hashability.
     if existing_site_note_path is None and url_pattern:
-        resolved = _resolve_site_note_path(url_pattern, workspace_root=workspace_root)
+        _ws_str = str(workspace_root) if workspace_root is not None else None
+        resolved = _resolve_site_note_path(url_pattern, _ws_str)
         if resolved is not None:
             existing_site_note_path = str(resolved)
             checks["site_note_auto_resolved"] = True
