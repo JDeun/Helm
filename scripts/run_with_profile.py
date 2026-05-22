@@ -45,6 +45,7 @@ from scripts.state_io import build_ledger_entry
 EXIT_GUARD_REQUIRE_APPROVAL = 24
 EXIT_GUARD_DENY = 25
 EXIT_PAUSED = 26
+EXIT_BROWSER_BLOCKED = 27
 
 def _pause_gate_enabled() -> bool:
     """Return True only when OPENCLAW_PAUSE_GATE is truthy ('1', 'true', 'yes').
@@ -53,6 +54,23 @@ def _pause_gate_enabled() -> bool:
     Delegates to ``scripts.env_flags.env_flag`` for shared semantics.
     """
     return env_flag("OPENCLAW_PAUSE_GATE")
+
+
+def _browser_gate_enabled() -> bool:
+    """Return True only when OPENCLAW_BROWSER_GATE is truthy ('1', 'true', 'yes').
+
+    Default False (opt-in).  When disabled the verifier is called in shadow
+    mode: decision is logged but the runner proceeds regardless.  When enabled
+    the decision is enforced.  Delegates to ``scripts.env_flags.env_flag`` for
+    shared semantics, mirroring the discipline of OPENCLAW_PAUSE_GATE.
+    """
+    return env_flag("OPENCLAW_BROWSER_GATE")
+
+
+_BROWSER_ACTIONS = frozenset({
+    "read", "navigate", "fetch_resource", "screenshot",
+    "crawl_batch", "fillform", "interact", "submit",
+})
 
 # Single layout lookup at import time (was 4 separate calls; see 2026-05-21
 # Helm full review issue #9).
@@ -559,6 +577,111 @@ def _attach_tool_grant(task: dict, profile: str) -> None:
         pass
 
 
+def _evaluate_browser_gate(
+    args: argparse.Namespace,
+    task: dict,
+) -> int | None:
+    """Evaluate the browser verifier gate and mutate *task* with the result.
+
+    Returns:
+        None   — caller should proceed normally.
+        int    — exit code; caller should exit immediately with that code.
+
+    This function is called ONLY when ``--browser-action`` is present.
+    It never raises: any exception from the verifier is caught and treated
+    as a ``require_confirmation`` shadow-mode fallback.
+
+    Behavior matrix
+    ---------------
+    gate OFF  → shadow mode: decision logged as ``browser_recon_shadow``,
+                runner proceeds (returns None).
+    gate ON   → enforce mode: decision honored per spec.
+    """
+    from scripts.browser_work_verifier import verify as _bv_verify
+
+    request = {
+        "url_pattern": getattr(args, "browser_url_pattern", None) or "",
+        "intended_action": args.browser_action,
+        "logged_in_account_required": bool(getattr(args, "browser_logged_in", False)),
+        "parallel_requested": bool(getattr(args, "browser_parallel", False)),
+        "execution_profile": args.profile,
+    }
+    site_note = getattr(args, "browser_site_note", None)
+    if site_note:
+        request["existing_site_note_path"] = site_note
+
+    try:
+        decision = _bv_verify(request)
+    except Exception as exc:  # noqa: BLE001 — verifier errors degrade safely
+        decision = {
+            "allow_single_session": False,
+            "allow_parallel": False,
+            "require_user_login": False,
+            "require_confirmation": True,
+            "block_mutation": False,
+            "pause_profile": False,
+            "reason": f"verifier exception: {exc}",
+            "checks": {},
+        }
+
+    enforce = _browser_gate_enabled()
+
+    if not enforce:
+        # Shadow mode: log and proceed.
+        task["status"] = "browser_recon_shadow"
+        task["browser_recon"] = decision
+        task["finished_at"] = utc_now_iso()
+        append_ledger(dict(task))
+        # Reset status so the calling code can continue.
+        task.pop("status", None)
+        task.pop("browser_recon", None)
+        task.pop("finished_at", None)
+        return None
+
+    # Enforce mode — honor the decision.
+    block = (
+        decision.get("block_mutation") is True
+        or decision.get("allow_single_session") is False
+    )
+    if block:
+        task["status"] = "browser_blocked"
+        task["finished_at"] = utc_now_iso()
+        task["browser_recon"] = decision
+        append_ledger(dict(task))
+        print(
+            f"BROWSER GATE BLOCKED: {decision.get('reason', 'blocked by verifier')}",
+            file=sys.stderr,
+        )
+        return EXIT_BROWSER_BLOCKED
+
+    if decision.get("require_confirmation") and not getattr(args, "approve_risk", False):
+        task["status"] = "browser_requires_approval"
+        task["finished_at"] = utc_now_iso()
+        task["browser_recon"] = decision
+        append_ledger(dict(task))
+        print(
+            f"BROWSER GATE REQUIRES APPROVAL: {decision.get('reason', '')}. "
+            "Pass --approve-risk to proceed.",
+            file=sys.stderr,
+        )
+        return EXIT_GUARD_REQUIRE_APPROVAL
+
+    if decision.get("require_confirmation") and getattr(args, "approve_risk", False):
+        task["browser_approved_with_risk"] = True
+        task["status_browser"] = "browser_approved_with_risk"
+        # Ledger row records approval visibly.
+        _browser_recon_entry = dict(task)
+        _browser_recon_entry["status"] = "browser_approved_with_risk"
+        _browser_recon_entry["browser_recon"] = decision
+        append_ledger(_browser_recon_entry)
+        # task continues; do NOT set status yet — normal flow takes over.
+        return None
+
+    # All clear: embed recon into the task dict for the normal finalize path.
+    task["browser_recon"] = decision
+    return None
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     profiles = load_profiles()
     if args.profile not in profiles:
@@ -599,6 +722,18 @@ def cmd_run(args: argparse.Namespace) -> int:
     # NOTE: denied tools are NOT blocked here — that is Task #4's responsibility.
     _attach_tool_grant(task, args.profile)
     append_ledger(task)
+
+    # --- Browser gate (OPENCLAW_BROWSER_GATE + --browser-action) ---
+    # Only active when --browser-action is explicitly supplied with a known action
+    # string. The isinstance(str) guard prevents a MagicMock attribute from
+    # accidentally triggering the gate in tests that don't set browser_action=None.
+    # Pause gate always wins (already returned EXIT_PAUSED above if paused).
+    _browser_action = getattr(args, "browser_action", None)
+    if isinstance(_browser_action, str) and _browser_action:
+        _browser_rc = _evaluate_browser_gate(args, task)
+        if _browser_rc is not None:
+            return _browser_rc
+    # --- End browser gate ---
 
     checkpoint = run_checkpoint(args.profile, args)
     if checkpoint and checkpoint.get("error"):
@@ -823,6 +958,41 @@ def parse_run_args() -> argparse.Namespace:
         default=1800,
         help="Subprocess timeout in seconds (default: 1800 / 30 minutes). 0 disables the timeout.",
     )
+    # --- Browser gate flags (Wave 3a) ---
+    parser.add_argument(
+        "--browser-action",
+        choices=sorted(_BROWSER_ACTIONS),
+        default=None,
+        help=(
+            "Treat this command as a browser task and consult the verifier. "
+            "One of: read, navigate, fetch_resource, screenshot, crawl_batch, "
+            "fillform, interact, submit. When absent all other --browser-* flags "
+            "are ignored and the verifier is NOT called."
+        ),
+    )
+    parser.add_argument(
+        "--browser-url-pattern",
+        default=None,
+        help="URL pattern for the browser task (required when --browser-action is set).",
+    )
+    parser.add_argument(
+        "--browser-logged-in",
+        action="store_true",
+        default=False,
+        help="Indicate the browser session requires a logged-in account.",
+    )
+    parser.add_argument(
+        "--browser-parallel",
+        action="store_true",
+        default=False,
+        help="Indicate the browser task may run in parallel with other sessions.",
+    )
+    parser.add_argument(
+        "--browser-site-note",
+        default=None,
+        help="Path to an existing site note for the target URL (optional).",
+    )
+    # --- End browser gate flags ---
     args, remainder = parser.parse_known_args()
     if remainder and remainder[0] == "--":
         remainder = remainder[1:]
