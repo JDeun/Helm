@@ -125,6 +125,12 @@ After Task 6, the path is:
 
 The transcript may have been compacted. The control state was not.
 
+This behavior is locked in by a regression test — see
+`tests/test_task_state_control.py::test_recovered_messages_survive_compaction`
+— which exercises the record / mark / unhandled-query flow end-to-end and
+confirms `unhandled_recovered_messages(state)` stays authoritative
+independently of any transcript content.
+
 ---
 
 ## 4. Compaction Safety Contract

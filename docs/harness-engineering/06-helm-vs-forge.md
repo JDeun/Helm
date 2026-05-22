@@ -125,40 +125,20 @@ insufficient.
 
 ## 5. Integration Sketch
 
-### Where a Forge-like proxy fits in Helm's stack
-
 The only Helm path where a Forge-style proxy adds value without creating
 a governance gap is in front of a local fallback model (Task 15 spike).
-
 When the primary model is unavailable and OpenClaw falls back to a local
-Ollama or llama.cpp endpoint, that local model may produce malformed tool
-calls or premature text answers. A lightweight guard proxy between the
-fallback router and the local model backend can intercept and retry those
-failures before they reach Helm's runner. This keeps the fallback path
-at parity with the primary path's reliability without modifying the
-host runtime.
+Ollama or llama.cpp endpoint, the fallback model may produce malformed
+tool calls or premature text answers. A lightweight guard proxy between
+the fallback router and the local model backend can intercept and retry
+those failures before they reach Helm's runner, keeping the fallback
+path at parity with the primary path without modifying the host runtime.
 
 Placement: `host runtime -> Helm guard/profile -> [proxy] -> local model`
 
 The proxy is optional and scoped to the weak-model path. It does not
-see Helm's task-state, ledger, or side-effect approvals.
-
-### Where Forge components do not fit
-
-- **Task ledger:** The ledger is an append-only JSONL file recording task
-  lifecycle events with structured metadata. This is an operational
-  audit surface, not a per-call state store. Forge has no equivalent and
-  does not need one.
-- **Side-effect approval gate:** The `external_side_effect_approvals` list
-  and the `applied -> promoted` promotion gate require cross-session
-  state and explicit human authorization. These operate at a layer Forge
-  does not address. A per-call proxy has no basis for making or recording
-  approval decisions.
-- **Profile enforcement:** Execution profiles (`inspect_local`,
-  `workspace_edit`, `risky_edit`, `service_ops`, `remote_handoff`) are
-  pre-execution policy that constrains what the host runtime is allowed
-  to do in a given session. This is a governance concern that lives above
-  the LLM call layer. Forge's runner operates below this layer.
+see Helm's task-state, ledger, or side-effect approvals — those concerns
+live above the LLM call layer and are covered by Section 4.
 
 ---
 
