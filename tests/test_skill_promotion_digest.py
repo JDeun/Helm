@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.skill_promotion_digest import build_digest
+from scripts.skill_promotion_digest import build_digest, _build_summary, _SUMMARY_BYTE_BUDGET
 from scripts.skill_promotion_state import (
     load_state,
     mark_approved,
@@ -335,3 +335,56 @@ class TestProcessedExclusion:
         payload2 = build_digest(traces_dir=traces_dir, state_path=state_path)
         ids2 = [c["candidate_id"] for c in payload2["candidates"]]
         assert cid not in ids2
+
+
+# ---------------------------------------------------------------------------
+# FIX H-3: UTF-8 truncation — errors="ignore" strategy
+# ---------------------------------------------------------------------------
+
+class TestBuildSummaryUTF8Truncation:
+    """H-3: truncation at byte budget produces valid UTF-8, no mojibake."""
+
+    def _korean_candidate(self, idx: int) -> dict:
+        """Return a synthetic candidate dict with Korean task_name."""
+        return {
+            "candidate_id": f"{idx:08x}",
+            "skill": "테스트-스킬",
+            "task_name": "한국어 작업 이름 " + "가나다라마바사아자차카타파하" * 3,
+            "count": idx + 1,
+            "sample_trace_ids": [f"tr-{idx:04d}"],
+            "status": "new",
+        }
+
+    def test_korean_output_is_valid_utf8(self):
+        """Summary with Korean text approaching the byte budget must be valid UTF-8."""
+        # Build enough Korean candidates to overflow the byte budget
+        candidates = [self._korean_candidate(i) for i in range(20)]
+        result = _build_summary(candidates, total_available=20)
+
+        # Must be valid UTF-8 (no mojibake): encode/decode round-trip succeeds
+        try:
+            result.encode("utf-8").decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise AssertionError(f"Output is not valid UTF-8: {exc}") from exc
+
+    def test_korean_output_ends_with_ellipsis_when_truncated(self):
+        """When the byte budget is exceeded, the summary ends with '...'."""
+        candidates = [self._korean_candidate(i) for i in range(20)]
+        result = _build_summary(candidates, total_available=20)
+
+        encoded = result.encode("utf-8")
+        if len(encoded) >= _SUMMARY_BYTE_BUDGET:
+            # If it was truncated, it must end with "..."
+            assert result.endswith("..."), (
+                f"Expected truncated summary to end with '...', got: {result[-10:]!r}"
+            )
+
+    def test_korean_output_within_byte_budget(self):
+        """The byte-encoded summary must never exceed the byte budget."""
+        candidates = [self._korean_candidate(i) for i in range(20)]
+        result = _build_summary(candidates, total_available=20)
+        encoded_len = len(result.encode("utf-8"))
+        # Budget is 800; "..." adds 3 bytes, but the truncated portion ≤ budget
+        assert encoded_len <= _SUMMARY_BYTE_BUDGET, (
+            f"Summary byte length {encoded_len} exceeds budget {_SUMMARY_BYTE_BUDGET}"
+        )

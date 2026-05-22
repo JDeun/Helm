@@ -380,6 +380,45 @@ def test_resolve_site_note_path_returns_none_for_empty():
 
 
 # ---------------------------------------------------------------------------
+# FIX H-4: host trailing dot strip
+# ---------------------------------------------------------------------------
+
+def test_resolve_site_note_path_trailing_dot_stripped(tmp_path: Path):
+    """FQDN trailing dot (example.com.) must resolve to example.com site note."""
+    note_dir = tmp_path / "skills" / "browser-site-notes"
+    note_dir.mkdir(parents=True)
+    note_file = note_dir / "example.com.md"
+    note_file.write_text("note content")
+
+    # Trailing dot in FQDN form
+    result = _resolve_site_note_path("example.com.", workspace_root=str(tmp_path))
+    assert result == note_file, "Trailing dot should be stripped to find site note"
+
+
+def test_resolve_site_note_path_wildcard_resolved(tmp_path: Path):
+    """Wildcard pattern *.example.com must resolve to example.com site note."""
+    note_dir = tmp_path / "skills" / "browser-site-notes"
+    note_dir.mkdir(parents=True)
+    note_file = note_dir / "example.com.md"
+    note_file.write_text("note content")
+
+    result = _resolve_site_note_path("*.example.com", workspace_root=str(tmp_path))
+    assert result == note_file, "*.example.com should resolve to example.com site note"
+
+
+def test_resolve_site_note_path_fqdn_url_trailing_dot(tmp_path: Path):
+    """URL with FQDN host 'https://example.com./path' should find site note."""
+    note_dir = tmp_path / "skills" / "browser-site-notes"
+    note_dir.mkdir(parents=True)
+    note_file = note_dir / "example.com.md"
+    note_file.write_text("note content")
+
+    # urlparse returns hostname='example.com.' for "https://example.com./path"
+    result = _resolve_site_note_path("https://example.com./path", workspace_root=str(tmp_path))
+    assert result == note_file, "FQDN URL trailing dot should be stripped"
+
+
+# ---------------------------------------------------------------------------
 # Unknown profile (not in hard-block list, not in policy) — soft gate
 # ---------------------------------------------------------------------------
 

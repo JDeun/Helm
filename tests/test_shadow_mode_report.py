@@ -646,3 +646,94 @@ class TestTimestamps:
             val = report["window"][key]
             assert "T" in val
             assert val.endswith("+00:00") or val.endswith("Z"), f"{key}={val!r}"
+
+
+# ---------------------------------------------------------------------------
+# FIX H-5: _parse_ts iteration order — window filter uses last-update time
+# ---------------------------------------------------------------------------
+
+class TestParseTimestampIterationOrder:
+    """H-5: _parse_ts tries updated_at first; window filter uses last-update time."""
+
+    def test_updated_at_wins_over_started_at(self):
+        """updated_at is returned even when started_at is also present."""
+        from scripts.shadow_mode_report import _parse_ts
+        old_ts = "2026-01-01T00:00:00+00:00"
+        new_ts = "2026-05-01T00:00:00+00:00"
+        entry = {"updated_at": new_ts, "started_at": old_ts}
+        result = _parse_ts(entry)
+        assert result is not None
+        expected = datetime.fromisoformat(new_ts)
+        assert result == expected, (
+            f"Expected updated_at={new_ts!r} but got {result.isoformat()!r}"
+        )
+
+    def test_started_at_used_when_no_updated_at(self):
+        """Falls back to started_at when updated_at is absent."""
+        from scripts.shadow_mode_report import _parse_ts
+        ts = "2026-03-15T12:00:00+00:00"
+        entry = {"started_at": ts}
+        result = _parse_ts(entry)
+        assert result is not None
+        assert result == datetime.fromisoformat(ts)
+
+    def test_ts_fields_order_matches_module_constant(self):
+        """_TS_FIELDS starts with 'updated_at' (first-wins semantics)."""
+        import scripts.shadow_mode_report as smr
+        assert hasattr(smr, "_TS_FIELDS"), "_TS_FIELDS must be a module-level constant"
+        assert smr._TS_FIELDS[0] == "updated_at", (
+            f"First field should be 'updated_at' for last-update-time semantics; "
+            f"got {smr._TS_FIELDS[0]!r}"
+        )
+
+    def test_none_returned_when_no_timestamp_fields(self):
+        """Returns None when no recognised timestamp field is present."""
+        from scripts.shadow_mode_report import _parse_ts
+        assert _parse_ts({}) is None
+        assert _parse_ts({"other_field": "value"}) is None
+
+
+# ---------------------------------------------------------------------------
+# FIX H-7: _agg_skill_promotion uses load_state; missing file handled
+# ---------------------------------------------------------------------------
+
+class TestAggSkillPromotionMissingFile:
+    """H-7: missing skill state file is handled correctly via load_state."""
+
+    def _report_with_state(self, tmp_path: Path, state_path: Path) -> dict:
+        ledger = tmp_path / "ledger.jsonl"
+        proxy = tmp_path / "proxy.jsonl"
+        if not ledger.exists():
+            _write_jsonl(ledger, [])
+        if not proxy.exists():
+            _write_jsonl(proxy, [])
+        return generate_report(
+            ledger_path=ledger,
+            proxy_events_path=proxy,
+            skill_state_path=state_path,
+        )
+
+    def test_missing_state_file_returns_zeros(self, tmp_path):
+        """A missing skill state file produces all-zero counts."""
+        report = self._report_with_state(tmp_path, tmp_path / "nonexistent.json")
+        sp = report["features"]["skill_promotion"]
+        assert sp["candidates_notified"] == 0
+        assert sp["approved"] == 0
+        assert sp["rejected"] == 0
+        assert sp["pending"] == 0
+
+    def test_empty_state_file_returns_zeros(self, tmp_path):
+        """An empty state file (empty entries list) produces all-zero counts."""
+        state_path = tmp_path / "state.json"
+        state_path.write_text('{"entries": []}', encoding="utf-8")
+        report = self._report_with_state(tmp_path, state_path)
+        sp = report["features"]["skill_promotion"]
+        assert sp["candidates_notified"] == 0
+
+    def test_corrupt_state_file_returns_zeros(self, tmp_path):
+        """A corrupt JSON state file produces all-zero counts (no exception)."""
+        state_path = tmp_path / "state.json"
+        state_path.write_text("not valid json{{{", encoding="utf-8")
+        report = self._report_with_state(tmp_path, state_path)
+        sp = report["features"]["skill_promotion"]
+        assert sp["candidates_notified"] == 0
