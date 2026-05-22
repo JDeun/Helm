@@ -577,6 +577,18 @@ class TestToMarkdown:
         assert "<class" not in md
         assert "object at 0x" not in md
 
+    def test_window_truncated_surfaced_in_markdown(self, tmp_path):
+        report = _default_report(tmp_path)
+        report["data_freshness"]["window_truncated"] = True
+        md = to_markdown(report)
+        assert "window truncated" in md.lower()
+
+    def test_window_truncated_absent_when_false(self, tmp_path):
+        report = _default_report(tmp_path)
+        report["data_freshness"]["window_truncated"] = False
+        md = to_markdown(report)
+        assert "window truncated" not in md.lower()
+
 
 # ---------------------------------------------------------------------------
 # Test 16: to_markdown with empty report

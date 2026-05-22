@@ -571,6 +571,12 @@ def to_markdown(report: dict) -> str:
             f"- Proxy entries without parseable timestamp: "
             f"{freshness['proxy_unparseable_timestamp_count']} (included in report)"
         )
+    if freshness.get("window_truncated"):
+        lines.append(
+            "- **WARNING: window truncated** — the per-file `tail_lines` cap was hit; "
+            "the effective window is shorter than `since_days`. Raise `tail_lines` "
+            "or investigate ledger turnover."
+        )
 
     features = report.get("features", {})
 
