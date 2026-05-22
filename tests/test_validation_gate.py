@@ -266,3 +266,22 @@ class TestRunGates:
 
         assert len(results) == 2
         assert call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Fix 5 — copy-on-read test for _load_gate_policy
+# ---------------------------------------------------------------------------
+
+class TestLoadGatePolicyCopyOnRead:
+    def test_load_gate_policy_returns_independent_copy(self):
+        """Mutating the returned dict does not corrupt the cache for the next call."""
+        mod = _get_module()
+        p1 = mod._load_gate_policy()
+        # Mutate — inject a key and tamper with an existing list
+        p1["__injected__"] = ["poison"]
+        if "python" in p1:
+            p1["python"].append("__evil__")
+        p2 = mod._load_gate_policy()
+        assert "__injected__" not in p2
+        if "python" in p2:
+            assert "__evil__" not in p2["python"]

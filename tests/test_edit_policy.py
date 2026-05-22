@@ -48,7 +48,7 @@ class TestLoadEditPolicy:
         mod = _get_module()
         p1 = mod.load_edit_policy()
         p2 = mod.load_edit_policy()
-        assert p1 is p2  # same object — cache hit
+        assert p1 == p2  # copy-on-read: equal content, but distinct objects
 
     def test_reload_param_forces_fresh_read(self):
         mod = _get_module()
@@ -180,3 +180,19 @@ class TestNextActionForPath:
         mod = _get_module()
         policy = mod.load_edit_policy()
         assert policy["on_repeated_patch_failure"] == "reload_context_then_decompose"
+
+
+# ---------------------------------------------------------------------------
+# Fix 5 — copy-on-read tests
+# ---------------------------------------------------------------------------
+
+class TestLoadEditPolicyCopyOnRead:
+    def test_load_edit_policy_returns_independent_copy(self):
+        """Mutating the returned dict does not corrupt the cache for the next call."""
+        mod = _get_module()
+        p1 = mod.load_edit_policy()
+        p1["__injected__"] = "poison"
+        p1["requires_checkpoint_for"].append("__evil__")
+        p2 = mod.load_edit_policy()
+        assert "__injected__" not in p2
+        assert "__evil__" not in p2.get("requires_checkpoint_for", [])

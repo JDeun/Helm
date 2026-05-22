@@ -38,6 +38,7 @@ Public API:
 """
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -51,14 +52,14 @@ def _load_data() -> dict:
     """Load and cache the tool_groups.json data."""
     global _CACHE  # noqa: PLW0603
     if _CACHE is not None:
-        return _CACHE
+        return copy.deepcopy(_CACHE)
     try:
         raw = _DATA_FILE.read_text(encoding="utf-8")
     except FileNotFoundError:
         raise FileNotFoundError(f"tool_groups data file not found: {_DATA_FILE}") from None
     data = json.loads(raw)
     _CACHE = data
-    return data
+    return copy.deepcopy(_CACHE)
 
 
 def _get_profiles() -> dict[str, dict]:
