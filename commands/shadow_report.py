@@ -38,7 +38,12 @@ from scripts.shadow_mode_recommendation import recommend
 
 
 def cmd_shadow_report(args: argparse.Namespace) -> int:
-    """Execute ``helm shadow-report``."""
+    """Execute ``helm shadow-report``.
+
+    Schedule via a single cron daemon; concurrent invocation can produce
+    duplicate delivery on the workspace side (the mtime-based cadence check
+    in ``delivery_utils.is_within_cadence_window`` is not atomic).
+    """
     since_days: int = getattr(args, "since", 14) or 14
     features: list[str] | None = getattr(args, "feature", None) or None
     fmt: str = getattr(args, "format", "md") or "md"
