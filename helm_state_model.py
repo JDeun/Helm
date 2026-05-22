@@ -48,6 +48,8 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Iterable
 
+from scripts.time_helpers import utc_now_iso
+
 __all__ = [
     "State",
     "PromotionEvidence",
@@ -551,10 +553,10 @@ _TASK_STATE_DEFAULT_FACTORIES: dict[str, object] = {
 def _utcnow_iso8601() -> str:
     """Return current UTC time as ISO8601 with a ``+00:00`` offset.
 
-    Uses ``datetime.now(timezone.utc)`` so the value is tz-aware and stable
-    across the test suite's freezegun-free assertions.
+    Delegates to :func:`scripts.time_helpers.utc_now_iso` so the format is
+    consistent with every other timestamp emitted by Helm harness modules.
     """
-    return datetime.now(tz=timezone.utc).isoformat()
+    return utc_now_iso()
 
 
 def new_task_state() -> dict:

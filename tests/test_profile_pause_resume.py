@@ -2,21 +2,23 @@
 """Tests for scripts/profile_pause_resume.py — profile-level hard-stop.
 
 Test inventory (11 tests):
-  0. OPENCLAW_PAUSE_STATE env var with leading ~ expands to home directory.
-  1. pause_profile creates an entry; subsequent is_paused returns True.
-  2. Calling pause_profile for an already-paused profile updates the entry
-     (new reason, new token, new paused_at) but does not duplicate.
-  3. resume_profile with correct token clears the entry; subsequent
-     is_paused returns False.
-  4. resume_profile with wrong token raises ValueError; state file unchanged.
-  5. resume_profile for an unpaused profile raises ValueError.
-  6. list_paused returns all paused profiles sorted by profile name.
-  7. pause_session_summary returns a JSON-serializable dict with the
-     documented keys (profile, paused_sessions, cleanup_status, stop_reason).
-  8. check_can_start returns (False, reason) when paused; (True, None) when not.
-  9. Atomic write — mocking os.replace to fail leaves the original file intact.
- 10. Concurrent sequential writes — two pause_profile calls both succeed;
-     second wins on token.
+  0.   OPENCLAW_PAUSE_STATE env var with leading ~ expands to home directory.
+  1.   pause_profile creates an entry; subsequent is_paused returns True.
+  1b.  pause_profile writes paused_at in the canonical utc_now_iso format
+       (+00:00 offset); regression guard for FIX-2 timestamp unification.
+  2.   Calling pause_profile for an already-paused profile updates the entry
+       (new reason, new token, new paused_at) but does not duplicate.
+  3.   resume_profile with correct token clears the entry; subsequent
+       is_paused returns False.
+  4.   resume_profile with wrong token raises ValueError; state file unchanged.
+  5.   resume_profile for an unpaused profile raises ValueError.
+  6.   list_paused returns all paused profiles sorted by profile name.
+  7.   (removed) pause_session_summary had no production call site; deleted in
+       task-14 cleanup (refactor: inline pause_session_summary).
+  8.   check_can_start returns (False, reason) when paused; (True, None) when not.
+  9.   Atomic write — mocking os.replace to fail leaves the original file intact.
+  10.  Concurrent sequential writes — two pause_profile calls both succeed;
+       second wins on token.
 """
 from __future__ import annotations
 
@@ -37,9 +39,9 @@ from scripts.profile_pause_resume import (
     is_paused,
     list_paused,
     pause_profile,
-    pause_session_summary,
     resume_profile,
 )
+from scripts.time_helpers import utc_now_iso
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +68,32 @@ def test_pause_creates_entry_and_is_paused(tmp_path: Path) -> None:
 
     assert is_paused("chrome-work", state_file) is True
     assert is_paused("chrome-personal", state_file) is False
+
+
+# ---------------------------------------------------------------------------
+# Test 1b: pause_profile writes a paused_at timestamp in the canonical
+#           utc_now_iso format (``+00:00`` offset, microsecond precision).
+#           Regression guard for the FIX-2 timestamp unification.
+# ---------------------------------------------------------------------------
+
+def test_pause_profile_timestamp_format(tmp_path: Path) -> None:
+    """paused_at must match the format produced by time_helpers.utc_now_iso."""
+    from datetime import datetime, timezone
+
+    state_file = tmp_path / "state.json"
+    entry = pause_profile("chrome-work", "timestamp format check", state_file)
+
+    ts = entry["paused_at"]
+    # Must parse as a valid ISO-8601 datetime.
+    parsed = datetime.fromisoformat(ts)
+    # Must carry UTC timezone (offset +00:00).
+    assert parsed.tzinfo is not None, "timestamp must be timezone-aware"
+    assert parsed.utcoffset().total_seconds() == 0, "timestamp must be UTC"
+    # Must contain '+00:00' suffix (not bare 'Z') to match utc_now_iso format.
+    assert "+00:00" in ts, f"expected +00:00 suffix, got {ts!r}"
+    # Confirm the format matches a fresh utc_now_iso() call structurally.
+    sample = utc_now_iso()
+    assert sample.endswith("+00:00"), "utc_now_iso must emit +00:00 suffix"
 
 
 # ---------------------------------------------------------------------------
@@ -156,28 +184,6 @@ def test_list_paused_sorted(tmp_path: Path) -> None:
         assert "paused_at" in r
         assert "reason" in r
         assert "resume_token" in r
-
-
-# ---------------------------------------------------------------------------
-# Test 7: pause_session_summary returns JSON-serializable dict with correct keys
-# ---------------------------------------------------------------------------
-
-def test_pause_session_summary_shape() -> None:
-    summary = pause_session_summary(
-        profile="chrome-work",
-        sessions=["sess-001", "sess-002"],
-        cleanup_status="partial",
-    )
-
-    # Must be JSON-serializable (no datetime objects etc.)
-    serialized = json.dumps(summary)
-    assert isinstance(serialized, str)
-
-    # Must contain the documented keys.
-    assert summary["profile"] == "chrome-work"
-    assert summary["paused_sessions"] == ["sess-001", "sess-002"]
-    assert summary["cleanup_status"] == "partial"
-    assert summary["stop_reason"] == "hard_stop"
 
 
 # ---------------------------------------------------------------------------
