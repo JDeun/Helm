@@ -35,7 +35,9 @@ from __future__ import annotations
 
 import json
 import pathlib
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
+from scripts.time_helpers import utc_now
 from typing import Any
 
 from scripts.jsonl_io import read_jsonl
@@ -450,7 +452,7 @@ def generate_report(
     proxy_events_path = proxy_events_path or _DEFAULT_PROXY_EVENTS
     skill_state_path = skill_state_path or _DEFAULT_SKILL_STATE
 
-    now = datetime.now(tz=timezone.utc)
+    now = utc_now()
     since = now - timedelta(days=since_days)
 
     # Normalise feature filter
