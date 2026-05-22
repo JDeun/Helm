@@ -53,6 +53,19 @@ __all__ = [
     "CAPTURED_PHRASES",
     "lint_telegram_phrase",
     "PhraseLintError",
+    # Task-state control-flow container (Forge: "Control Flow Is Not Memory").
+    "TASK_STATE_SCHEMA_VERSION",
+    "FINALIZATION_STATES",
+    "RECOVERED_MESSAGE_STATUSES",
+    "new_task_state",
+    "load_task_state",
+    "save_task_state",
+    "is_finalized",
+    "unhandled_recovered_messages",
+    "mark_step_completed",
+    "record_approval",
+    "record_recovered_message",
+    "mark_recovered_message",
 ]
 
 
@@ -465,3 +478,233 @@ def lint_telegram_phrase(text: str, state: State | str) -> None:
         raise PhraseLintError(
             f"phrase {captured_hit!r} cannot be used when state=rejected"
         )
+
+
+# ---------------------------------------------------------------------------
+# Task-state control-flow container
+# ---------------------------------------------------------------------------
+#
+# Forge's "Control Flow Is Not Memory" principle: a model's message history
+# is *memory* and is subject to compaction. Required steps, completion
+# state, approvals, blockers, and recovered messages are *control state*
+# and must live outside the transcript. After compaction, this structured
+# state — not the model's recollection — is authoritative.
+#
+# This section is intentionally schema-light: the task state is a plain
+# ``dict`` so callers (runner, approver, message handler, completion-check
+# code) can read and mutate it without depending on a dataclass-bound API.
+# Backward compatibility is honored by ``load_task_state`` filling defaults
+# for missing fields and preserving any unknown extra keys for round-trip.
+
+
+TASK_STATE_SCHEMA_VERSION: int = 1
+
+FINALIZATION_STATES: frozenset[str] = frozenset(
+    {"pending", "in_progress", "finalized", "abandoned"}
+)
+
+RECOVERED_MESSAGE_STATUSES: frozenset[str] = frozenset(
+    {"handled", "superseded", "active_unhandled", "blocked_by_truncation"}
+)
+
+
+# Field-name → default-factory. ``list`` is used as a factory so each new
+# state object gets its own list (no mutable-default aliasing).
+_TASK_STATE_DEFAULT_FACTORIES: dict[str, object] = {
+    "task_state_schema_version": lambda: TASK_STATE_SCHEMA_VERSION,
+    "required_steps": list,
+    "completed_steps": list,
+    "blockers": list,
+    "external_side_effect_approvals": list,
+    "finalization_state": lambda: "pending",
+    "recovered_messages": list,
+}
+
+
+def _utcnow_iso8601() -> str:
+    """Return current UTC time as ISO8601 with a ``+00:00`` offset.
+
+    Uses ``datetime.now(timezone.utc)`` so the value is tz-aware and stable
+    across the test suite's freezegun-free assertions.
+    """
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
+def new_task_state() -> dict:
+    """Return a fresh task-state dict populated with defaults."""
+
+    state: dict = {}
+    for name, factory in _TASK_STATE_DEFAULT_FACTORIES.items():
+        state[name] = factory()  # type: ignore[operator]
+    return state
+
+
+def load_task_state(raw: dict | None) -> dict:
+    """Load a task-state dict, filling defaults for missing fields.
+
+    Unknown extra keys are preserved verbatim so the loader can be safely
+    used against state objects written by newer code paths. The returned
+    dict is always a fresh object (the input is not mutated).
+    """
+
+    if raw is None:
+        return new_task_state()
+    if not isinstance(raw, dict):
+        raise TypeError(
+            f"task state must be a dict, got {type(raw).__name__}"
+        )
+    state = dict(raw)
+    for name, factory in _TASK_STATE_DEFAULT_FACTORIES.items():
+        if name not in state:
+            state[name] = factory()  # type: ignore[operator]
+    return state
+
+
+def save_task_state(state: dict) -> dict:
+    """Return a JSON-serializable copy of ``state`` for persistence.
+
+    Preserves unknown extra keys. Does not mutate the input. The shape is
+    intentionally a plain dict so callers may json-dump it directly.
+    """
+
+    if not isinstance(state, dict):
+        raise TypeError(
+            f"task state must be a dict, got {type(state).__name__}"
+        )
+    return dict(state)
+
+
+def is_finalized(state: dict) -> bool:
+    """Return True iff the task is *both* flagged finalized *and* complete.
+
+    "Finalized" requires:
+
+    * ``finalization_state == "finalized"`` — the runner explicitly
+      closed the task, AND
+    * ``completed_steps == required_steps`` — every declared step has
+      been marked done, in order.
+
+    Either condition alone is insufficient. A task with all steps done
+    but ``finalization_state == "pending"`` is still mid-flight; a task
+    flagged finalized with a step missing is malformed and must not be
+    treated as complete.
+    """
+
+    if state.get("finalization_state") != "finalized":
+        return False
+    required = list(state.get("required_steps") or [])
+    completed = list(state.get("completed_steps") or [])
+    return completed == required
+
+
+def unhandled_recovered_messages(state: dict) -> list[dict]:
+    """Return recovered messages whose status is ``active_unhandled``.
+
+    This is the read side of the recovered-context regression fix:
+    callers (Telegram bridge, completion-check code) consult this list
+    to find requests that survived compaction and still need action.
+    """
+
+    return [
+        m
+        for m in (state.get("recovered_messages") or [])
+        if isinstance(m, dict) and m.get("status") == "active_unhandled"
+    ]
+
+
+def mark_step_completed(state: dict, step: str) -> None:
+    """Mark ``step`` as completed.
+
+    * Raises ``ValueError`` if ``step`` is not in ``required_steps``.
+    * Idempotent: a second call for the same step is a no-op.
+    * Appends in call order — preserves the sequence in which steps
+      actually finished, which may differ from ``required_steps`` order.
+    """
+
+    required = state.setdefault("required_steps", [])
+    completed = state.setdefault("completed_steps", [])
+    if step not in required:
+        raise ValueError(
+            f"unknown step {step!r}; required_steps={list(required)!r}"
+        )
+    if step in completed:
+        return
+    completed.append(step)
+
+
+def record_approval(
+    state: dict,
+    action: str,
+    target: str,
+    approved_by: str,
+) -> None:
+    """Append a side-effect-approval record with an ISO8601 timestamp.
+
+    The approval list is the authoritative log of "the user (or operator)
+    explicitly OK'd this external side effect" — it does not replace the
+    promotion gate, but it is the durable record consulted after
+    compaction.
+    """
+
+    approvals = state.setdefault("external_side_effect_approvals", [])
+    approvals.append(
+        {
+            "action": action,
+            "target": target,
+            "approved_by": approved_by,
+            "approved_at": _utcnow_iso8601(),
+        }
+    )
+
+
+def record_recovered_message(
+    state: dict,
+    source: str,
+    message_id: str,
+    action_verb: str | None,
+    topic_continuity_score: float | None,
+) -> None:
+    """Add a recovered-message entry with status ``active_unhandled``.
+
+    Raises ``ValueError`` if ``message_id`` already exists in
+    ``recovered_messages`` — no silent overwrite. Use
+    :func:`mark_recovered_message` to mutate the status of an existing
+    entry.
+    """
+
+    messages = state.setdefault("recovered_messages", [])
+    for existing in messages:
+        if isinstance(existing, dict) and existing.get("message_id") == message_id:
+            raise ValueError(
+                f"recovered message_id {message_id!r} already exists; "
+                "use mark_recovered_message() to update status"
+            )
+    messages.append(
+        {
+            "source": source,
+            "message_id": message_id,
+            "action_verb": action_verb,
+            "status": "active_unhandled",
+            "topic_continuity_score": topic_continuity_score,
+        }
+    )
+
+
+def mark_recovered_message(state: dict, message_id: str, status: str) -> None:
+    """Set ``status`` on the recovered-message entry with ``message_id``.
+
+    Raises ``ValueError`` on unknown ``message_id`` or unknown ``status``.
+    Valid statuses are in :data:`RECOVERED_MESSAGE_STATUSES`.
+    """
+
+    if status not in RECOVERED_MESSAGE_STATUSES:
+        raise ValueError(
+            f"unknown recovered-message status {status!r}; "
+            f"valid={sorted(RECOVERED_MESSAGE_STATUSES)!r}"
+        )
+    messages = state.get("recovered_messages") or []
+    for entry in messages:
+        if isinstance(entry, dict) and entry.get("message_id") == message_id:
+            entry["status"] = status
+            return
+    raise ValueError(f"no recovered message with message_id={message_id!r}")
