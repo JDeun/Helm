@@ -70,14 +70,14 @@ _TEMPLATE_SECTIONS = [
 def _default_traces_dir() -> Path:
     env = os.environ.get("OPENCLAW_TRACES_DIR")
     if env:
-        return Path(env)
+        return Path(env).expanduser()
     return Path.home() / ".openclaw" / "workspace" / ".openclaw" / "traces"
 
 
 def _default_drafts_dir() -> Path:
     env = os.environ.get("OPENCLAW_DRAFTS_DIR")
     if env:
-        return Path(env)
+        return Path(env).expanduser()
     return Path.home() / ".openclaw" / "workspace" / "skill_drafts"
 
 
