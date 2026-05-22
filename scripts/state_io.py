@@ -131,6 +131,7 @@ def build_ledger_entry(
     screenshot_evidence: str | None = None,
     console_network_signals: dict | None = None,
     site_note_update: str | None = None,
+    policy_transition: dict | None = None,
 ) -> dict[str, Any]:
     """Return a copy of *base* with optional task-ledger fields merged in.
 
@@ -159,6 +160,9 @@ def build_ledger_entry(
         screenshot_evidence: Path to a screenshot taken as evidence (stub).
         console_network_signals: Structured network/console observations (stub).
         site_note_update: Note update produced by a site-interaction task (stub).
+        policy_transition: Structured transition record from
+            ``scripts.policy_transition.transition_record()`` documenting an
+            automatic policy action triggered by a repeated failure pattern.
 
     Returns:
         New dict containing ``base`` fields plus any non-``None`` extras.
@@ -194,5 +198,7 @@ def build_ledger_entry(
         entry["console_network_signals"] = console_network_signals
     if site_note_update is not None:
         entry["site_note_update"] = site_note_update
+    if policy_transition is not None:
+        entry["policy_transition"] = policy_transition
 
     return entry

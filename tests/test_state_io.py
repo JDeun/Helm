@@ -343,6 +343,21 @@ class TestBuildLedgerEntry:
         result = build_ledger_entry({"task_id": "t1"}, snapshot_evidence="~/snaps/s.json")
         assert result["snapshot_evidence"] == "~/snaps/s.json"
 
+    def test_policy_transition_included(self):
+        from scripts.state_io import build_ledger_entry
+        pt = {
+            "action": "stop_retry_and_diagnose",
+            "reason": "fingerprint repeated 2x",
+            "signature": {"fingerprint": "abc123", "tool": "x", "error_class": "exit_nonzero"},
+        }
+        result = build_ledger_entry({"task_id": "t1"}, policy_transition=pt)
+        assert result["policy_transition"] == pt
+
+    def test_policy_transition_absent_when_not_passed(self):
+        from scripts.state_io import build_ledger_entry
+        result = build_ledger_entry({"task_id": "t1"})
+        assert "policy_transition" not in result
+
     def test_round_trip_via_append(self, tmp_path: Path):
         """build_ledger_entry result persists cleanly via append_jsonl_atomic."""
         from scripts.state_io import build_ledger_entry, append_jsonl_atomic
