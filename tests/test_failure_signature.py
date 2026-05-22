@@ -567,7 +567,7 @@ class TestFingerprintStability:
 # ---------------------------------------------------------------------------
 
 class TestLedgerExtension:
-    """Verify that the ledger writer (append_jsonl_atomic + _append_state)
+    """Verify that the ledger writer (append_jsonl_atomic + build_ledger_entry)
     persists new optional fields and that old entries without them still parse.
     """
 
@@ -701,3 +701,94 @@ class TestLedgerExtension:
                       "browser_profile", "browser_mode", "source_urls", "screenshot_evidence",
                       "console_network_signals", "site_note_update"):
             assert field not in row, f"New field {field!r} should not appear on legacy entry"
+
+
+class TestBuildLedgerEntry:
+    """Unit tests for scripts.state_io.build_ledger_entry."""
+
+    def test_returns_copy_not_mutation(self):
+        from scripts.state_io import build_ledger_entry
+        base = {"task_id": "abc", "status": "failed"}
+        result = build_ledger_entry(base, sessions=["s1"])
+        assert "sessions" not in base  # original unchanged
+
+    def test_base_fields_preserved(self):
+        from scripts.state_io import build_ledger_entry
+        base = {"task_id": "abc", "status": "failed", "exit_code": 1, "retry_count": 2}
+        result = build_ledger_entry(base)
+        assert result["retry_count"] == 2
+        assert result["exit_code"] == 1
+
+    def test_failure_signature_included(self):
+        from scripts.state_io import build_ledger_entry
+        sig = {"component": "guard", "tool": "run_with_profile", "profile": "inspect_local",
+               "error_class": "guard_deny", "target": "profile:inspect_local", "fingerprint": "abc12345"}
+        result = build_ledger_entry({"task_id": "t1"}, failure_signature=sig)
+        assert result["failure_signature"]["error_class"] == "guard_deny"
+
+    def test_sessions_included(self):
+        from scripts.state_io import build_ledger_entry
+        result = build_ledger_entry({"task_id": "t1"}, sessions=["sess-001"])
+        assert result["sessions"] == ["sess-001"]
+
+    def test_cleanup_status_valid_values(self):
+        from scripts.state_io import build_ledger_entry
+        for val in ("ok", "partial", "failed", "not_required"):
+            result = build_ledger_entry({"task_id": "t1"}, cleanup_status=val)
+            assert result["cleanup_status"] == val
+
+    def test_cleanup_status_invalid_raises(self):
+        from scripts.state_io import build_ledger_entry
+        with pytest.raises(ValueError, match="cleanup_status"):
+            build_ledger_entry({"task_id": "t1"}, cleanup_status="bad_value")
+
+    def test_none_fields_not_included(self):
+        from scripts.state_io import build_ledger_entry
+        result = build_ledger_entry({"task_id": "t1"})
+        for field in ("failure_signature", "sessions", "snapshot_evidence", "cleanup_status",
+                      "browser_profile", "browser_mode", "source_urls", "screenshot_evidence",
+                      "console_network_signals", "site_note_update"):
+            assert field not in result
+
+    def test_browser_fields_included(self):
+        from scripts.state_io import build_ledger_entry
+        result = build_ledger_entry(
+            {"task_id": "t1"},
+            browser_profile="default",
+            browser_mode="headless",
+            source_urls=["https://example.com"],
+            screenshot_evidence="~/screenshots/s.png",
+            console_network_signals={"xhr_count": 3},
+            site_note_update="note text",
+        )
+        assert result["browser_profile"] == "default"
+        assert result["browser_mode"] == "headless"
+        assert result["source_urls"] == ["https://example.com"]
+        assert result["screenshot_evidence"] == "~/screenshots/s.png"
+        assert result["console_network_signals"]["xhr_count"] == 3
+        assert result["site_note_update"] == "note text"
+
+    def test_snapshot_evidence_included(self):
+        from scripts.state_io import build_ledger_entry
+        result = build_ledger_entry({"task_id": "t1"}, snapshot_evidence="~/snaps/s.json")
+        assert result["snapshot_evidence"] == "~/snaps/s.json"
+
+    def test_round_trip_via_append(self, tmp_path: Path):
+        """build_ledger_entry result persists cleanly via append_jsonl_atomic."""
+        from scripts.state_io import build_ledger_entry, append_jsonl_atomic
+        from scripts.jsonl_io import read_jsonl
+        path = tmp_path / "ledger.jsonl"
+        sig = {"component": "skill", "tool": "gemini_video_understand", "profile": "service_ops",
+               "error_class": "gemini_video_api", "target": None, "fingerprint": "feedcafe"}
+        entry = build_ledger_entry(
+            {"task_id": "rt-001", "status": "failed"},
+            failure_signature=sig,
+            sessions=["s1", "s2"],
+            cleanup_status="not_required",
+        )
+        append_jsonl_atomic(path, entry)
+        rows = read_jsonl(path)
+        assert len(rows) == 1
+        assert rows[0]["failure_signature"]["error_class"] == "gemini_video_api"
+        assert rows[0]["sessions"] == ["s1", "s2"]
+        assert rows[0]["cleanup_status"] == "not_required"
