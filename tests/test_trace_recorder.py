@@ -23,6 +23,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.trace_recorder import (
+    default_traces_dir,
     load_trace,
     record_changed_file,
     record_tool_call,
@@ -344,3 +345,17 @@ class TestJsonSerializable:
         dumped = json.dumps(trace)
         parsed = json.loads(dumped)
         assert parsed["skill"] is None
+
+
+# ---------------------------------------------------------------------------
+# OPENCLAW_TRACES_DIR env var expansion
+# ---------------------------------------------------------------------------
+
+class TestTracesDirEnvExpansion:
+    def test_OPENCLAW_TRACES_DIR_expands_tilde(self, monkeypatch):
+        """``OPENCLAW_TRACES_DIR=~/x`` must resolve to ``$HOME/x``."""
+        monkeypatch.setenv("OPENCLAW_TRACES_DIR", "~/some-name")
+        resolved = default_traces_dir()
+        assert resolved == Path.home() / "some-name"
+        # And it must NOT be a literal `~` path.
+        assert "~" not in str(resolved)

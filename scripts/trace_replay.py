@@ -188,7 +188,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    traces_dir = Path(args.traces_dir) if args.traces_dir else default_traces_dir()
+    # Expand `~` in the CLI arg so users can pass ``--traces-dir ~/x`` without
+    # creating a literal `~` directory.
+    traces_dir = Path(args.traces_dir).expanduser() if args.traces_dir else default_traces_dir()
 
     try:
         trace = load_trace(traces_dir, args.task_id)

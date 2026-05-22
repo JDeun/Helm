@@ -86,10 +86,15 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 def default_traces_dir() -> Path:
-    """Return the canonical traces directory, honouring ``OPENCLAW_TRACES_DIR``."""
+    """Return the canonical traces directory, honouring ``OPENCLAW_TRACES_DIR``.
+
+    The env value is expanded with :py:meth:`Path.expanduser` so values like
+    ``~/my/traces`` resolve relative to the current user's home directory
+    rather than creating a literal ``~`` directory.
+    """
     env = os.environ.get("OPENCLAW_TRACES_DIR")
     if env:
-        return Path(env)
+        return Path(env).expanduser()
     return Path.home() / ".openclaw" / "workspace" / ".openclaw" / "traces"
 
 
