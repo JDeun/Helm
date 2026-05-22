@@ -24,7 +24,7 @@ from scripts.retrieval_policy_lib import build_retrieval_plan
 from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies as load_manifest_policies
 from scripts.failure_signature import signature as failure_sig
 from scripts.policy_transition import evaluate as pt_evaluate, transition_record as pt_record
-from scripts.state_io import append_jsonl_atomic
+from scripts.state_io import append_jsonl_atomic, build_ledger_entry
 from scripts.time_helpers import utc_now_iso
 
 
@@ -1084,14 +1084,14 @@ def record_failure_with_policy_check(
         reason=transition["reason"],
         signature=transition["signature"],
     )
-    entry: dict = {
+    base: dict = {
         "task_id": task_id,
         "status": "policy_transition",
-        "policy_transition": pt,
         "updated_at": utc_now_iso(),
     }
     for field in ("task_name", "skill"):
         if failure_event.get(field):
-            entry[field] = failure_event[field]
+            base[field] = failure_event[field]
+    entry = build_ledger_entry(base, policy_transition=pt)
     append_jsonl_atomic(TASK_LEDGER, entry)
     return pt
