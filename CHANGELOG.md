@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+## [0.10.0] — 2026-05-22
+
+### Added
+
+- **failure_signature classification**: `scripts/failure_signature.py` produces a structured `{component, tool, profile, error_class, target, fingerprint}` signature from any failure event, covering FS-001..FS-010 patterns observed in the task ledger.
+- **build_ledger_entry schema helper**: `scripts/state_io.build_ledger_entry` formalises the optional task-ledger fields (failure_signature, sessions, snapshot_evidence, cleanup_status, browser stubs, policy_transition, browser_recon) with a strict no-null-fillers contract.
+- **task-state control container**: `helm_state_model.py` now hosts the Forge-style "Control Flow Is Not Memory" container: required_steps, completed_steps, blockers, external_side_effect_approvals, finalization_state, recovered_messages — separated from transcript content so compaction cannot drop control state.
+- **profile → tool-group grants**: `references/tool_groups.json` plus `scripts/tool_groups.py` map each execution profile to an allow / ask / deny tool group, and `run_with_profile.py` records the computed `tool_grant` in every ledger entry.
+- **policy_transition** module + `adaptive_harness_lib` integration: same-fingerprint / patch_failed / same-skill / credential-invalid-grant rules drive automatic transitions written through `build_ledger_entry`.
+- **edit_policy + validation_gate**: patch-first edit policy with checkpoint requirements, plus per-extension validation gate commands.
+- **agent reliability eval suite**: `scripts/eval_runner.py` and six `tests/eval/` scenarios cover inspect-only, save-required, recovered-context, external-side-effect approval, compaction-finalize integrity, and partial-completion reporting.
+- **trace_recorder + trace_replay**: structured per-task trace JSON files with tool-sequence, validation gates, failure signatures, and a CLI replayer that prints replay plans (no re-execution this release).
+- **trace_to_skill candidates**: `scripts/trace_to_skill.py` aggregates traces into scaffold / repair / compound-runner candidates; `scripts/skill_capture_ext.py` adds `draft-from-task` and `assess-draft` subcommands.
+- **profile_pause_resume**: `scripts/profile_pause_resume.py` with secret-token gate and `OPENCLAW_PAUSE_GATE` env flag wired into `run_with_profile.py` (`EXIT_PAUSED = 26`).
+- **local_model_proxy spike + model_repair orchestrator**: `scripts/local_model_proxy.py` (validate / nudge / retry / record) plus `scripts/model_repair.py` (`evaluate_response`, `repair_loop`, `repair_enabled()` reading `HELM_MODEL_REPAIR`).
+- **synthetic_respond_tool spike + respond_tool_wiring**: schema + injection + strip + enforce helpers, gated by `HELM_SYNTHETIC_RESPOND` and the `L3_local_model` tier.
+- **browser_work_verifier + browser_gate**: `scripts/browser_work_verifier.py` returns a `BrowserReconDecision` (allow_single_session, allow_parallel, require_user_login, require_confirmation, block_mutation, pause_profile, require_cleanup_evidence). `scripts/browser_gate.py` hosts the runner-side enforcement (session counter, finalization gate). `OPENCLAW_BROWSER_GATE` env flag plus `--browser-action` CLI opts opt-in.
+- **skill_promotion pipeline**: `scripts/skill_promotion_{state,digest,approval}.py` + `commands/skill_promotion.py` produce digest payloads, accept Telegram replies (`approve` / `reject` / `details <id>`), and persist promotion state.
+- **shadow_mode_report + recommendations**: `scripts/shadow_mode_report.py` aggregates 14-day signals across all feature-flagged surfaces; `scripts/shadow_mode_recommendation.py` emits `ready_to_enforce / needs_more_data / caution / no_signal` per feature; `commands/shadow_report.py` exposes `helm shadow-report --since N --format md|json --with-recommendations`.
+- **env_flags shared helper**: `scripts/env_flags.py` centralises the `1 / true / yes` truthy-value contract used by every feature flag.
+- **atomic_write_json shared helper**: `scripts/io_utils.py` consolidates the `tempfile + os.replace` pattern.
+- **harness-engineering docs**: 13 design / runbook documents in `docs/harness-engineering/` covering inventory, ledger schema, browser verifier, Control Flow Is Not Memory, Helm vs Forge positioning, chromux Phase 1 smoke, local-model-proxy spike, synthetic-respond-tool spike, skill-promotion pipeline, commit attribution, and shadow-mode report runbook.
+
+### Changed
+
+- **OQ-4 / OQ-8 hard block**: `workspace_edit` and `remote_handoff` profiles now hard-block any browser action via the verifier (previously surfaced as `require_confirmation`). Operator workflows that relied on `--approve-risk` passing browser tasks through these profiles must switch to `service_ops` or `risky_edit`.
+- **adaptive_harness_lib ledger reads** tail-sample the task ledger (200-line tail) instead of full-read; protects against unbounded growth.
+- **command-line surface**: `run_with_profile.py` adds `--browser-action`, `--browser-url-pattern`, `--browser-logged-in`, `--browser-parallel`, `--browser-site-note`. `helm.py` adds `skill-promotion` and `shadow-report` subcommands.
+
+### Fixed
+
+- **OQ-3 max_sessions enforcement**: runner-side ledger-based counter blocks new browser sessions once a profile's `max_sessions` cap is reached (within a 10-minute window).
+- **OQ-7 finalization gate**: tasks emitting `require_cleanup_evidence` cannot mark complete without a `cleanup_status` row; runner returns `EXIT_CLEANUP_REQUIRED = 28`.
+- **shadow_mode_report tail-cap visibility**: `window_truncated` flag is set in `data_freshness` and surfaced as a warning line in the markdown render when the tail cap is hit.
+- **candidate_id NUL-byte defence**: `skill_promotion_state.candidate_id_for` raises `ValueError` if either input contains `\x00`.
+- **respond_tool_schema copy-on-read**: returns a shallow dict copy instead of the live cache reference.
+- **`_resolve_site_note_path` cache**: `lru_cache(maxsize=256)` eliminates repeated `Path.exists()` syscalls; documented `cache_clear()` escape hatch.
+- **expanduser coverage**: `OPENCLAW_TRACES_DIR`, `OPENCLAW_DRAFTS_DIR`, `OPENCLAW_PAUSE_STATE`, `RESPOND_TOOL_SCHEMA_PATH` env values now resolve `~`.
+
+### Boundary
+
+This release ships only the public Helm operations layer and harness-engineering modules. It does not include OpenClaw workspace contents, private memory, personal connector state, local schedules, credentials, or raw task history.
+
+### Verification
+
+- `python3 scripts/release_version_check.py --version 0.10.0`
+- `python3 -m pytest -q` → 1372 passed
+- two cross-cutting review cycles (duplication + over-engineering / bug + performance) returned CLEAN before merge
+
 ## [0.9.6] — 2026-05-16
 
 ### Added
