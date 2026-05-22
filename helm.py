@@ -80,6 +80,7 @@ from commands.task import (
 )
 from commands.validate import cmd_validate
 from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status, cmd_db_query
+from commands.skill_promotion import cmd_skill_promotion
 from commands.phase_modules import (
     cmd_action_scope_evaluate,
     cmd_compression_profiles,
@@ -774,6 +775,43 @@ def build_parser() -> argparse.ArgumentParser:
     )
     comp_profiles.add_argument("--json", action="store_true")
     comp_profiles.set_defaults(func=cmd_compression_profiles)
+
+    # ---- Wave 4: Skill-promotion pipeline ------------------------------------
+    skill_promo = subparsers.add_parser(
+        "skill-promotion",
+        help="Skill scaffold candidate digest, approval, and state tracking (Wave 4).",
+    )
+    sp_sub = skill_promo.add_subparsers(dest="skill_promotion_command", required=True)
+
+    sp_digest = sp_sub.add_parser("digest", help="Print the daily/weekly digest payload as JSON.")
+    sp_digest.add_argument("--cadence", choices=["daily", "weekly"], default="daily")
+    sp_digest.add_argument("--max", type=int, default=5, dest="max", metavar="N",
+                           help="Maximum candidates to include (default: 5).")
+    sp_digest.add_argument("--state-path", dest="state_path", default=None,
+                           help="Override path to the promotion state file.")
+    sp_digest.add_argument("--traces-dir", dest="traces_dir", default=None,
+                           help="Override path to the traces directory.")
+    sp_digest.set_defaults(func=cmd_skill_promotion, skill_promotion_command="digest")
+
+    sp_approve = sp_sub.add_parser("approve", help="Manually approve a candidate.")
+    sp_approve.add_argument("candidate_id", help="8-hex candidate id.")
+    sp_approve.add_argument("--state-path", dest="state_path", default=None)
+    sp_approve.set_defaults(func=cmd_skill_promotion, skill_promotion_command="approve")
+
+    sp_reject = sp_sub.add_parser("reject", help="Manually reject a candidate.")
+    sp_reject.add_argument("candidate_id", help="8-hex candidate id.")
+    sp_reject.add_argument("--reason", default=None, help="Optional rejection reason.")
+    sp_reject.add_argument("--state-path", dest="state_path", default=None)
+    sp_reject.set_defaults(func=cmd_skill_promotion, skill_promotion_command="reject")
+
+    sp_pending = sp_sub.add_parser("pending", help="List notified but unprocessed candidates.")
+    sp_pending.add_argument("--json", action="store_true")
+    sp_pending.add_argument("--state-path", dest="state_path", default=None)
+    sp_pending.set_defaults(func=cmd_skill_promotion, skill_promotion_command="pending")
+
+    sp_state_path = sp_sub.add_parser("state-path", help="Print the state file path in use.")
+    sp_state_path.add_argument("--state-path", dest="state_path", default=None)
+    sp_state_path.set_defaults(func=cmd_skill_promotion, skill_promotion_command="state-path")
 
     return parser
 
