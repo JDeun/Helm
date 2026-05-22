@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.env_flags import env_flag
 from scripts.memory_capture import build_memory_capture_plan
 from scripts.state_io import append_jsonl_atomic
 from scripts.command_guard import CommandClassification, GuardDecision, evaluate_command_guard, decision_to_json
@@ -45,17 +46,13 @@ EXIT_GUARD_REQUIRE_APPROVAL = 24
 EXIT_GUARD_DENY = 25
 EXIT_PAUSED = 26
 
-_PAUSE_GATE_TRUTHY = frozenset({"1", "true", "yes"})
-
-
 def _pause_gate_enabled() -> bool:
-    """Return True only when OPENCLAW_PAUSE_GATE is set to a truthy value.
+    """Return True only when OPENCLAW_PAUSE_GATE is truthy ('1', 'true', 'yes').
 
-    Truthy values (case-insensitive): "1", "true", "yes".
-    All other values (including unset / "" / "0" / "false" / "no") return False.
+    All other values (including unset / '' / '0' / 'false' / 'no') return False.
+    Delegates to ``scripts.env_flags.env_flag`` for shared semantics.
     """
-    raw = os.environ.get("OPENCLAW_PAUSE_GATE", "")
-    return raw.strip().lower() in _PAUSE_GATE_TRUTHY
+    return env_flag("OPENCLAW_PAUSE_GATE")
 
 # Single layout lookup at import time (was 4 separate calls; see 2026-05-21
 # Helm full review issue #9).
