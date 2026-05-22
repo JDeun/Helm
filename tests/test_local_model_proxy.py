@@ -171,6 +171,20 @@ def test_validate_response_whitespace_content_counts_as_empty():
 
 
 def test_validate_response_terminal_without_tool():
+    """terminal_without_tool fires when response is empty AND tool_required."""
+    payload = {
+        "content": "",
+        "tool_calls": None,
+        "tool_required": True,
+    }
+    result = validate_response(payload)
+    assert result["valid"] is False
+    assert "terminal_without_tool" in result["issues"]
+    assert "non_json_when_tool_required" not in result["issues"]
+
+
+def test_validate_response_non_json_does_not_imply_terminal():
+    """When content is plain text AND tool_required, only non_json_when_tool_required fires."""
     payload = {
         "content": "Here is my final answer.",
         "tool_calls": None,
@@ -178,8 +192,8 @@ def test_validate_response_terminal_without_tool():
     }
     result = validate_response(payload)
     assert result["valid"] is False
-    assert "terminal_without_tool" in result["issues"]
     assert "non_json_when_tool_required" in result["issues"]
+    assert "terminal_without_tool" not in result["issues"]
 
 
 def test_validate_response_tool_required_but_tool_provided_is_valid():

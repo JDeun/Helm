@@ -218,8 +218,8 @@ def validate_response(payload: dict) -> dict:
             # Model replied with plain text instead of a tool call.
             issues.append(_NON_JSON_WHEN_TOOL_REQUIRED)
 
-        if not has_tool_calls and has_content:
-            # The text reply constitutes a premature terminal answer.
+        if not has_tool_calls and not has_content:
+            # Empty response when a tool was required — cannot nudge.
             issues.append(_TERMINAL_WITHOUT_TOOL)
 
     valid = len(issues) == 0
