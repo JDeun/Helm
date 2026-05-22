@@ -372,8 +372,8 @@ def signature(event: dict) -> dict:
     if target is not None:
         target = normalize_target(target) or target
 
-    # Fingerprint: hash of (component, tool, profile, error_class, target or "")
-    fp_input = f"{component}|{tool}|{profile or ''}|{error_class}|{target or ''}"
+    # Fingerprint: hash of (component, tool, error_class, target or "")
+    fp_input = f"{component}|{tool}|{error_class}|{target or ''}"
     fingerprint = hashlib.sha256(fp_input.encode()).hexdigest()[:8]
 
     return {

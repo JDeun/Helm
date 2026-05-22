@@ -530,13 +530,13 @@ class TestFingerprintStability:
         sig2 = signature(event2)
         assert sig1["fingerprint"] != sig2["fingerprint"]
 
-    def test_different_profile_different_fingerprint(self):
+    def test_profile_does_not_affect_fingerprint(self):
         event1 = _make_event(["python3", "foo.py"], profile="service_ops")
         event2 = _make_event(["python3", "foo.py"], profile="workspace_edit")
         sig1 = signature(event1)
         sig2 = signature(event2)
-        # profile is included in fingerprint input
-        assert sig1["fingerprint"] != sig2["fingerprint"]
+        # Per spec, profile is NOT part of the fingerprint hash input.
+        assert sig1["fingerprint"] == sig2["fingerprint"]
 
     def test_different_error_class_different_fingerprint(self):
         # guard deny vs non-guard
