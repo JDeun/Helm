@@ -21,6 +21,10 @@ Browser-specific stubs (accepted and persisted; values not generated here):
   screenshot_evidence     (str)
   console_network_signals (dict)
   site_note_update        (str)
+
+Browser verifier recon result (Wave 3a):
+  browser_recon           (dict)  — BrowserReconDecision dict from
+                                    scripts.browser_work_verifier.verify()
 """
 from __future__ import annotations
 
@@ -132,6 +136,7 @@ def build_ledger_entry(
     console_network_signals: dict | None = None,
     site_note_update: str | None = None,
     policy_transition: dict | None = None,
+    browser_recon: dict | None = None,
 ) -> dict[str, Any]:
     """Return a copy of *base* with optional task-ledger fields merged in.
 
@@ -163,6 +168,9 @@ def build_ledger_entry(
         policy_transition: Structured transition record from
             ``scripts.policy_transition.transition_record()`` documenting an
             automatic policy action triggered by a repeated failure pattern.
+        browser_recon: BrowserReconDecision dict returned by
+            ``scripts.browser_work_verifier.verify()``.  Recorded for
+            observability when the browser gate evaluates a task (Wave 3a).
 
     Returns:
         New dict containing ``base`` fields plus any non-``None`` extras.
@@ -200,5 +208,7 @@ def build_ledger_entry(
         entry["site_note_update"] = site_note_update
     if policy_transition is not None:
         entry["policy_transition"] = policy_transition
+    if browser_recon is not None:
+        entry["browser_recon"] = browser_recon
 
     return entry
