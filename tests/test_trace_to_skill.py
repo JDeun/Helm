@@ -606,3 +606,44 @@ class TestAssessDraftPath:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         assert result.returncode == 0
         assert "OK" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Fix 4 — expanduser tests
+# ---------------------------------------------------------------------------
+
+class TestExpandUserTraceToSkill:
+    def test_OPENCLAW_TRACES_DIR_expands_tilde_in_trace_to_skill(self, monkeypatch):
+        """OPENCLAW_TRACES_DIR env var with ~ is expanded to home directory."""
+        import os
+        from pathlib import Path
+        from scripts.trace_to_skill import _default_traces_dir
+
+        monkeypatch.setenv("OPENCLAW_TRACES_DIR", "~/my/traces")
+        result = _default_traces_dir()
+        assert result == Path.home() / "my" / "traces"
+        assert "~" not in str(result)
+
+
+class TestExpandUserSkillCaptureExt:
+    def test_OPENCLAW_TRACES_DIR_expands_tilde_in_skill_capture_ext(self, monkeypatch):
+        """OPENCLAW_TRACES_DIR env var with ~ is expanded to home directory."""
+        import os
+        from pathlib import Path
+        from scripts.skill_capture_ext import _default_traces_dir
+
+        monkeypatch.setenv("OPENCLAW_TRACES_DIR", "~/capture/traces")
+        result = _default_traces_dir()
+        assert result == Path.home() / "capture" / "traces"
+        assert "~" not in str(result)
+
+    def test_OPENCLAW_DRAFTS_DIR_expands_tilde_in_skill_capture_ext(self, monkeypatch):
+        """OPENCLAW_DRAFTS_DIR env var with ~ is expanded to home directory."""
+        import os
+        from pathlib import Path
+        from scripts.skill_capture_ext import _default_drafts_dir
+
+        monkeypatch.setenv("OPENCLAW_DRAFTS_DIR", "~/my/drafts")
+        result = _default_drafts_dir()
+        assert result == Path.home() / "my" / "drafts"
+        assert "~" not in str(result)

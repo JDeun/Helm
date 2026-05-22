@@ -326,7 +326,7 @@ def _default_traces_dir() -> Path:
 
     env = os.environ.get("OPENCLAW_TRACES_DIR")
     if env:
-        return Path(env)
+        return Path(env).expanduser()
     return Path.home() / ".openclaw" / "workspace" / ".openclaw" / "traces"
 
 
