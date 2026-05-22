@@ -12,6 +12,10 @@ and applies the corresponding state transition via
 The module **does not** communicate with Telegram — it only parses strings and
 mutates local state.  The Telegram transport lives in the workspace-side task.
 
+# NOTE: keep in sync with workspace/scripts/skill_promotion_telegram_handler.py
+# parse_message — both modules must agree on the approved/rejected/details
+# command vocabulary and the 8-hex candidate_id format.
+
 Public API
 ----------
 * :func:`parse_reply`  — parse a raw message string into an action dict or ``None``.
