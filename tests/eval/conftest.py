@@ -1,18 +1,22 @@
 # tests/eval/conftest.py
 """Shared fixtures for the reliability eval suite.
 
-Provides:
-- in_memory_state: a fresh task-state dict (from new_task_state)
-- ledger_path: a tmp_path-scoped JSONL ledger file path (not pre-created)
-- fake_clock: a simple callable that returns a fixed UTC ISO8601 timestamp,
-  suitable for monkeypatching _utcnow_iso8601 where deterministic timestamps
-  are needed.
+Provides only fixtures that are actually wired into a scenario today:
+
+- ``in_memory_state``: a fresh task-state dict (from
+  :func:`helm_state_model.new_task_state`). Used by scenario 4.
+- ``ledger_path``: a tmp-path-scoped JSONL ledger file path (not
+  pre-created). Used by scenario 2.
+
+A ``fake_clock`` fixture was considered but removed: monkeypatching the
+state-model's internal timestamp helper is not a behavioral assertion at
+the eval/scenario level, so the fixture would be dead weight. Add one
+back when a scenario actually needs deterministic timestamps.
 """
 
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -34,18 +38,3 @@ def in_memory_state() -> dict:
 def ledger_path(tmp_path: Path) -> Path:
     """Return a tmp-scoped path for a JSONL ledger (parent dir exists; file not pre-created)."""
     return tmp_path / "eval-ledger.jsonl"
-
-
-@pytest.fixture
-def fake_clock():
-    """Return a callable that yields a fixed UTC ISO8601 timestamp string.
-
-    Use this to monkeypatch helm_state_model._utcnow_iso8601 in tests that need
-    deterministic timestamps without freezegun.
-    """
-    _FIXED_TS = "2026-05-22T00:00:00+00:00"
-
-    def _clock() -> str:
-        return _FIXED_TS
-
-    return _clock
