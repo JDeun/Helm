@@ -270,6 +270,11 @@ Helm은 전용 workspace에 두고, 기존 시스템은 먼저 read-only context
 - [`docs/comparisons/observability-tools.md`](docs/comparisons/observability-tools.md)
 - [`docs/comparisons/eval-tools.md`](docs/comparisons/eval-tools.md)
 
+Harness engineering 원칙:
+
+- [`docs/harness-engineering/05-control-flow-is-not-memory.md`](docs/harness-engineering/05-control-flow-is-not-memory.md) — workflow 완료 상태가 transcript 밖에 있어야 하는 이유, task-state container가 이를 어떻게 강제하는지, 피해야 할 anti-pattern.
+- [`docs/harness-engineering/06-helm-vs-forge.md`](docs/harness-engineering/06-helm-vs-forge.md) — Helm과 Forge의 비교, Helm이 Forge 설계에서 흡수하는 것, 두 레이어가 겹치지 않는 지점.
+
 릴리즈:
 
 - [`CHANGELOG.md`](CHANGELOG.md)
