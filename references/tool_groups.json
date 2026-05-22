@@ -1,0 +1,30 @@
+{
+  "_spec": "Tool-group grant declarations per execution profile. Source of truth: inventory 01-inventory.md Section 7. Keep this file in sync between ~/Helm/.worktrees/harness-eng and ~/.openclaw/workspace/.worktrees/harness-eng.",
+  "profiles": {
+    "inspect_local": {
+      "allow": ["read_file", "focused_test", "git_diff"],
+      "ask":   ["broad_shell", "secrets_read"],
+      "deny":  ["apply_patch", "external_network", "destructive_git"]
+    },
+    "workspace_edit": {
+      "allow": ["read_file", "apply_patch", "focused_test", "git_diff"],
+      "ask":   ["broad_shell", "secrets_read", "destructive_git"],
+      "deny":  ["external_network"]
+    },
+    "risky_edit": {
+      "allow": ["read_file", "apply_patch", "focused_test", "git_diff"],
+      "ask":   ["broad_shell", "destructive_git", "secrets_read"],
+      "deny":  ["external_network"]
+    },
+    "service_ops": {
+      "allow": ["read_file", "apply_patch", "focused_test", "git_diff", "external_network"],
+      "ask":   ["broad_shell", "secrets_read"],
+      "deny":  ["destructive_git"]
+    },
+    "remote_handoff": {
+      "allow": ["read_file", "git_diff", "external_network"],
+      "ask":   ["broad_shell", "apply_patch", "focused_test", "secrets_read"],
+      "deny":  ["destructive_git"]
+    }
+  }
+}

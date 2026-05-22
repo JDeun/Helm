@@ -1,0 +1,7 @@
+{
+  "python":     ["python -m py_compile {path}"],
+  "javascript": ["node --check {path}"],
+  "typescript": ["npx tsc --noEmit {path}"],
+  "json":       ["python -m json.tool {path}"],
+  "markdown":   []
+}

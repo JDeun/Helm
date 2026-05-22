@@ -25,16 +25,30 @@ The module also classifies a note's storage tier:
 * ``raw_capture`` — loose, captured-only, prunable after 30 days.
 * ``durable`` — strict, promoted, retained indefinitely.
 
+In addition to the note-lifecycle machinery, this module hosts the
+**task-state control-flow container** (Forge "Control Flow Is Not
+Memory"): structured fields — ``required_steps``, ``completed_steps``,
+``blockers``, ``external_side_effect_approvals``, ``finalization_state``,
+``recovered_messages`` — plus helpers (``new_task_state``,
+``load_task_state``, ``save_task_state``, ``is_finalized``,
+``mark_step_completed``, ``record_approval``, ``record_recovered_message``,
+``mark_recovered_message``, ``unhandled_recovered_messages``) that
+survive transcript compaction and remain authoritative for completion
+checks.
+
 Side effects: this module is pure logic.  It never writes files.  Tests rely on
 this purity to exercise transition rules.
 """
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Iterable
+
+from scripts.time_helpers import utc_now_iso
 
 __all__ = [
     "State",
@@ -53,6 +67,19 @@ __all__ = [
     "CAPTURED_PHRASES",
     "lint_telegram_phrase",
     "PhraseLintError",
+    # Task-state control-flow container (Forge: "Control Flow Is Not Memory").
+    "TASK_STATE_SCHEMA_VERSION",
+    "FINALIZATION_STATES",
+    "RECOVERED_MESSAGE_STATUSES",
+    "new_task_state",
+    "load_task_state",
+    "save_task_state",
+    "is_finalized",
+    "unhandled_recovered_messages",
+    "mark_step_completed",
+    "record_approval",
+    "record_recovered_message",
+    "mark_recovered_message",
 ]
 
 
@@ -465,3 +492,275 @@ def lint_telegram_phrase(text: str, state: State | str) -> None:
         raise PhraseLintError(
             f"phrase {captured_hit!r} cannot be used when state=rejected"
         )
+
+
+# ---------------------------------------------------------------------------
+# Task-state control-flow container
+# ---------------------------------------------------------------------------
+#
+# Forge's "Control Flow Is Not Memory" principle: a model's message history
+# is *memory* and is subject to compaction. Required steps, completion
+# state, approvals, blockers, and recovered messages are *control state*
+# and must live outside the transcript. After compaction, this structured
+# state — not the model's recollection — is authoritative.
+#
+# This section is intentionally schema-light: the task state is a plain
+# ``dict`` so callers (runner, approver, message handler, completion-check
+# code) can read and mutate it without depending on a dataclass-bound API.
+# Backward compatibility is honored by ``load_task_state`` filling defaults
+# for missing fields and preserving any unknown extra keys for round-trip.
+#
+# Verb convention for mutators:
+#
+# * ``record_*`` (e.g. ``record_approval``, ``record_recovered_message``)
+#   *appends* a new entry to a list. Duplicate-id rejection is the
+#   per-call concern of the function (only ``record_recovered_message``
+#   currently enforces it; approvals are intentionally append-only).
+# * ``mark_*`` (e.g. ``mark_step_completed``, ``mark_recovered_message``)
+#   *mutates* an existing entry's status / membership. Raises on
+#   unknown id or unknown step. Idempotent where the spec calls for it
+#   (``mark_step_completed``).
+#
+# Read helpers (``is_finalized``, ``unhandled_recovered_messages``)
+# return defensive deep copies — callers cannot corrupt internal state
+# by mutating the returned values.
+
+
+TASK_STATE_SCHEMA_VERSION: int = 1
+
+FINALIZATION_STATES: frozenset[str] = frozenset(
+    {"pending", "in_progress", "finalized", "abandoned"}
+)
+
+RECOVERED_MESSAGE_STATUSES: frozenset[str] = frozenset(
+    {"handled", "superseded", "active_unhandled", "blocked_by_truncation"}
+)
+
+
+# Field-name → default-factory. ``list`` is used as a factory so each new
+# state object gets its own list (no mutable-default aliasing).
+_TASK_STATE_DEFAULT_FACTORIES: dict[str, object] = {
+    "task_state_schema_version": lambda: TASK_STATE_SCHEMA_VERSION,
+    "required_steps": list,
+    "completed_steps": list,
+    "blockers": list,
+    "external_side_effect_approvals": list,
+    "finalization_state": lambda: "pending",
+    "recovered_messages": list,
+}
+
+
+def _utcnow_iso8601() -> str:
+    """Return current UTC time as ISO8601 with a ``+00:00`` offset.
+
+    Delegates to :func:`scripts.time_helpers.utc_now_iso` so the format is
+    consistent with every other timestamp emitted by Helm harness modules.
+    """
+    return utc_now_iso()
+
+
+def new_task_state() -> dict:
+    """Return a fresh task-state dict populated with defaults."""
+
+    state: dict = {}
+    for name, factory in _TASK_STATE_DEFAULT_FACTORIES.items():
+        state[name] = factory()  # type: ignore[operator]
+    return state
+
+
+def load_task_state(raw: dict | None) -> dict:
+    """Load a task-state dict, filling defaults for missing fields.
+
+    Unknown extra keys are preserved verbatim so the loader can be safely
+    used against state objects written by newer code paths. The returned
+    dict is always a fresh object (the input is not mutated).
+    """
+
+    if raw is None:
+        return new_task_state()
+    if not isinstance(raw, dict):
+        raise TypeError(
+            f"task state must be a dict, got {type(raw).__name__}"
+        )
+    state = dict(raw)
+    for name, factory in _TASK_STATE_DEFAULT_FACTORIES.items():
+        if name not in state:
+            state[name] = factory()  # type: ignore[operator]
+    return state
+
+
+def save_task_state(state: dict) -> dict:
+    """Return a JSON-serializable deep copy of ``state`` for persistence.
+
+    Preserves unknown extra keys. Does not mutate the input. The returned
+    object is a full deep copy — nested lists / dicts are *not* shared
+    with the input, so subsequent mutations to ``state`` cannot affect
+    a previously-saved snapshot (and vice versa). The shape is a plain
+    dict so callers may json-dump it directly.
+    """
+
+    if not isinstance(state, dict):
+        raise TypeError(
+            f"task state must be a dict, got {type(state).__name__}"
+        )
+    return copy.deepcopy(state)
+
+
+def is_finalized(state: dict) -> bool:
+    """Return True iff the task is *both* flagged finalized *and* complete.
+
+    "Finalized" requires:
+
+    * ``finalization_state == "finalized"`` — the runner explicitly
+      closed the task, AND
+    * every step in ``required_steps`` appears in ``completed_steps``.
+
+    Either condition alone is insufficient. A task with all steps done
+    but ``finalization_state == "pending"`` is still mid-flight; a task
+    flagged finalized with a step missing is malformed and must not be
+    treated as complete.
+
+    Dirty-data guard: if ``completed_steps`` contains an entry that is
+    not in ``required_steps``, ``is_finalized`` raises ``ValueError``
+    rather than silently returning ``False`` forever. This surfaces a
+    real class of bug (callers appending to ``completed_steps``
+    directly, bypassing :func:`mark_step_completed`) instead of hiding
+    it. Use :func:`mark_step_completed` to record progress; it
+    enforces this invariant on write as well.
+    """
+
+    if state.get("finalization_state") != "finalized":
+        return False
+    required = list(state.get("required_steps") or [])
+    completed = list(state.get("completed_steps") or [])
+    required_set = set(required)
+    unknown = [s for s in completed if s not in required_set]
+    if unknown:
+        raise ValueError(
+            f"completed_steps contains entries not in required_steps: "
+            f"{unknown!r}; required_steps={required!r}"
+        )
+    return required_set.issubset(set(completed))
+
+
+def unhandled_recovered_messages(state: dict) -> list[dict]:
+    """Return recovered messages whose status is ``active_unhandled``.
+
+    This is the read side of the recovered-context regression fix:
+    callers (Telegram bridge, completion-check code) consult this list
+    to find requests that survived compaction and still need action.
+
+    The returned list contains *copies* of the entries — mutating the
+    result does not affect the state. Use :func:`mark_recovered_message`
+    to change status.
+    """
+
+    return [
+        copy.deepcopy(m)
+        for m in (state.get("recovered_messages") or [])
+        if isinstance(m, dict) and m.get("status") == "active_unhandled"
+    ]
+
+
+def mark_step_completed(state: dict, step: str) -> None:
+    """Mark ``step`` as completed.
+
+    * Raises ``ValueError`` if ``step`` is not in ``required_steps``.
+    * Idempotent: a second call for the same step is a no-op.
+    * Appends in call order — preserves the sequence in which steps
+      actually finished, which may differ from ``required_steps`` order.
+    """
+
+    required = state.setdefault("required_steps", [])
+    completed = state.setdefault("completed_steps", [])
+    if step not in required:
+        raise ValueError(
+            f"unknown step {step!r}; required_steps={list(required)!r}"
+        )
+    if step in completed:
+        return
+    completed.append(step)
+
+
+def record_approval(
+    state: dict,
+    action: str,
+    target: str,
+    approved_by: str,
+) -> None:
+    """Append a side-effect-approval record with an ISO8601 timestamp.
+
+    The approval list is the authoritative log of "the user (or operator)
+    explicitly OK'd this external side effect" — it does not replace the
+    promotion gate, but it is the durable record consulted after
+    compaction.
+    """
+
+    approvals = state.setdefault("external_side_effect_approvals", [])
+    approvals.append(
+        {
+            "action": action,
+            "target": target,
+            "approved_by": approved_by,
+            "approved_at": _utcnow_iso8601(),
+        }
+    )
+
+
+def record_recovered_message(
+    state: dict,
+    source: str,
+    message_id: str,
+    action_verb: str | None,
+    topic_continuity_score: float | None,
+) -> None:
+    """Add a recovered-message entry with status ``active_unhandled``.
+
+    Raises ``ValueError`` if ``message_id`` already exists in
+    ``recovered_messages`` — no silent overwrite. Use
+    :func:`mark_recovered_message` to mutate the status of an existing
+    entry.
+
+    ``action_verb`` and ``topic_continuity_score`` may both be ``None``;
+    they are stored as-is. ``None`` for ``action_verb`` indicates the
+    recovery source did not extract a verb (e.g. a non-imperative
+    message); ``None`` for ``topic_continuity_score`` indicates no
+    continuity heuristic was applied.
+    """
+
+    messages = state.setdefault("recovered_messages", [])
+    for existing in messages:
+        if isinstance(existing, dict) and existing.get("message_id") == message_id:
+            raise ValueError(
+                f"recovered message_id {message_id!r} already exists; "
+                "use mark_recovered_message() to update status"
+            )
+    messages.append(
+        {
+            "source": source,
+            "message_id": message_id,
+            "action_verb": action_verb,
+            "status": "active_unhandled",
+            "topic_continuity_score": topic_continuity_score,
+        }
+    )
+
+
+def mark_recovered_message(state: dict, message_id: str, status: str) -> None:
+    """Set ``status`` on the recovered-message entry with ``message_id``.
+
+    Raises ``ValueError`` on unknown ``message_id`` or unknown ``status``.
+    Valid statuses are in :data:`RECOVERED_MESSAGE_STATUSES`.
+    """
+
+    if status not in RECOVERED_MESSAGE_STATUSES:
+        raise ValueError(
+            f"unknown recovered-message status {status!r}; "
+            f"valid={sorted(RECOVERED_MESSAGE_STATUSES)!r}"
+        )
+    messages = state.get("recovered_messages") or []
+    for entry in messages:
+        if isinstance(entry, dict) and entry.get("message_id") == message_id:
+            entry["status"] = status
+            return
+    raise ValueError(f"no recovered message with message_id={message_id!r}")
