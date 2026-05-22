@@ -4,9 +4,10 @@
 
 <h1 align="center">Helm</h1>
 
-<p align="center"><strong>The local operations layer for long-running coding agents.</strong></p>
+<p align="center"><strong>The local operations layer for long-running AI agents.</strong></p>
 
 <p align="center">
+  Coding, ops, research, automation — any agent that runs for hours on the same workspace.<br/>
   Profiles before commands · Checkpoints before risky work · Durable history after the chat is gone.
 </p>
 
@@ -54,19 +55,19 @@ The first command produces a guarded execution record. The second shows what jus
 
 ## Why Helm
 
-Long-running coding agents drift. They forget prior decisions, execute risky edits before you can stop them, and leave behind a chat log nobody can audit a week later.
+Long-running AI agents drift. They forget prior decisions, execute risky actions before you can stop them, and leave behind a chat log nobody can audit a week later — regardless of whether the agent is editing code, running ops, organizing notes, browsing sites, or chaining tool calls.
 
 Helm is a thin, file-backed operations layer that sits around your existing agent runtime. It does **not** replace your agent. It makes the agent's work boundable, recoverable, and reviewable.
 
 | Without Helm | With Helm |
 | --- | --- |
 | Risky commands run as soon as the agent decides | Commands run under a declared execution profile with a guard check |
-| Multi-file edits leave you guessing what changed | Checkpoint created before the work; visible rollback point |
+| Multi-step or multi-file changes leave you guessing what happened | Checkpoint created before the work; visible rollback point |
 | "What did the agent do yesterday?" → scroll the chat | Local task ledger, command log, dashboard, markdown report |
 | Context lives in the chat window | File-backed memory + ranked retrieval rehydrates the next session |
 | Skill rules live in prompts | `SKILL.md` + `contract.json` enforce policy at run time |
 
-If your agent only runs one-off demos, you do not need Helm. If you run it for hours on the same project, you do.
+If your agent only runs one-off demos, you do not need Helm. If you run it for hours on the same workspace — coding, ops, knowledge capture, or any mix — you do.
 
 ---
 
