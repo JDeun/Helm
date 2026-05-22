@@ -31,10 +31,10 @@ Feature flags
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from typing import Callable
 
+from scripts.env_flags import env_flag
 from scripts.local_model_proxy import (
     build_nudge,
     record_proxy_event,
@@ -56,13 +56,6 @@ _POLICY_PATH = pathlib.Path(__file__).resolve().parent.parent / "references" / "
 # ---------------------------------------------------------------------------
 
 
-def _is_truthy_env(val: str | None) -> bool:
-    """Return True iff val is one of '1', 'true', 'yes' (case-insensitive, stripped)."""
-    if val is None:
-        return False
-    return val.strip().lower() in ("1", "true", "yes")
-
-
 def _load_default_policy() -> dict:
     """Load and return the default policy from references/local_model_proxy_policy.json."""
     with _POLICY_PATH.open("r", encoding="utf-8") as fh:
@@ -82,7 +75,7 @@ def repair_enabled() -> bool:
 
     Checked at call time so runtime env changes (e.g. in tests) take effect.
     """
-    return _is_truthy_env(os.environ.get("HELM_MODEL_REPAIR"))
+    return env_flag("HELM_MODEL_REPAIR")
 
 
 def evaluate_response(

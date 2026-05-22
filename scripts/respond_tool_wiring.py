@@ -28,8 +28,7 @@ their input arguments.
 
 from __future__ import annotations
 
-import os
-
+from scripts.env_flags import env_flag
 from scripts.synthetic_respond_tool import (
     enforce_final_response,
     inject_respond_tool,
@@ -46,18 +45,6 @@ _LOCAL_TIER = "L3_local_model"
 
 
 # ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
-
-
-def _is_truthy_env(val: str | None) -> bool:
-    """Return True iff val is one of '1', 'true', 'yes' (case-insensitive, stripped)."""
-    if val is None:
-        return False
-    return val.strip().lower() in ("1", "true", "yes")
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -70,7 +57,7 @@ def synthetic_respond_enabled() -> bool:
 
     Checked at call time so runtime env changes take effect immediately.
     """
-    return _is_truthy_env(os.environ.get("HELM_SYNTHETIC_RESPOND"))
+    return env_flag("HELM_SYNTHETIC_RESPOND")
 
 
 def prepare_tools(tools: list[dict], *, model_tier: str) -> list[dict]:
