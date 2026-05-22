@@ -127,6 +127,12 @@ class TestClassifyError:
         stderr = "gold vault not found in storage backend"
         assert classify_error(stderr) == "exit_nonzero"
 
+    def test_mediawiki_wikilink_not_obsidian(self):
+        """False-positive guard: bare 'wikilink' from non-Obsidian wiki
+        systems (MediaWiki, Confluence) must NOT classify as Obsidian."""
+        stderr = "wikilink parser error in MediaWiki article"
+        assert classify_error(stderr) == "exit_nonzero"
+
     def test_large_input_bounded(self):
         """A 100 KB stderr blob must still classify in bounded time."""
         # 100 KB of irrelevant noise, then a Gemini signal beyond the 8KB cap.
@@ -243,7 +249,7 @@ class TestSignatureFS001:
         )
         sig = signature(event)
         assert sig["error_class"] == "google_sheets_api"
-        assert sig["component"] in ("skill", "external_api", "google-workspace")
+        assert sig["component"] == "external_api"
 
     def test_tool_normalized(self):
         event = _make_event(
@@ -460,7 +466,7 @@ class TestSignatureFS009:
     def test_tool_shell(self):
         event = _make_event(["zsh", "-c", "echo hello"])
         sig = signature(event)
-        assert sig["tool"] in ("zsh", "bash", "sh")
+        assert sig["tool"] == "zsh"
 
 
 class TestSignatureFS010:

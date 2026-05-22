@@ -82,11 +82,13 @@ _ERROR_CLASS_PATTERNS: list[tuple[re.Pattern, str]] = [
         re.I,
     ), "gemini_video_api"),
 
-    # Obsidian vault / link maintenance errors
+    # Obsidian vault / link maintenance errors.
+    # `wikilink` alone matches non-Obsidian wiki systems (MediaWiki, Confluence);
+    # require either the `malformed.*wikilink` shape or an explicit obsidian
+    # marker. The bare `obsidian` alternative covers `obsidian.*vault.*not found`
+    # too, so the latter is omitted as redundant.
     (re.compile(
         r"obsidian"
-        r"|wikilink"
-        r"|obsidian.*vault.*not found"
         r"|malformed.*wikilink"
         r"|obsidian_link_maintenance",
         re.I,
