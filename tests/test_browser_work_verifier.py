@@ -1,8 +1,11 @@
 """Tests for scripts/browser_work_verifier.py (Wave 3b — OQ-1..8 resolved)."""
 from __future__ import annotations
 
-import pytest
+import sys
 from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+import pytest
 
 from scripts.browser_work_verifier import DECISION_KEYS, verify, _resolve_site_note_path
 
@@ -490,3 +493,90 @@ def test_reason_string_is_non_empty_for_every_decision():
     ]:
         d = verify(spec)
         assert d["reason"], f"empty reason for {spec}"
+
+
+# ---------------------------------------------------------------------------
+# FIX M-5: lru_cache on _resolve_site_note_path
+# ---------------------------------------------------------------------------
+
+class TestResolveSiteNotePathCache:
+    """M-5: _resolve_site_note_path is cached; two calls with the same
+    arguments produce exactly one filesystem stat (Path.exists) hit."""
+
+    def test_cache_deduplicates_filesystem_hits(self, tmp_path):
+        """Two calls with identical arguments should hit Path.exists exactly once."""
+        import scripts.browser_work_verifier as bwv
+
+        # Clear the cache so prior test state doesn't interfere.
+        bwv._resolve_site_note_path.cache_clear()
+
+        call_count = 0
+
+        original_exists = Path.exists
+
+        def counting_exists(self_path):
+            nonlocal call_count
+            call_count += 1
+            return original_exists(self_path)
+
+        url = "https://example.com/path"
+        ws = str(tmp_path)
+
+        with patch.object(Path, "exists", counting_exists):
+            bwv._resolve_site_note_path(url, ws)
+            bwv._resolve_site_note_path(url, ws)
+
+        assert call_count == 1, (
+            f"Expected exactly 1 filesystem hit due to lru_cache, got {call_count}"
+        )
+
+    def test_cache_clear_forces_recheck(self, tmp_path):
+        """After cache_clear(), the next call re-checks the filesystem."""
+        import scripts.browser_work_verifier as bwv
+
+        bwv._resolve_site_note_path.cache_clear()
+
+        call_count = 0
+        original_exists = Path.exists
+
+        def counting_exists(self_path):
+            nonlocal call_count
+            call_count += 1
+            return original_exists(self_path)
+
+        url = "https://cache-clear-test.example.com/"
+        ws = str(tmp_path)
+
+        with patch.object(Path, "exists", counting_exists):
+            bwv._resolve_site_note_path(url, ws)
+            bwv._resolve_site_note_path.cache_clear()
+            bwv._resolve_site_note_path(url, ws)
+
+        assert call_count == 2, (
+            f"Expected 2 filesystem hits (one before and one after cache_clear), "
+            f"got {call_count}"
+        )
+
+    def test_different_args_each_hit_filesystem(self, tmp_path):
+        """Different URL patterns are separate cache keys → each hits the filesystem."""
+        import scripts.browser_work_verifier as bwv
+
+        bwv._resolve_site_note_path.cache_clear()
+
+        call_count = 0
+        original_exists = Path.exists
+
+        def counting_exists(self_path):
+            nonlocal call_count
+            call_count += 1
+            return original_exists(self_path)
+
+        ws = str(tmp_path)
+
+        with patch.object(Path, "exists", counting_exists):
+            bwv._resolve_site_note_path("https://alpha.com/", ws)
+            bwv._resolve_site_note_path("https://beta.com/", ws)
+
+        assert call_count == 2, (
+            f"Different URLs should each cause a filesystem hit; got {call_count}"
+        )
