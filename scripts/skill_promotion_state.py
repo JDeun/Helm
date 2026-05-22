@@ -72,8 +72,20 @@ def candidate_id_for(skill: str | None, task_name: str) -> str:
     Uses SHA-256 over ``"<skill>\\x00<task_name>"`` (NUL separator) so that
     ``("ab", "cde")`` and ``("abc", "de")`` produce different IDs.
     *skill* is normalised to the empty string when ``None``.
+
+    Raises ``ValueError`` if *skill* or *task_name* contains a NUL byte
+    (``\\x00``), because NUL is used as the separator and an embedded NUL
+    would collapse the collision-resistance guarantee.
     """
     skill_str = skill if skill is not None else ""
+    if "\x00" in skill_str:
+        raise ValueError(
+            "candidate_id_for: 'skill' must not contain NUL bytes (\\x00)"
+        )
+    if "\x00" in task_name:
+        raise ValueError(
+            "candidate_id_for: 'task_name' must not contain NUL bytes (\\x00)"
+        )
     raw = f"{skill_str}\x00{task_name}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:8]
 
