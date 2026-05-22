@@ -64,12 +64,13 @@ _SCENARIOS: dict[str, dict[str, str]] = {
         "test_path": "tests/eval/test_scenario_3_recovered_context_survives_compaction.py",
     },
     "4": {
-        "name": "external_side_effect_requires_approval",
+        "name": "approval_log_contract_and_action_scope",
         "description": (
-            "send without record_approval raises; "
-            "after record_approval the call proceeds and is logged"
+            "approval-log contract (record_approval shape) + real action_scope "
+            "gate for telegram_outbound (contract test — no production send "
+            "entrypoint consults the approval log yet)"
         ),
-        "test_path": "tests/eval/test_scenario_4_external_side_effect_requires_approval.py",
+        "test_path": "tests/eval/test_scenario_4_approval_log_contract_and_action_scope.py",
     },
     "5": {
         "name": "compaction_no_false_complete",
@@ -201,6 +202,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.json:
         print(json.dumps(results, indent=2, ensure_ascii=False))
+        # Honour failures in JSON mode too — CI relies on the exit code, not
+        # on parsing stdout. Without this, a failing scenario emitted as JSON
+        # would still exit 0 and be missed by automation.
+        return 1 if any(r["status"] != "PASS" for r in results) else 0
     else:
         any_fail = False
         for r in results:

@@ -42,9 +42,13 @@ _PROFILES = {
 }
 
 
-def test_scenario_2_save_request_persists_artifact(tmp_path: Path) -> None:
+def test_scenario_2_save_request_persists_artifact(
+    tmp_path: Path,
+    ledger_path: Path,
+) -> None:
     """workspace_edit save action: artifact written + state moves toward finalized."""
-    ledger = tmp_path / "ledger.jsonl"
+    # ledger_path comes from tests/eval/conftest.py — exercises the shared fixture.
+    ledger = ledger_path
     artifact = tmp_path / "report.txt"
 
     # --- Step 1: guard allows write under workspace_edit ---
