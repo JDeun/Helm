@@ -31,6 +31,7 @@ helper callbacks, exit codes) via keyword arguments to avoid importing
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import sys
 from pathlib import Path
@@ -64,12 +65,23 @@ _BROWSER_ACTIONS = frozenset({
 _BROWSER_SESSION_TAIL_LINES: int = 2000
 
 # Per-profile session cap constants for OQ-3 max_sessions enforcement.
-# Mirrors _PROFILE_POLICIES in browser_work_verifier.py.
+# Derived from _PROFILE_POLICIES in browser_work_verifier.py so the two stay
+# in sync automatically — no silent drift if a profile's cap changes.
+from scripts.browser_work_verifier import _PROFILE_POLICIES as _BWV_POLICIES
+
 _BROWSER_MAX_SESSIONS: dict[str, int] = {
-    "inspect_local": 5,
-    "service_ops": 3,
-    "risky_edit": 2,
+    name: pol.get("max_sessions", 1)
+    for name, pol in _BWV_POLICIES.items()
 }
+
+# Set of ledger statuses indicating a browser session is still open.
+_OPEN_STATUSES = frozenset({
+    "browser_recon",
+    "running",
+    "browser_approved_with_risk",
+    "browser_approved_by_site_note",
+    "browser_recon_shadow",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -118,17 +130,8 @@ def _count_active_browser_sessions_impl(
 
         now_ts = utc_now_iso()
         # Build a simple ISO-comparable window cutoff.
-        import datetime as _dt
         now_dt = _dt.datetime.fromisoformat(now_ts.replace("Z", "+00:00"))
         cutoff_dt = now_dt - _dt.timedelta(minutes=window_minutes)
-
-        _OPEN_STATUSES = frozenset({
-            "browser_recon",
-            "running",
-            "browser_approved_with_risk",
-            "browser_approved_by_site_note",
-            "browser_recon_shadow",
-        })
 
         # First pass: collect all entries.
         all_entries: list[dict] = []
