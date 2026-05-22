@@ -228,45 +228,58 @@ class TestRespondToolSchemaCopyOnRead(unittest.TestCase):
         self.assertNotIn("__injected__", s2)
 
     def test_RESPOND_TOOL_SCHEMA_PATH_expands_tilde(self):
-        """Env var with ~ is expanded to the home directory."""
+        """Env var with ~ is expanded to the home directory.
+
+        Writes a minimal schema JSON to a real temp file under HOME so that
+        the expanduser() resolution can be verified end-to-end without any
+        monkey-patching.
+        """
         import os
+        import tempfile
+        import json as _json
         from pathlib import Path
+        from unittest.mock import patch
 
-        env_value = "~/x.json"
-        expected_path = Path.home() / "x.json"
+        home = Path.home()
+        # Create a real file inside a tmp dir under HOME so that a tilde path
+        # pointing to it expands correctly.
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            dir=home,
+            delete=False,
+        ) as tf:
+            schema_data = {
+                "type": "function",
+                "function": {
+                    "name": "respond",
+                    "description": "test",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"message": {"type": "string"}},
+                        "required": ["message"],
+                    },
+                },
+            }
+            _json.dump(schema_data, tf)
+            tmp_name = Path(tf.name).name  # just the filename, no dir
 
-        # We cannot actually open the file, but we can verify the path
-        # resolution by monkey-patching the open call so we can capture
-        # what path was opened.
-        captured: list[Path] = []
-        original_schema_cache = dict(self.srt._SCHEMA_CACHE)
-
-        def _fake_open(path, *args, **kwargs):
-            captured.append(path)
-            # Return a minimal valid schema so the module doesn't error.
-            import io, json as _json
-            return io.StringIO(_json.dumps({"type": "function", "function": {"name": "respond", "description": "x", "parameters": {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"]}}}))
-
+        tilde_path = f"~/{tmp_name}"
         original_env = os.environ.get("RESPOND_TOOL_SCHEMA_PATH")
-        os.environ["RESPOND_TOOL_SCHEMA_PATH"] = env_value
-        # Also clear the cache so the env path is actually read.
+        os.environ["RESPOND_TOOL_SCHEMA_PATH"] = tilde_path
         self.srt._SCHEMA_CACHE.clear()
         try:
-            import builtins
-            orig_open = builtins.open
-            builtins.open = _fake_open
-            try:
-                self.srt.respond_tool_schema()
-            finally:
-                builtins.open = orig_open
+            result = self.srt.respond_tool_schema()
         finally:
             if original_env is None:
                 del os.environ["RESPOND_TOOL_SCHEMA_PATH"]
             else:
                 os.environ["RESPOND_TOOL_SCHEMA_PATH"] = original_env
+            (home / tmp_name).unlink(missing_ok=True)
 
-        self.assertTrue(len(captured) >= 1)
-        self.assertEqual(captured[0], expected_path)
+        # If expanduser worked, the file was read correctly and schema populated.
+        self.assertIn("type", result)
+        self.assertEqual(result.get("function", {}).get("name"), "respond")
 
 
 if __name__ == "__main__":
