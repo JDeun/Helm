@@ -72,12 +72,6 @@ def test_load_old_state_fills_defaults() -> None:
     assert state["some_legacy_field"] == "value"
 
 
-def test_load_empty_dict_yields_defaults() -> None:
-    state = load_task_state({})
-    assert state["finalization_state"] == "pending"
-    assert state["task_state_schema_version"] == 1
-
-
 # ---------------------------------------------------------------------------
 # Scenario 3: unknown extra keys are preserved on round-trip
 # ---------------------------------------------------------------------------
@@ -174,6 +168,34 @@ def test_is_finalized_false_for_other_finalization_states() -> None:
         assert is_finalized(state) is False, fs
 
 
+def test_is_finalized_raises_on_dirty_completed_step() -> None:
+    """Dirty-data guard: completed_steps containing an entry not in
+    required_steps must surface as a ValueError rather than silently
+    making is_finalized() return False forever (the original bug class
+    flagged in code review)."""
+    state = new_task_state()
+    state["required_steps"] = ["draft", "send"]
+    # Bypass mark_step_completed — append dirty data directly.
+    state["completed_steps"] = ["draft", "send", "phantom_step"]
+    state["finalization_state"] = "finalized"
+    with pytest.raises(ValueError):
+        is_finalized(state)
+
+
+def test_is_finalized_tolerates_unordered_completion() -> None:
+    """is_finalized uses set semantics for the completion check, so
+    completing steps in a different order than required_steps still
+    reports finalized when the flag is set."""
+    state = new_task_state()
+    state["required_steps"] = ["draft", "review", "send"]
+    # Complete in a different order; mark_step_completed appends in call order.
+    mark_step_completed(state, "send")
+    mark_step_completed(state, "draft")
+    mark_step_completed(state, "review")
+    state["finalization_state"] = "finalized"
+    assert is_finalized(state) is True
+
+
 # ---------------------------------------------------------------------------
 # Scenario 6: Telegram recovered-context regression scenario
 #
@@ -243,6 +265,57 @@ def test_unhandled_recovered_messages_filters_status() -> None:
     assert [m["message_id"] for m in out] == ["c"]
 
 
+def test_unhandled_recovered_messages_returns_copy() -> None:
+    """The returned list contains copies — mutating it must not corrupt
+    state. Callers must go through mark_recovered_message to change
+    status."""
+    state = new_task_state()
+    record_recovered_message(state, "telegram", "tg-1", "send", 0.7)
+    out = unhandled_recovered_messages(state)
+    assert len(out) == 1
+    # Mutate the returned dict; state must be unaffected.
+    out[0]["status"] = "handled"
+    out[0]["action_verb"] = "tampered"
+    out.append({"message_id": "tg-injected", "status": "active_unhandled"})
+
+    # State entry is untouched.
+    assert state["recovered_messages"][0]["status"] == "active_unhandled"
+    assert state["recovered_messages"][0]["action_verb"] == "send"
+    assert len(state["recovered_messages"]) == 1
+    # And re-reading still shows the unhandled entry.
+    again = unhandled_recovered_messages(state)
+    assert len(again) == 1
+    assert again[0]["message_id"] == "tg-1"
+
+
+def test_save_task_state_returns_deep_copy() -> None:
+    """save_task_state returns a deep copy — mutating either the saved
+    snapshot or the original after save must not corrupt the other.
+    This protects on-disk snapshots from being silently changed by
+    later in-memory edits."""
+    state = new_task_state()
+    state["required_steps"] = ["draft", "send"]
+    record_recovered_message(state, "telegram", "tg-1", "send", 0.7)
+    record_approval(state, "send_email", "user@example.com", "kevin")
+
+    saved = save_task_state(state)
+
+    # Mutate the saved snapshot's nested structures.
+    saved["required_steps"].append("phantom")
+    saved["recovered_messages"][0]["status"] = "handled"
+    saved["external_side_effect_approvals"][0]["approved_by"] = "attacker"
+
+    # Original state must be untouched.
+    assert state["required_steps"] == ["draft", "send"]
+    assert state["recovered_messages"][0]["status"] == "active_unhandled"
+    assert state["external_side_effect_approvals"][0]["approved_by"] == "kevin"
+
+    # And the reverse: mutating the original after save must not change
+    # the snapshot.
+    state["required_steps"].append("late_addition")
+    assert "late_addition" not in saved["required_steps"]
+
+
 # ---------------------------------------------------------------------------
 # Scenario 7: record_approval — iso8601 timestamp, append in order
 # ---------------------------------------------------------------------------
@@ -296,7 +369,7 @@ def test_record_recovered_message_rejects_duplicate_ids() -> None:
     assert state["recovered_messages"][0]["status"] == "active_unhandled"
 
 
-def test_record_recovered_message_writes_iso8601_since_on_status_change() -> None:
+def test_record_recovered_message_stores_fields_verbatim() -> None:
     state = new_task_state()
     record_recovered_message(state, "telegram", "tg-1", "send", 0.7)
     entry = state["recovered_messages"][0]

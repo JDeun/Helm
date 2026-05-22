@@ -25,12 +25,24 @@ The module also classifies a note's storage tier:
 * ``raw_capture`` — loose, captured-only, prunable after 30 days.
 * ``durable`` — strict, promoted, retained indefinitely.
 
+In addition to the note-lifecycle machinery, this module hosts the
+**task-state control-flow container** (Forge "Control Flow Is Not
+Memory"): structured fields — ``required_steps``, ``completed_steps``,
+``blockers``, ``external_side_effect_approvals``, ``finalization_state``,
+``recovered_messages`` — plus helpers (``new_task_state``,
+``load_task_state``, ``save_task_state``, ``is_finalized``,
+``mark_step_completed``, ``record_approval``, ``record_recovered_message``,
+``mark_recovered_message``, ``unhandled_recovered_messages``) that
+survive transcript compaction and remain authoritative for completion
+checks.
+
 Side effects: this module is pure logic.  It never writes files.  Tests rely on
 this purity to exercise transition rules.
 """
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -495,6 +507,21 @@ def lint_telegram_phrase(text: str, state: State | str) -> None:
 # code) can read and mutate it without depending on a dataclass-bound API.
 # Backward compatibility is honored by ``load_task_state`` filling defaults
 # for missing fields and preserving any unknown extra keys for round-trip.
+#
+# Verb convention for mutators:
+#
+# * ``record_*`` (e.g. ``record_approval``, ``record_recovered_message``)
+#   *appends* a new entry to a list. Duplicate-id rejection is the
+#   per-call concern of the function (only ``record_recovered_message``
+#   currently enforces it; approvals are intentionally append-only).
+# * ``mark_*`` (e.g. ``mark_step_completed``, ``mark_recovered_message``)
+#   *mutates* an existing entry's status / membership. Raises on
+#   unknown id or unknown step. Idempotent where the spec calls for it
+#   (``mark_step_completed``).
+#
+# Read helpers (``is_finalized``, ``unhandled_recovered_messages``)
+# return defensive deep copies — callers cannot corrupt internal state
+# by mutating the returned values.
 
 
 TASK_STATE_SCHEMA_VERSION: int = 1
@@ -561,17 +588,20 @@ def load_task_state(raw: dict | None) -> dict:
 
 
 def save_task_state(state: dict) -> dict:
-    """Return a JSON-serializable copy of ``state`` for persistence.
+    """Return a JSON-serializable deep copy of ``state`` for persistence.
 
-    Preserves unknown extra keys. Does not mutate the input. The shape is
-    intentionally a plain dict so callers may json-dump it directly.
+    Preserves unknown extra keys. Does not mutate the input. The returned
+    object is a full deep copy — nested lists / dicts are *not* shared
+    with the input, so subsequent mutations to ``state`` cannot affect
+    a previously-saved snapshot (and vice versa). The shape is a plain
+    dict so callers may json-dump it directly.
     """
 
     if not isinstance(state, dict):
         raise TypeError(
             f"task state must be a dict, got {type(state).__name__}"
         )
-    return dict(state)
+    return copy.deepcopy(state)
 
 
 def is_finalized(state: dict) -> bool:
@@ -581,20 +611,34 @@ def is_finalized(state: dict) -> bool:
 
     * ``finalization_state == "finalized"`` — the runner explicitly
       closed the task, AND
-    * ``completed_steps == required_steps`` — every declared step has
-      been marked done, in order.
+    * every step in ``required_steps`` appears in ``completed_steps``.
 
     Either condition alone is insufficient. A task with all steps done
     but ``finalization_state == "pending"`` is still mid-flight; a task
     flagged finalized with a step missing is malformed and must not be
     treated as complete.
+
+    Dirty-data guard: if ``completed_steps`` contains an entry that is
+    not in ``required_steps``, ``is_finalized`` raises ``ValueError``
+    rather than silently returning ``False`` forever. This surfaces a
+    real class of bug (callers appending to ``completed_steps``
+    directly, bypassing :func:`mark_step_completed`) instead of hiding
+    it. Use :func:`mark_step_completed` to record progress; it
+    enforces this invariant on write as well.
     """
 
     if state.get("finalization_state") != "finalized":
         return False
     required = list(state.get("required_steps") or [])
     completed = list(state.get("completed_steps") or [])
-    return completed == required
+    required_set = set(required)
+    unknown = [s for s in completed if s not in required_set]
+    if unknown:
+        raise ValueError(
+            f"completed_steps contains entries not in required_steps: "
+            f"{unknown!r}; required_steps={required!r}"
+        )
+    return required_set.issubset(set(completed))
 
 
 def unhandled_recovered_messages(state: dict) -> list[dict]:
@@ -603,10 +647,14 @@ def unhandled_recovered_messages(state: dict) -> list[dict]:
     This is the read side of the recovered-context regression fix:
     callers (Telegram bridge, completion-check code) consult this list
     to find requests that survived compaction and still need action.
+
+    The returned list contains *copies* of the entries — mutating the
+    result does not affect the state. Use :func:`mark_recovered_message`
+    to change status.
     """
 
     return [
-        m
+        copy.deepcopy(m)
         for m in (state.get("recovered_messages") or [])
         if isinstance(m, dict) and m.get("status") == "active_unhandled"
     ]
@@ -670,6 +718,12 @@ def record_recovered_message(
     ``recovered_messages`` — no silent overwrite. Use
     :func:`mark_recovered_message` to mutate the status of an existing
     entry.
+
+    ``action_verb`` and ``topic_continuity_score`` may both be ``None``;
+    they are stored as-is. ``None`` for ``action_verb`` indicates the
+    recovery source did not extract a verb (e.g. a non-imperative
+    message); ``None`` for ``topic_continuity_score`` indicates no
+    continuity heuristic was applied.
     """
 
     messages = state.setdefault("recovered_messages", [])
