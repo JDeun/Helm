@@ -316,7 +316,7 @@ Helm은 dedicated workspace에서 동작하며, 기존 시스템을 read-only co
 
 ## 연구 배경
 
-Helm의 설계 방향은 [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129) 의 결과와 일치합니다. 이 논문은 planning, verification, recovery harness가 소형 언어 모델의 운영 안정성에 어떻게 영향을 주는지 실험적으로 연구합니다.
+Helm의 설계 방향은 [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129) 의 결과와 일치합니다. 이 논문은 planning, verification, recovery harness가 소형 언어 모델의 운영 안정성에 어떻게 영향을 주는지 실험적으로 연구합니다. Helm의 adaptive harness 방향은 [It's Not the Capability: Harness Sensitivity Is Non-Monotone Across LLM Agent Tiers](https://arxiv.org/abs/2605.26731) 의 결과와도 연결됩니다. 이 후속 논문은 harness strictness를 모든 모델에 일괄 적용하기보다 모델 타입과 실패 패턴에 맞춰 선택해야 함을 보여줍니다.
 
 Helm 인용:
 
