@@ -316,7 +316,7 @@ See deeper comparisons in [`docs/comparisons/`](docs/comparisons/).
 
 ## Research background
 
-Helm's design follows the findings in [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129), which experimentally studies how planning, verification, and recovery harnesses affect operational stability.
+Helm's design follows the findings in [Harness Design Determines Operational Stability in Small Language Models](https://arxiv.org/abs/2605.12129), which experimentally studies how planning, verification, and recovery harnesses affect operational stability. Its adaptive-harness direction is also informed by [It's Not the Capability: Harness Sensitivity Is Non-Monotone Across LLM Agent Tiers](https://arxiv.org/abs/2605.26731), which shows that harness strictness should be selected by model type and failure mode rather than applied uniformly.
 
 Cite Helm:
 
