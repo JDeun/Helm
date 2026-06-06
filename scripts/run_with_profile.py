@@ -105,6 +105,7 @@ CHECKPOINT_SCRIPT = ROOT / "scripts" / "workspace_checkpoint.py"
 TASK_LEDGER = _LAYOUT.state_root / "task-ledger.jsonl"
 CHECKPOINT_INDEX = _LAYOUT.checkpoints_root / "index.json"
 STATE_ROOT = _LAYOUT.state_root
+GOVERNANCE_DECISIONS = STATE_ROOT / "action-governance-decisions.jsonl"
 
 
 _MINIMAL_ENV_KEYS = {
@@ -231,6 +232,226 @@ def block_task(task: dict, *, reason: str, stage: str = "guard") -> None:
     append_ledger(task)
 
 
+def record_runtime_approval_pause(task: dict, guard_decision: GuardDecision) -> dict | None:
+    """Persist a recoverable approval pause for a guard-gated task.
+
+    Ledger rows remain append-only audit records. This runtime record is the
+    resumable control state: pending action, risk reason, resource, options,
+    expiry, and resume command survive transcript compaction.
+    """
+    try:
+        from scripts.long_running_runtime import (
+            create_task_run,
+            load_runtime_state,
+            pause_for_approval,
+            save_runtime_state,
+            upsert_task_run,
+        )
+    except Exception as exc:  # noqa: BLE001 - advisory runtime attachment
+        task["runtime_pause_error"] = f"import failed: {exc}"
+        return None
+
+    try:
+        state = load_runtime_state()
+        task_id = str(task["task_id"])
+        runtime_task = state.get("task_runs", {}).get(task_id)
+        if not isinstance(runtime_task, dict):
+            runtime_task = create_task_run(
+                task_id=task_id,
+                requester=str(task.get("meta", {}).get("requester") or "operator"),
+                source_surface=str(task.get("delivery_mode") or "runner"),
+                user_message=str(task.get("task_name") or task.get("command_preview") or ""),
+                normalized_intent=str(task.get("task_name") or task.get("command_preview") or ""),
+                risk_class="approval_required",
+                status="pending",
+                metadata={
+                    "profile": task.get("profile"),
+                    "skill": task.get("skill"),
+                    "command_preview": task.get("command_preview"),
+                    "checkpoint_id": task.get("checkpoint_id"),
+                },
+            )
+        if (
+            task.get("checkpoint_id")
+            and task.get("checkpoint_id") not in runtime_task.get("checkpoint_ids", [])
+        ):
+            runtime_task.setdefault("checkpoint_ids", []).append(task["checkpoint_id"])
+        guard_evidence = {
+            "kind": "guard_decision",
+            "task_ledger_status": task.get("status"),
+            "matched_rules": list(guard_decision.matched_rules),
+            "reasons": list(guard_decision.reasons),
+        }
+        evidence_refs = runtime_task.setdefault("evidence_refs", [])
+        if guard_evidence not in evidence_refs:
+            evidence_refs.append(guard_evidence)
+        upsert_task_run(state, runtime_task)
+        quoted_command = " ".join(map(shlex.quote, task.get("command", [])))
+        gate = pause_for_approval(
+            state,
+            task_id=task_id,
+            pending_action=task.get("command_preview") or quoted_command,
+            resource=str(task.get("runtime_target") or task.get("profile") or "local"),
+            risk_reason="; ".join(guard_decision.reasons),
+            risk_class="high_risk_mutation",
+            options=["approve", "cancel"],
+            resume_command=(
+                f"python3 {Path(__file__).resolve()} run {task.get('profile')} "
+                f"--task-id {task_id} --approve-risk -- {quoted_command}"
+            ),
+        )
+        save_runtime_state(state)
+        task["runtime_pause"] = {
+            "approval_id": gate["approval_id"],
+            "resume_command": gate["resume_command"],
+            "expires_at": gate["expires_at"],
+        }
+        return gate
+    except Exception as exc:  # noqa: BLE001 - runner should still return approval-required
+        task["runtime_pause_error"] = str(exc)
+        return None
+
+
+def _governance_action_id(command: list[str], guard_decision: GuardDecision | None) -> str | None:
+    """Map a guarded command to an action-governance registry id.
+
+    The mapping is deliberately conservative. It only returns ids that exist in
+    the default registry; unrecognized read-only commands do not need an action
+    governance record, while mutating shell commands collapse to `file_write`.
+    """
+    if not command:
+        return None
+    lowered = [part.lower() for part in command]
+    cmd0 = lowered[0]
+    subcmd = lowered[1] if len(lowered) > 1 else ""
+    if cmd0 == "git" and subcmd == "commit":
+        return "git_commit"
+    if cmd0 == "git" and subcmd == "push":
+        return "git_push"
+    if cmd0 == "crontab":
+        if "-r" in lowered:
+            return "cron_remove"
+        return "cron_update"
+    classification = _classification_for_governance(command, guard_decision)
+    if classification is not None and (classification.writes_detected or classification.destructive_detected):
+        return "file_write"
+    return None
+
+
+def _governance_target(command: list[str], guard_decision: GuardDecision | None, action_id: str) -> str:
+    classification = _classification_for_governance(command, guard_decision)
+    if classification is not None and classification.target_paths:
+        return classification.target_paths[0]
+    if action_id in {"git_commit", "git_push"}:
+        return "git repository"
+    if action_id.startswith("cron_"):
+        return "cron job"
+    if len(command) > 1:
+        return command[-1]
+    return action_id
+
+
+def _governance_message(task: dict, action_id: str, target: str) -> str:
+    parts = [str(value) for value in (task.get("task_name"), task.get("task_goal")) if value]
+    if parts:
+        return "\n".join(parts)
+    if action_id == "git_commit":
+        return f"Save `{target}`"
+    if action_id == "git_push":
+        return f"Push `{target}`"
+    if action_id == "cron_remove":
+        return f"Delete `{target}`"
+    if action_id.startswith("cron_"):
+        return f"Update `{target}`"
+    return f"Edit `{target}`"
+
+
+def record_governance_approval_pause(task: dict, record: dict) -> dict | None:
+    """Persist a runtime approval pause for action-governance decisions."""
+    try:
+        from scripts.long_running_runtime import (
+            create_task_run,
+            load_runtime_state,
+            pause_for_approval,
+            save_runtime_state,
+            upsert_task_run,
+        )
+    except Exception as exc:  # noqa: BLE001 - runtime attachment must not mask decision
+        task["governance_runtime_pause_error"] = f"import failed: {exc}"
+        return None
+    try:
+        state = load_runtime_state()
+        task_id = str(task["task_id"])
+        runtime_task = state.get("task_runs", {}).get(task_id)
+        if not isinstance(runtime_task, dict):
+            runtime_task = create_task_run(
+                task_id=task_id,
+                requester=str(task.get("meta", {}).get("requester") or "operator"),
+                source_surface=str(task.get("delivery_mode") or "runner"),
+                user_message=str(task.get("task_name") or task.get("command_preview") or ""),
+                normalized_intent=str(task.get("task_name") or task.get("command_preview") or ""),
+                risk_class="governance_approval_required",
+                status="pending",
+                metadata={
+                    "profile": task.get("profile"),
+                    "skill": task.get("skill"),
+                    "command_preview": task.get("command_preview"),
+                },
+            )
+        upsert_task_run(state, runtime_task)
+        gate = pause_for_approval(
+            state,
+            task_id=task_id,
+            pending_action=str(record.get("attempted_action") or task.get("command_preview")),
+            resource=str(record.get("resource") or task.get("profile") or "local"),
+            risk_reason=str(record.get("reason") or "governance approval required"),
+            risk_class="high_risk_mutation",
+            options=["approve", "cancel"],
+            resume_command=(
+                f"python3 {Path(__file__).resolve()} run {task.get('profile')} "
+                f"--task-id {task_id} --approve-risk -- {task.get('command_preview')}"
+            ),
+        )
+        save_runtime_state(state)
+        task["governance_runtime_pause"] = {
+            "approval_id": gate["approval_id"],
+            "resume_command": gate["resume_command"],
+            "expires_at": gate["expires_at"],
+        }
+        return gate
+    except Exception as exc:  # noqa: BLE001
+        task["governance_runtime_pause_error"] = str(exc)
+        return None
+
+
+def evaluate_governance_for_run(
+    *,
+    task: dict,
+    args: argparse.Namespace,
+    command: list[str],
+    guard_decision: GuardDecision | None,
+) -> dict | None:
+    """Evaluate and persist action governance before executing a command."""
+    action_id = _governance_action_id(command, guard_decision)
+    if action_id is None:
+        return None
+    from scripts.action_governance import append_decision_record, evaluate_governed_action
+
+    target = _governance_target(command, guard_decision, action_id)
+    record = evaluate_governed_action(
+        user_message=_governance_message(task, action_id, target),
+        action_id=action_id,
+        target=target,
+        target_explicit=True,
+        live_source_confirmed=bool(getattr(args, "governance_live_source_confirmed", False)),
+        approval_status="approved" if getattr(args, "approve_risk", False) else None,
+        session_id=str(task.get("task_id")),
+    ).as_dict()
+    append_decision_record(GOVERNANCE_DECISIONS, record)
+    task["governance"] = record
+    return record
+
+
 def fallback_guard_decision(command: list[str], args: argparse.Namespace, exc: Exception) -> GuardDecision:
     return GuardDecision(
         action="require_approval",
@@ -295,6 +516,7 @@ def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dic
     return {
         "task_id": args.task_id or str(uuid.uuid4()),
         "task_name": args.task_name or " ".join(command[:3]),
+        "task_goal": args.task_goal,
         "skill": args.skill,
         "profile": profile,
         "backend": config["backend"],
@@ -314,6 +536,28 @@ def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dic
         "delivery_mode": args.delivery_mode,
         "meta": meta,
     }
+
+
+def _classification_for_governance(
+    command: list[str],
+    guard_decision: GuardDecision | None,
+) -> CommandClassification | None:
+    if guard_decision is not None:
+        return guard_decision.classification
+    try:
+        from scripts.command_guard import _classify_argv, _effective_argv, _normalize, _normalize_flags
+        effective_argv, shell_wrapped, shell_inner = _effective_argv(command)
+        normalized_argv = _normalize_flags(effective_argv)
+        match_text = shell_inner if shell_inner is not None else _normalize(normalized_argv)
+        return _classify_argv(
+            effective_argv=normalized_argv,
+            normalized=match_text,
+            shell_wrapped=shell_wrapped,
+            shell_inner=shell_inner,
+            original_argv=command,
+        )
+    except Exception:  # noqa: BLE001 - governance falls back to known command ids
+        return None
 
 
 def validate_skill_profile(skill: str | None, profile: str) -> None:
@@ -565,14 +809,11 @@ def _attach_advisory_action_scope(task: dict, args: argparse.Namespace) -> None:
 def _attach_tool_grant(task: dict, profile: str) -> None:
     """Compute and attach the tool_grant block to a task dict (idempotent).
 
-    The grant is recorded in the ledger for observability only.  Denied tools
-    are NOT blocked at runner level — that is Task #4's responsibility.
     Calling this function again on a task that already has ``tool_grant`` is a
     no-op (the existing block is preserved unchanged).
 
-    A default set of the eight canonical tool-group names is used because no
-    ``--tool-grant`` CLI flag exists yet.  When that flag lands (future task),
-    this call site can be made lazy/conditional.
+    A default set of the eight canonical tool-group names is used so every run
+    records and enforces the same profile grant surface.
     """
     if "tool_grant" in task:
         # Idempotent: already computed, do not overwrite.
@@ -588,6 +829,46 @@ def _attach_tool_grant(task: dict, profile: str) -> None:
         }
     except Exception:  # noqa: BLE001 — advisory; never block the hot path
         pass
+
+
+def _tools_used_by_command(command: list[str], guard_decision: GuardDecision | None) -> list[str]:
+    """Infer canonical tool groups consumed by a shell command."""
+    tools: list[str] = []
+    classification = _classification_for_governance(command, guard_decision)
+    lowered = [part.lower() for part in command]
+    if classification is not None:
+        if classification.network_detected or classification.remote_detected:
+            tools.append("external_network")
+        if classification.destructive_detected and lowered[:1] == ["git"]:
+            tools.append("destructive_git")
+        if classification.shell_wrapped:
+            tools.append("broad_shell")
+        if classification.writes_detected:
+            tools.append("apply_patch")
+    if lowered[:2] in (["git", "diff"], ["git", "status"]):
+        tools.append("git_diff")
+    return list(dict.fromkeys(tools))
+
+
+def enforce_tool_grant_for_run(task: dict, command: list[str], guard_decision: GuardDecision | None) -> str | None:
+    """Block commands that require a profile-denied tool group.
+
+    The command guard remains the primary semantic classifier. This helper turns
+    its conservative command classification into a small set of Helm tool-group
+    names so the ledger's `tool_grant` is enforced before subprocess execution.
+    """
+    grant = task.get("tool_grant")
+    if not isinstance(grant, dict):
+        return None
+    denied = set(grant.get("denied") or [])
+    used = _tools_used_by_command(command, guard_decision)
+    denied_used = [tool for tool in used if tool in denied]
+    task["tool_grant"]["used"] = used
+    task["tool_grant"]["enforced"] = True
+    if denied_used:
+        task["tool_grant"]["violation"] = {"denied_used": denied_used}
+        return "tool_grant deny: " + ", ".join(denied_used)
+    return None
 
 
 # _BROWSER_MAX_SESSIONS imported from scripts.browser_gate
@@ -681,8 +962,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     task = task_stub(args.profile, args, command)
     # Advisory Phase-A wiring (R2 I1): best-effort, silent on failure.
     _attach_advisory_action_scope(task, args)
-    # Tool-grant wiring (Task #3): records grant for the profile before execution.
-    # NOTE: denied tools are NOT blocked here — that is Task #4's responsibility.
+    # Tool-grant wiring: records the profile grant and enforces denied tool groups
+    # after command classification, before subprocess execution.
     _attach_tool_grant(task, args.profile)
     append_ledger(task)
 
@@ -738,6 +1019,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             return EXIT_GUARD_DENY
 
         if guard_decision.action == "require_approval" and not getattr(args, "approve_risk", False):
+            record_runtime_approval_pause(task, guard_decision)
             block_task(task, reason="approval required")
             hint = guard_decision.approval_hint or "Use --approve-risk to proceed."
             print(f"GUARD APPROVAL REQUIRED: {', '.join(guard_decision.reasons)}", file=sys.stderr)
@@ -747,6 +1029,39 @@ def cmd_run(args: argparse.Namespace) -> int:
         if getattr(args, "approve_risk", False) and guard_decision.action == "require_approval":
             task["guard"]["approved"] = True
     # --- End guard evaluation ---
+
+    tool_grant_reason = enforce_tool_grant_for_run(task, command, guard_decision)
+    if tool_grant_reason:
+        block_task(task, reason=tool_grant_reason, stage="tool_grant")
+        print(f"TOOL GRANT DENY: {tool_grant_reason}", file=sys.stderr)
+        return EXIT_GUARD_DENY
+
+    try:
+        governance_record = evaluate_governance_for_run(
+            task=task,
+            args=args,
+            command=command,
+            guard_decision=guard_decision,
+        )
+    except Exception as exc:  # noqa: BLE001 - governance must fail closed
+        task["governance_error"] = str(exc)
+        block_task(task, reason="governance decision failed", stage="governance")
+        print(f"GOVERNANCE DENY: decision failed: {exc}", file=sys.stderr)
+        return EXIT_GUARD_DENY
+
+    if governance_record:
+        decision = governance_record.get("decision")
+        reason = str(governance_record.get("reason") or decision)
+        if decision in {"deny", "inspect_only"}:
+            block_task(task, reason=f"governance {decision}: {reason}", stage="governance")
+            print(f"GOVERNANCE DENY: {reason}", file=sys.stderr)
+            return EXIT_GUARD_DENY
+        if decision == "require_approval":
+            record_governance_approval_pause(task, governance_record)
+            block_task(task, reason="governance approval required", stage="governance")
+            print(f"GOVERNANCE APPROVAL REQUIRED: {reason}", file=sys.stderr)
+            print("Hint: use --approve-risk after verifying the target and risk.", file=sys.stderr)
+            return EXIT_GUARD_REQUIRE_APPROVAL
 
     # --- Backend-specific handling ---
     if config["backend"] == "manual-remote":
@@ -907,6 +1222,7 @@ def parse_run_args() -> argparse.Namespace:
     parser.add_argument("command_name")
     parser.add_argument("profile", type=str)
     parser.add_argument("--task-name", help="Human-readable task name, recommended for service_ops.")
+    parser.add_argument("--task-goal", help="Detailed task intent used by guard and governance scope checks.")
     parser.add_argument("--task-id", help="Explicit task id override for harness-controlled runs.")
     parser.add_argument("--skill", help="Owning skill slug for policy enforcement.")
     parser.add_argument("--meta-json", help="Structured metadata JSON to embed in the task ledger.")
@@ -930,6 +1246,11 @@ def parse_run_args() -> argparse.Namespace:
         "--approve-risk",
         action="store_true",
         help="Approve commands that require_approval. Does not override deny.",
+    )
+    parser.add_argument(
+        "--governance-live-source-confirmed",
+        action="store_true",
+        help="Confirm current live-source/readback evidence for governed external actions.",
     )
     parser.add_argument(
         "--guard-json",

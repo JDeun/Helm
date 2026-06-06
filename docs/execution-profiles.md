@@ -45,6 +45,38 @@ Pick the narrowest profile that matches the real risk:
 - If the right answer is `remote_handoff`, say so early instead of silently faking local execution.
 - Name the real runtime target with `--runtime-target` whenever the backend is not just the local workspace shell.
 
+## Harness Contract
+
+Execution profiles are not prompt advice. They are the boundary where Helm
+turns model proposals into governed operations:
+
+- the model proposes the next action
+- the harness validates the schema, profile, command guard, tool grant, and
+  skill contract
+- the harness authorizes, blocks, or requests approval before execution
+- the harness executes only the authorized path
+- the harness records task state, guard decisions, checkpoint references,
+  tool grants, validation evidence, and finalization state
+- the harness returns observations, including denials, approval requirements,
+  timeouts, errors, aborts, and handoff requirements
+
+Every tool call or governed action must produce a result record. A denied,
+timed-out, failed, paused, or aborted action is still an observation; it should
+not disappear into a transcript-only explanation.
+
+For long-running work, Helm also records resumable runtime state in
+`.helm/long-running-runtime.json`:
+
+- phase checkpoints preserve input hashes, processed items, pending items,
+  output artifacts, tool evidence, and idempotency keys
+- approval pauses preserve pending action context and a resume command
+- specialist agents are declared through an agent registry with tool,
+  memory, model, timeout, owner, version, and output-contract metadata
+
+The task ledger remains the audit trail. The long-running runtime file is the
+control state used to resume from the last successful phase or continue after a
+human approval.
+
 ## Minimal Diff Discipline
 
 For `workspace_edit` and `risky_edit`, every changed line should trace directly to the user's request.
@@ -57,6 +89,20 @@ Agents should not:
 - remove pre-existing dead code unless asked
 
 Agents may remove only the unused imports, variables, or helpers introduced by their own change.
+
+Helm's current edit policy implements a patch-first helper:
+
+- `references/edit_policy.json` sets `default` to `patch_first`
+- `scripts/edit_policy.py` tracks per-file patch failures and recommends
+  `reload_context_then_decompose` after repeated failure
+- the policy can require checkpoints for target kinds such as
+  `shared_workflow`, `skill_router`, and `automation`
+
+SmallCode-style read-before-write now has a deterministic policy surface in
+Helm. `scripts/edit_policy.py` validates read evidence before mutation, treats
+missing or stale path/mtime/size evidence as a blocker, and keeps whole-file
+rewrites limited to new files, generated artifacts, small files, or explicit
+user requests.
 
 ## Finalization Rule
 
@@ -79,6 +125,12 @@ Examples:
 - note, memory, ontology, or other durable knowledge sources changed
 
 The profiled runner now writes a `memory_capture` plan into the final task-ledger state so this decision is visible instead of implicit.
+
+Completion claims require evidence. A final answer, assistant message, or
+compacted summary is not sufficient evidence by itself. The durable record
+should point to task evidence such as exit code, diff inspection, test/lint
+output, provider result, checkpoint id, write validation, cleanup evidence, or
+explicit `completion_evidence`.
 
 For conversation-only or synthetic task paths, the same rule still applies: auditability should use an explicit lifecycle instead of a single terminal row.
 
@@ -142,6 +194,8 @@ See [Privacy Boundary](./privacy-boundary.md).
 
 - `risky_edit` automatically creates a checkpoint before execution.
 - `risky_edit` stores the created `checkpoint_id` in later task-ledger states when checkpoint creation succeeds.
+- guard `require_approval` decisions create a runtime approval pause before
+  the runner exits with `EXIT_GUARD_REQUIRE_APPROVAL`.
 - `remote_handoff` records a handoff task instead of pretending to execute locally, and requires `--runtime-target`.
 - If `--skill` is provided, the runner checks the skill-local `contract.json` manifest first and rejects disallowed profile/skill combinations.
 - `service_ops` runs are appended to `.helm/task-ledger.jsonl` so detached or side-effectful work is auditable later.

@@ -47,6 +47,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from scripts.social_privacy_gate import SocialRiskLevel, evaluate_social_privacy
+
 
 # ---------------------------------------------------------------------------
 # Scope definitions
@@ -420,6 +422,7 @@ _LIVE_SOURCE_TOPICS: frozenset[str] = frozenset(
         "stock_price",
         "exchange_rate",
         "external_repo_status",
+        "social_profile_high_risk",
     }
 )
 
@@ -459,6 +462,9 @@ class ActionScopeDecision:
     requires_target: bool = False
     targets: list[str] = field(default_factory=list)
     needs_live_source: bool = False
+    privacy_risk: str | None = None
+    privacy_missing_requirements: dict[str, bool] = field(default_factory=dict)
+    privacy_labels: list[str] = field(default_factory=list)
     refusal_reason: str | None = None
     annotations: list[str] = field(default_factory=list)
 
@@ -480,6 +486,9 @@ class ActionScopeDecision:
             "requires_target": self.requires_target,
             "targets": list(self.targets),
             "needs_live_source": self.needs_live_source,
+            "privacy_risk": self.privacy_risk,
+            "privacy_missing_requirements": dict(self.privacy_missing_requirements),
+            "privacy_labels": list(self.privacy_labels),
             "refusal_reason": self.refusal_reason,
             "annotations": list(self.annotations),
             "allowed": self.allowed,
@@ -662,6 +671,23 @@ def evaluate(
             "현재 메시지에서 명시 동사를 찾지 못했습니다. 의도를 다시 확인하세요."
         )
         return decision
+
+    privacy = evaluate_social_privacy(message)
+    decision.privacy_risk = privacy.risk.value
+    decision.privacy_missing_requirements = dict(privacy.missing_requirements)
+    decision.privacy_labels = list(privacy.derived_data_labels)
+    if privacy.risk == SocialRiskLevel.HIGH:
+        decision.needs_live_source = True
+        if not privacy.allowed_without_clarification:
+            missing = sorted(
+                key for key, is_missing in privacy.missing_requirements.items() if is_missing
+            )
+            decision.refusal_reason = "social_privacy_requirements_missing"
+            decision.annotations.append(
+                "social privacy gate: missing " + ", ".join(missing)
+            )
+        else:
+            decision.annotations.append("social privacy gate: high-risk request requirements satisfied")
 
     # Target requirement
     if decision.locked_scope in {

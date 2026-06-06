@@ -75,6 +75,89 @@ def should_create_checkpoint(target_kind: str) -> bool:
     return target_kind in required
 
 
+def read_before_write_required() -> bool:
+    """Return True when write attempts require fresh read evidence.
+
+    The policy originally documented read-before-write as an advisory note.
+    This helper gives runners a deterministic contract surface: any edit
+    operation can ask this module whether missing or stale read evidence should
+    block the write.
+    """
+    policy = load_edit_policy()
+    read_policy = policy.get("read_before_write", {})
+    if not isinstance(read_policy, dict):
+        return False
+    return read_policy.get("mode") == "required"
+
+
+def validate_read_evidence(
+    *,
+    target_path: str,
+    evidence: dict[str, Any] | None,
+    current_mtime_ns: int | None = None,
+    current_size: int | None = None,
+) -> tuple[bool, str | None]:
+    """Validate read evidence for a pending write.
+
+    Required evidence shape:
+    ``{"path": str, "mtime_ns": int|None, "size": int|None, "read_at": str}``.
+    ``current_mtime_ns`` and ``current_size`` are optional because callers may
+    validate planned writes for not-yet-existing files; when supplied they must
+    match the evidence.
+    """
+    if not read_before_write_required():
+        return True, None
+    if evidence is None:
+        return False, "missing_read_evidence"
+    if evidence.get("path") != target_path:
+        return False, "read_evidence_path_mismatch"
+    if not evidence.get("read_at"):
+        return False, "read_evidence_missing_read_at"
+    if current_mtime_ns is not None and evidence.get("mtime_ns") != current_mtime_ns:
+        return False, "read_evidence_stale_mtime"
+    if current_size is not None and evidence.get("size") != current_size:
+        return False, "read_evidence_stale_size"
+    return True, None
+
+
+def whole_file_rewrite_allowed(reason: str) -> bool:
+    """Return True if ``reason`` is on the whole-file rewrite allowlist."""
+    policy = load_edit_policy()
+    allowed = policy.get("whole_file_rewrite_allowed_for", [])
+    return reason in allowed
+
+
+def validate_edit_request(
+    *,
+    target_path: str,
+    operation: str,
+    read_evidence: dict[str, Any] | None = None,
+    current_mtime_ns: int | None = None,
+    current_size: int | None = None,
+    rewrite_reason: str | None = None,
+) -> tuple[bool, str | None]:
+    """Validate a planned edit against the SmallCode-inspired policy.
+
+    ``operation`` is a small stable string such as ``"apply_patch"`` or
+    ``"whole_file_rewrite"``. The helper is intentionally side-effect free so
+    runners can call it before performing file mutations.
+    """
+    ok, reason = validate_read_evidence(
+        target_path=target_path,
+        evidence=read_evidence,
+        current_mtime_ns=current_mtime_ns,
+        current_size=current_size,
+    )
+    if not ok:
+        return ok, reason
+    if operation == "whole_file_rewrite":
+        if not rewrite_reason:
+            return False, "missing_whole_file_rewrite_reason"
+        if not whole_file_rewrite_allowed(rewrite_reason):
+            return False, "whole_file_rewrite_not_allowed"
+    return True, None
+
+
 def record_patch_failure(state: dict[str, Any], path: str) -> int:
     """Increment the patch-failure counter for *path* inside *state*.
 

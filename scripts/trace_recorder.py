@@ -13,6 +13,8 @@ Public API
 ----------
 * :func:`start_trace`           — create an empty trace object.
 * :func:`record_tool_call`      — append a tool-call entry.
+* :func:`record_governance_decision` — append a governed action decision.
+* :func:`record_evidence_contract` — append an evidence contract check.
 * :func:`record_changed_file`   — append a changed-file path (deduplicating).
 * :func:`record_validation_gate`— append a validation-gate result.
 * :func:`set_failure_signature` — attach a structured failure signature.
@@ -40,6 +42,8 @@ Schema (all keys always present on a saved trace):
           }
       ],
       "changedFiles":    [],
+      "governanceDecisions": [],
+      "evidenceContracts": [],
       "validationGates": [{"name": "<str>", "status": "<str>"}],
       "failureSignature": null,
       "outcome":         "completed|failed|aborted|null",
@@ -73,6 +77,8 @@ __all__ = [
     "default_traces_dir",
     "start_trace",
     "record_tool_call",
+    "record_governance_decision",
+    "record_evidence_contract",
     "record_changed_file",
     "record_validation_gate",
     "set_failure_signature",
@@ -131,6 +137,8 @@ def start_trace(
         "inputSummary": input_summary,
         "toolSequence": [],
         "changedFiles": [],
+        "governanceDecisions": [],
+        "evidenceContracts": [],
         "validationGates": [],
         "failureSignature": None,
         "outcome": None,
@@ -170,6 +178,21 @@ def record_tool_call(
             "resultSummary": result_summary,
         }
     )
+
+
+def record_governance_decision(trace: dict, decision: dict) -> None:
+    """Append a governed-action decision record to *trace*.
+
+    The caller may pass ``DecisionRecord.as_dict()`` from
+    :mod:`scripts.action_governance` or an equivalent dict. This recorder keeps
+    the schema permissive so historical traces can still be replayed.
+    """
+    trace.setdefault("governanceDecisions", []).append(dict(decision))
+
+
+def record_evidence_contract(trace: dict, result: dict) -> None:
+    """Append an evidence-contract validation result to *trace*."""
+    trace.setdefault("evidenceContracts", []).append(dict(result))
 
 
 def record_changed_file(trace: dict, path: str) -> None:

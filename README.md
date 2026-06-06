@@ -59,6 +59,8 @@ Long-running AI agents drift. They forget prior decisions, execute risky actions
 
 Helm is a thin, file-backed operations layer that sits around your existing agent runtime. It does **not** replace your agent. It makes the agent's work boundable, recoverable, and reviewable.
 
+The model proposes actions; the harness validates, authorizes, executes, records, and returns observations. Safety and completion claims should come from execution evidence, not from prompt advice or a compacted chat transcript.
+
 | Without Helm | With Helm |
 | --- | --- |
 | Risky commands run as soon as the agent decides | Commands run under a declared execution profile with a guard check |

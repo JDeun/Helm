@@ -1,0 +1,168 @@
+{
+  "schema_version": "helm.governance/v1",
+  "policy_version": "personal-agent-governance-2026-06-03",
+  "default_action": "deny",
+  "actions": [
+    {
+      "action_id": "telegram_outbound",
+      "resource_type": "telegram_message",
+      "required_scope": "external_send",
+      "mutates": true,
+      "needs_live_source": true,
+      "requires_approval": true,
+      "default_decision": "require_approval",
+      "evidence_contract": {
+        "require_all": ["provider_result"],
+        "require_one_of": ["message_id", "send_result"]
+      }
+    },
+    {
+      "action_id": "google_calendar_create",
+      "resource_type": "google_calendar_event",
+      "required_scope": "edit",
+      "mutates": true,
+      "needs_live_source": true,
+      "requires_approval": false,
+      "default_decision": "allow",
+      "evidence_contract": {
+        "require_all": ["event_id"],
+        "require_one_of": ["api_readback", "provider_result"]
+      }
+    },
+    {
+      "action_id": "google_calendar_update",
+      "resource_type": "google_calendar_event",
+      "required_scope": "edit",
+      "mutates": true,
+      "needs_live_source": true,
+      "requires_approval": false,
+      "default_decision": "allow",
+      "evidence_contract": {
+        "require_all": ["event_id"],
+        "require_one_of": ["api_readback", "provider_result"]
+      }
+    },
+    {
+      "action_id": "google_calendar_delete",
+      "resource_type": "google_calendar_event",
+      "required_scope": "delete",
+      "mutates": true,
+      "needs_live_source": true,
+      "requires_approval": true,
+      "default_decision": "require_approval",
+      "evidence_contract": {
+        "require_all": ["event_id"],
+        "require_one_of": ["api_readback", "provider_result"]
+      }
+    },
+    {
+      "action_id": "google_sheets_ledger_append",
+      "resource_type": "google_sheet_row",
+      "required_scope": "edit",
+      "mutates": true,
+      "needs_live_source": true,
+      "requires_approval": false,
+      "default_decision": "allow",
+      "evidence_contract": {
+        "require_one_of": ["row_id", "api_readback", "provider_result"]
+      }
+    },
+    {
+      "action_id": "google_sheets_ledger_update",
+      "resource_type": "google_sheet_row",
+      "required_scope": "edit",
+      "mutates": true,
+      "needs_live_source": true,
+      "requires_approval": false,
+      "default_decision": "allow",
+      "evidence_contract": {
+        "require_one_of": ["row_id", "api_readback", "provider_result"]
+      }
+    },
+    {
+      "action_id": "file_write",
+      "resource_type": "file",
+      "required_scope": "edit",
+      "mutates": true,
+      "needs_live_source": false,
+      "requires_approval": false,
+      "default_decision": "allow",
+      "evidence_contract": {
+        "require_one_of": ["filesystem_stat", "git_diff", "write_validation"]
+      }
+    },
+    {
+      "action_id": "git_commit",
+      "resource_type": "git_repository",
+      "required_scope": "save",
+      "mutates": true,
+      "needs_live_source": false,
+      "requires_approval": false,
+      "default_decision": "allow",
+      "evidence_contract": {
+        "require_one_of": ["commit_sha", "provider_result"]
+      }
+    },
+    {
+      "action_id": "git_push",
+      "resource_type": "git_remote",
+      "required_scope": "external_send",
+      "mutates": true,
+      "needs_live_source": true,
+      "requires_approval": true,
+      "default_decision": "require_approval",
+      "evidence_contract": {
+        "require_all": ["local_head", "remote_head"]
+      }
+    },
+    {
+      "action_id": "cron_add",
+      "resource_type": "cron_job",
+      "required_scope": "edit",
+      "mutates": true,
+      "needs_live_source": false,
+      "requires_approval": false,
+      "default_decision": "allow",
+      "evidence_contract": {
+        "require_one_of": ["filesystem_stat", "provider_result", "write_validation"]
+      }
+    },
+    {
+      "action_id": "cron_update",
+      "resource_type": "cron_job",
+      "required_scope": "edit",
+      "mutates": true,
+      "needs_live_source": false,
+      "requires_approval": false,
+      "default_decision": "allow",
+      "evidence_contract": {
+        "require_one_of": ["filesystem_stat", "provider_result", "write_validation"]
+      }
+    },
+    {
+      "action_id": "cron_remove",
+      "resource_type": "cron_job",
+      "required_scope": "delete",
+      "mutates": true,
+      "needs_live_source": false,
+      "requires_approval": true,
+      "default_decision": "require_approval",
+      "evidence_contract": {
+        "require_one_of": ["filesystem_stat", "provider_result", "write_validation"]
+      }
+    },
+    {
+      "action_id": "smart_home_high_risk_control",
+      "resource_type": "smart_home_device",
+      "required_scope": "external_send",
+      "mutates": true,
+      "needs_live_source": true,
+      "requires_approval": true,
+      "default_decision": "require_approval",
+      "evidence_contract": {
+        "require_all": ["provider_result"],
+        "require_one_of": ["device_state_readback", "command_id"]
+      }
+    }
+  ]
+}

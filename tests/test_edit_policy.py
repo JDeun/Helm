@@ -43,6 +43,8 @@ class TestLoadEditPolicy:
         assert "max_patch_failures_per_file" in policy
         assert "on_repeated_patch_failure" in policy
         assert "requires_checkpoint_for" in policy
+        assert "read_before_write" in policy
+        assert "whole_file_rewrite_allowed_for" in policy
 
     def test_cached_on_second_call(self):
         mod = _get_module()
@@ -180,6 +182,105 @@ class TestNextActionForPath:
         mod = _get_module()
         policy = mod.load_edit_policy()
         assert policy["on_repeated_patch_failure"] == "reload_context_then_decompose"
+
+    def test_read_before_write_is_required_policy(self):
+        mod = _get_module()
+        policy = mod.load_edit_policy()
+        read_policy = policy["read_before_write"]
+        assert read_policy["mode"] == "required"
+        assert read_policy["stale_read_requires_reload"] is True
+
+    def test_whole_file_rewrite_allowlist_is_narrow(self):
+        mod = _get_module()
+        policy = mod.load_edit_policy()
+        allowed = set(policy["whole_file_rewrite_allowed_for"])
+        assert allowed == {
+            "new_file",
+            "generated_artifact",
+            "small_file",
+            "explicit_user_request",
+        }
+
+    def test_validate_edit_request_blocks_missing_read_evidence(self):
+        mod = _get_module()
+        ok, reason = mod.validate_edit_request(
+            target_path="scripts/example.py",
+            operation="apply_patch",
+        )
+        assert ok is False
+        assert reason == "missing_read_evidence"
+
+    def test_validate_edit_request_accepts_fresh_read_evidence(self):
+        mod = _get_module()
+        evidence = {
+            "path": "scripts/example.py",
+            "mtime_ns": 123,
+            "size": 456,
+            "read_at": "2026-06-03T00:00:00Z",
+        }
+        ok, reason = mod.validate_edit_request(
+            target_path="scripts/example.py",
+            operation="apply_patch",
+            read_evidence=evidence,
+            current_mtime_ns=123,
+            current_size=456,
+        )
+        assert ok is True
+        assert reason is None
+
+    def test_validate_edit_request_blocks_stale_read_evidence(self):
+        mod = _get_module()
+        evidence = {
+            "path": "scripts/example.py",
+            "mtime_ns": 123,
+            "size": 456,
+            "read_at": "2026-06-03T00:00:00Z",
+        }
+        ok, reason = mod.validate_edit_request(
+            target_path="scripts/example.py",
+            operation="apply_patch",
+            read_evidence=evidence,
+            current_mtime_ns=999,
+            current_size=456,
+        )
+        assert ok is False
+        assert reason == "read_evidence_stale_mtime"
+
+    def test_validate_edit_request_blocks_disallowed_whole_file_rewrite(self):
+        mod = _get_module()
+        evidence = {
+            "path": "scripts/example.py",
+            "mtime_ns": 123,
+            "size": 456,
+            "read_at": "2026-06-03T00:00:00Z",
+        }
+        ok, reason = mod.validate_edit_request(
+            target_path="scripts/example.py",
+            operation="whole_file_rewrite",
+            read_evidence=evidence,
+            current_mtime_ns=123,
+            current_size=456,
+            rewrite_reason="refactor",
+        )
+        assert ok is False
+        assert reason == "whole_file_rewrite_not_allowed"
+
+    def test_validate_edit_request_allows_new_file_whole_file_write(self):
+        mod = _get_module()
+        evidence = {
+            "path": "scripts/new_file.py",
+            "mtime_ns": None,
+            "size": None,
+            "read_at": "2026-06-03T00:00:00Z",
+        }
+        ok, reason = mod.validate_edit_request(
+            target_path="scripts/new_file.py",
+            operation="whole_file_rewrite",
+            read_evidence=evidence,
+            rewrite_reason="new_file",
+        )
+        assert ok is True
+        assert reason is None
 
 
 # ---------------------------------------------------------------------------
