@@ -4,6 +4,11 @@ Helm treats privacy filtering as an agent/tool boundary concern.
 
 The goal is not to make private data public-safe after it has already been written into logs. The goal is to intercept sensitive spans before external tools, remote handoffs, shared reports, or durable public artifacts receive them.
 
+This boundary belongs to the harness. The model may identify a possible privacy
+risk, but the runtime must validate, authorize, execute tokenization or
+redaction, record the decision, and return the observation before private text
+crosses a tool boundary.
+
 ## Pattern
 
 Use recoverable pseudonymization for private values that must keep stable identity across a task.
@@ -46,6 +51,9 @@ The default vault is `.helm/privacy-vault.json` under the target workspace. The 
 - Keep raw mappings only in the local vault. Do not copy vault contents into memory notes, public fixtures, release docs, or examples.
 - Restore only for an authorized user-facing response or a local operation that genuinely needs the raw value.
 - Audit every tokenize and restore event with scope, operation, vault path, labels, and counts.
+- Treat privacy scan, tokenize, restore, deny, and redaction decisions as tool
+  results. They should be visible as observations instead of only described in
+  assistant prose.
 
 ## Public Helm Versus Private Runtimes
 

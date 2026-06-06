@@ -195,6 +195,47 @@ def test_live_source_required_for_sheets_topic() -> None:
     assert any("live source" in note for note in decision.annotations)
 
 
+def test_live_source_required_for_social_profile_high_risk_topic() -> None:
+    decision = evaluate(
+        "이 계정 어떤 사람인지 알려줘",
+        topics=("social_profile_high_risk",),
+    )
+    assert decision.locked_scope == ActionScopeKind.INSPECT
+    assert decision.needs_live_source is True
+    assert any("social_profile_high_risk" in note for note in decision.annotations)
+
+
+def test_social_privacy_gate_blocks_high_risk_profile_without_requirements() -> None:
+    decision = evaluate("이 사람 Bluesky 최근 글 전부 수집해서 정치 성향 dossier 알려줘")
+    assert decision.locked_scope == ActionScopeKind.INSPECT
+    assert decision.allowed is False
+    assert decision.needs_live_source is True
+    assert decision.refusal_reason == "social_privacy_requirements_missing"
+    assert decision.privacy_risk == "high"
+    assert decision.privacy_missing_requirements == {
+        "consent": True,
+        "purpose": True,
+        "scope": True,
+        "retention": True,
+    }
+
+
+def test_social_privacy_gate_allows_high_risk_when_requirements_are_present() -> None:
+    decision = evaluate(
+        "허락 받은 계정 최근 30개 글로 보안 점검 목적의 정치 성향 dossier 알려줘. 저장하지 마."
+    )
+    assert decision.locked_scope == ActionScopeKind.INSPECT
+    assert decision.allowed is True
+    assert decision.needs_live_source is True
+    assert decision.privacy_risk == "high"
+    assert decision.privacy_missing_requirements == {
+        "consent": False,
+        "purpose": False,
+        "scope": False,
+        "retention": False,
+    }
+
+
 def test_live_source_not_set_for_unrelated_topic() -> None:
     decision = evaluate("일정 확인해", topics=("openclaw_skills",))
     assert decision.needs_live_source is False

@@ -88,7 +88,29 @@ _FAKE_PROFILES = {
         "writes_allowed": False,
         "network_allowed": False,
         "checkpoint": "never",
-    }
+    },
+    "workspace_edit": {
+        "description": "Workspace editing without network.",
+        "backend": "local",
+        "runtime_backend": "local-shell",
+        "runtime_target_kind": "workspace",
+        "isolation": "shared-session",
+        "handoff_required": False,
+        "writes_allowed": True,
+        "network_allowed": False,
+        "checkpoint": "never",
+    },
+    "service_ops": {
+        "description": "Service operations with network.",
+        "backend": "local",
+        "runtime_backend": "local-shell",
+        "runtime_target_kind": "workspace",
+        "isolation": "shared-session",
+        "handoff_required": False,
+        "writes_allowed": True,
+        "network_allowed": True,
+        "checkpoint": "never",
+    },
 }
 
 
@@ -99,6 +121,7 @@ def _make_args():
     args.guard_mode = "enforce"
     args.guard_json = False
     args.approve_risk = False
+    args.governance_live_source_confirmed = False
     args.command = ["echo", "hello"]
     args.runtime_target = None
     args.task_name = "test"
@@ -254,6 +277,7 @@ def _make_args_with_timeout(timeout: int = 1800, profile: str = "inspect_local")
     args.guard_mode = "off"
     args.guard_json = False
     args.approve_risk = False
+    args.governance_live_source_confirmed = False
     args.command = ["sleep", "999"]
     args.runtime_target = None
     args.task_name = "test-timeout"
@@ -297,6 +321,319 @@ def _make_allow_decision(profile: str = "inspect_local"):
         approval_required=False,
         approval_hint=None,
     )
+
+
+def _make_write_allow_decision(profile: str = "workspace_edit"):
+    from scripts.command_guard import GuardDecision, CommandClassification
+    return GuardDecision(
+        action="allow",
+        risk_score=0.1,
+        score_breakdown={"test": 0.1},
+        selected_profile=profile,
+        recommended_profile=None,
+        reasons=["test write allow"],
+        matched_rules=[],
+        classification=CommandClassification(
+            normalized_command="touch out.txt",
+            argv=["touch", "out.txt"],
+            shell_wrapped=False,
+            shell_inner_command=None,
+            categories=["write"],
+            matched_rules=[],
+            writes_detected=True,
+            network_detected=False,
+            destructive_detected=False,
+            privilege_detected=False,
+            remote_detected=False,
+            target_paths=["out.txt"],
+        ),
+        approval_required=False,
+        approval_hint=None,
+    )
+
+
+def _make_push_allow_decision(profile: str = "service_ops"):
+    from scripts.command_guard import GuardDecision, CommandClassification
+    return GuardDecision(
+        action="allow",
+        risk_score=0.2,
+        score_breakdown={"test": 0.2},
+        selected_profile=profile,
+        recommended_profile=None,
+        reasons=["test push allow"],
+        matched_rules=[],
+        classification=CommandClassification(
+            normalized_command="git push origin main",
+            argv=["git", "push", "origin", "main"],
+            shell_wrapped=False,
+            shell_inner_command=None,
+            categories=["network"],
+            matched_rules=[],
+            writes_detected=False,
+            network_detected=True,
+            destructive_detected=False,
+            privilege_detected=False,
+            remote_detected=True,
+        ),
+        approval_required=False,
+        approval_hint=None,
+    )
+
+
+def _make_destructive_git_allow_decision(profile: str = "service_ops"):
+    from scripts.command_guard import GuardDecision, CommandClassification
+    return GuardDecision(
+        action="allow",
+        risk_score=0.9,
+        score_breakdown={"test": 0.9},
+        selected_profile=profile,
+        recommended_profile=None,
+        reasons=["test destructive allow"],
+        matched_rules=[],
+        classification=CommandClassification(
+            normalized_command="git reset --hard",
+            argv=["git", "reset", "--hard"],
+            shell_wrapped=False,
+            shell_inner_command=None,
+            categories=["destructive"],
+            matched_rules=[],
+            writes_detected=False,
+            network_detected=False,
+            destructive_detected=True,
+            privilege_detected=False,
+            remote_detected=False,
+        ),
+        approval_required=False,
+        approval_hint=None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Governance and tool-grant enforcement
+# ---------------------------------------------------------------------------
+
+
+def test_governance_blocks_inspect_intent_before_write_subprocess():
+    from unittest.mock import patch
+    from scripts.run_with_profile import EXIT_GUARD_DENY, cmd_run
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_write_allow_decision()), \
+         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+
+        args = _make_args()
+        args.profile = "workspace_edit"
+        args.command = ["touch", "out.txt"]
+        args.task_name = "Check `out.txt`"
+
+        rc = cmd_run(args)
+
+    assert rc == EXIT_GUARD_DENY
+    mock_subprocess.assert_not_called()
+    append_decision_record.assert_called_once()
+    record = append_decision_record.call_args.args[1]
+    assert record["decision"] == "inspect_only"
+    assert record["reason"] == "inspect_scope_for_mutation"
+
+
+def test_governance_records_allow_before_execution():
+    import subprocess as _sp
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+
+    captured_tasks = []
+
+    def capture_finalize(task):
+        captured_tasks.append(dict(task))
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_write_allow_decision()), \
+         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+
+        mock_subprocess.return_value = _sp.CompletedProcess(args=["touch", "out.txt"], returncode=0)
+        args = _make_args()
+        args.profile = "workspace_edit"
+        args.command = ["touch", "out.txt"]
+        args.task_name = "Edit `out.txt`"
+
+        rc = cmd_run(args)
+
+    assert rc == 0
+    append_decision_record.assert_called_once()
+    mock_subprocess.assert_called_once()
+    assert captured_tasks
+    task = captured_tasks[0]
+    assert task["governance"]["attempted_action"] == "file_write"
+    assert task["governance"]["decision"] == "allow"
+    assert task["tool_grant"]["enforced"] is True
+
+
+def test_governance_uses_task_goal_when_task_name_is_generic():
+    import subprocess as _sp
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_write_allow_decision()), \
+         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("scripts.run_with_profile.finalize_task"), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+
+        mock_subprocess.return_value = _sp.CompletedProcess(args=["touch", "out.txt"], returncode=0)
+        args = _make_args()
+        args.profile = "workspace_edit"
+        args.command = ["touch", "out.txt"]
+        args.task_name = "runner"
+        args.task_goal = "Edit `out.txt`"
+
+        rc = cmd_run(args)
+
+    assert rc == 0
+    mock_subprocess.assert_called_once()
+    record = append_decision_record.call_args.args[1]
+    assert record["decision"] == "allow"
+    assert record["parsed_scope"] == "edit"
+
+
+def test_governance_classifies_file_write_when_guard_mode_off():
+    import subprocess as _sp
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard") as evaluate_guard, \
+         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("scripts.run_with_profile.finalize_task"), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+
+        mock_subprocess.return_value = _sp.CompletedProcess(args=["touch", "out.txt"], returncode=0)
+        args = _make_args()
+        args.profile = "workspace_edit"
+        args.guard_mode = "off"
+        args.command = ["touch", "out.txt"]
+        args.task_name = "Edit `out.txt`"
+
+        rc = cmd_run(args)
+
+    assert rc == 0
+    evaluate_guard.assert_not_called()
+    mock_subprocess.assert_called_once()
+    record = append_decision_record.call_args.args[1]
+    assert record["attempted_action"] == "file_write"
+    assert record["decision"] == "allow"
+
+
+def test_governance_requires_live_source_for_git_push_even_with_approval():
+    from unittest.mock import patch
+    from scripts.run_with_profile import EXIT_GUARD_DENY, cmd_run
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_push_allow_decision()), \
+         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+
+        args = _make_args()
+        args.profile = "service_ops"
+        args.command = ["git", "push", "origin", "main"]
+        args.task_name = "Push `main`"
+        args.approve_risk = True
+        args.governance_live_source_confirmed = False
+
+        rc = cmd_run(args)
+
+    assert rc == EXIT_GUARD_DENY
+    mock_subprocess.assert_not_called()
+    append_decision_record.assert_called_once()
+    record = append_decision_record.call_args.args[1]
+    assert record["decision"] == "deny"
+    assert record["reason"] == "live_source_required"
+
+
+def test_governance_live_source_and_approval_allow_git_push():
+    import subprocess as _sp
+    from unittest.mock import patch
+    from scripts.run_with_profile import cmd_run
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger"), \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_push_allow_decision()), \
+         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("scripts.run_with_profile.finalize_task"), \
+         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+
+        mock_subprocess.return_value = _sp.CompletedProcess(args=["git", "push"], returncode=0)
+        args = _make_args()
+        args.profile = "service_ops"
+        args.command = ["git", "push", "origin", "main"]
+        args.task_name = "Push `main`"
+        args.approve_risk = True
+        args.governance_live_source_confirmed = True
+
+        rc = cmd_run(args)
+
+    assert rc == 0
+    mock_subprocess.assert_called_once()
+    append_decision_record.assert_called_once()
+    record = append_decision_record.call_args.args[1]
+    assert record["decision"] == "allow"
+
+
+def test_tool_grant_denied_tool_blocks_before_governance_and_subprocess():
+    from unittest.mock import patch
+    from scripts.run_with_profile import EXIT_GUARD_DENY, cmd_run
+
+    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("scripts.run_with_profile.validate_skill_profile"), \
+         patch("scripts.run_with_profile.append_ledger") as append_ledger, \
+         patch("scripts.run_with_profile._best_effort_index"), \
+         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_destructive_git_allow_decision()), \
+         patch("scripts.run_with_profile.evaluate_governance_for_run") as evaluate_governance, \
+         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+
+        args = _make_args()
+        args.profile = "service_ops"
+        args.command = ["git", "reset", "--hard"]
+        args.task_name = "Reset git state"
+
+        rc = cmd_run(args)
+
+    assert rc == EXIT_GUARD_DENY
+    mock_subprocess.assert_not_called()
+    evaluate_governance.assert_not_called()
+    blocked = append_ledger.call_args.args[0]
+    assert blocked["failure_stage"] == "tool_grant"
+    assert blocked["tool_grant"]["violation"]["denied_used"] == ["destructive_git"]
 
 
 # ---------------------------------------------------------------------------

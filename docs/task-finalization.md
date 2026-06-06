@@ -4,6 +4,11 @@ Helm distinguishes execution completion from operational completion.
 
 A command can finish and still leave the workspace in a weak state if the important result only lives in chat or in the operator's memory.
 
+The operating principle is: the model proposes actions, while the harness
+validates, authorizes, executes, records, and returns observations. A model
+message can suggest that work is done, but Helm should only treat the task as
+operationally complete when the ledger contains evidence for the claim.
+
 ## Rule
 
 Treat a task as operationally complete only after Helm has done all three:
@@ -11,6 +16,12 @@ Treat a task as operationally complete only after Helm has done all three:
 1. executed the command or handoff path
 2. recorded the result in the task ledger
 3. assessed whether durable state capture should happen next
+
+Every governed action must also return an observation to the loop. Denial,
+approval-required, timeout, error, abort, handoff-required, and validation
+failure are all valid tool results. A missing tool result is not a successful
+step; it is a broken execution boundary that should remain visible in the
+ledger or trace.
 
 Current Helm releases add the assessment boundary first. The task ledger now stores a `memory_capture` plan with:
 
@@ -99,11 +110,44 @@ checked. For Obsidian-backed workspaces, useful gates include:
 Those checks should be recorded as `write_validation` evidence with the
 validator name and the exact artifact paths inspected.
 
+## SmallCode-Inspired Edit Safety
+
+Helm has partial coverage for the file-edit safety patterns described in the
+SmallCode PRD:
+
+- Patch-first editing is implemented as policy plus helper functions in
+  `references/edit_policy.json` and `scripts/edit_policy.py`.
+- Read-before-write enforcement is implemented by `scripts/edit_policy.py`:
+  missing evidence, path mismatches, stale mtime, and stale size block a
+  planned write before mutation.
+- Repeated patch failure is tracked per file and escalates to
+  `reload_context_then_decompose`.
+- Whole-file rewrite limits are validated against the policy allowlist.
+- Checkpoint requirements are implemented for selected target kinds and
+  `risky_edit` creates a workspace checkpoint before execution.
+- Verification gates are implemented by `scripts/validation_gate.py` and
+  profile-level completion evidence is enforced by adaptive harness postflight
+  when the configured enforcement threshold applies.
+- Rollback is available for local workspace checkpoints through checkpoint
+  preview, restore, recommendation, and task-linked rollback inspection.
+
+Known gaps:
+
+- Validation gate selection is still extension/profile driven and does not
+  automatically infer every project-specific lint, test, or build command.
+- Hard validation failure does not automatically roll back local changes; Helm
+  records rollback guidance and leaves restore/apply decisions to an operator.
+- External systems such as calendars, sheets, messages, or remote hosts need
+  compensating-action guidance rather than true checkpoint restore.
+
 ## Why This Matters
 
 - Verification answers "did the task actually run?"
 - Finalization answers "what durable state should remain after it ran?"
 - Context hydration is only as strong as the files earlier tasks left behind
+- Compaction should preserve structured state, not prose. Task state,
+  approvals, checkpoint ids, validation evidence, and finalization status must
+  survive even when chat text is summarized or dropped.
 
 If the durable traces are weak, later routing and recovery will also be weak.
 
@@ -112,6 +156,9 @@ If the durable traces are weak, later routing and recovery will also be weak.
 The current implementation adds planning and observability:
 
 - `scripts/run_with_profile.py` writes a `memory_capture` section into the final task-ledger state
+- `scripts/long_running_runtime.py` stores resumable task runs, phase
+  checkpoints, approval pauses, idempotency keys, and specialist registry
+  entries in `.helm/long-running-runtime.json`
 - `scripts/adaptive_harness.py postflight` can enforce task evidence, finalization, and post-write artifact validation contracts
 - `task_ledger_report.py`, `ops_daily_report.py`, `helm status`, and `helm report` surface finalization counts
 

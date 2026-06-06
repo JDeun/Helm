@@ -59,6 +59,8 @@ helm dashboard
 
 Helm은 기존 agent runtime 주변을 감싸는 얇은 file-backed 운영 레이어입니다. agent를 **대체하지 않습니다**. agent의 작업이 **경계 안에서, 복구 가능하게, 검토 가능하게** 일어나도록 만듭니다.
 
+모델은 행동을 제안하고, harness는 검증, 권한 판단, 실행, 기록, 관찰 반환을 담당합니다. 안전과 완료 주장은 prompt 조언이나 compact된 chat transcript가 아니라 실행 증거에서 나와야 합니다.
+
 | Helm 없이 | Helm으로 |
 | --- | --- |
 | agent가 결정하는 즉시 위험한 명령 실행 | 선언된 execution profile + guard 검사를 거친 실행 |

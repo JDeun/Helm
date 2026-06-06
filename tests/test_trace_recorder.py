@@ -26,6 +26,8 @@ from scripts.trace_recorder import (
     default_traces_dir,
     load_trace,
     record_changed_file,
+    record_evidence_contract,
+    record_governance_decision,
     record_tool_call,
     record_validation_gate,
     save_trace,
@@ -46,6 +48,8 @@ _REQUIRED_KEYS = {
     "inputSummary",
     "toolSequence",
     "changedFiles",
+    "governanceDecisions",
+    "evidenceContracts",
     "validationGates",
     "failureSignature",
     "outcome",
@@ -83,6 +87,14 @@ class TestStartTrace:
     def test_validation_gates_initially_empty(self):
         trace = _make_trace()
         assert trace["validationGates"] == []
+
+    def test_governance_decisions_initially_empty(self):
+        trace = _make_trace()
+        assert trace["governanceDecisions"] == []
+
+    def test_evidence_contracts_initially_empty(self):
+        trace = _make_trace()
+        assert trace["evidenceContracts"] == []
 
     def test_outcome_initially_none(self):
         trace = _make_trace()
@@ -246,6 +258,32 @@ class TestRecordValidationGate:
         record_validation_gate(trace, "pytest", "passed")
         record_validation_gate(trace, "pytest", "passed")
         assert len(trace["validationGates"]) == 2
+
+
+class TestRecordGovernance:
+    def test_governance_decision_persists(self):
+        trace = _make_trace()
+        record_governance_decision(
+            trace,
+            {
+                "attempted_action": "file_write",
+                "decision": "allow",
+                "reason": "policy_satisfied",
+            },
+        )
+        assert trace["governanceDecisions"][0]["attempted_action"] == "file_write"
+
+    def test_evidence_contract_persists(self):
+        trace = _make_trace()
+        record_evidence_contract(
+            trace,
+            {
+                "action_id": "file_write",
+                "ok": True,
+                "satisfied": ["git_diff"],
+            },
+        )
+        assert trace["evidenceContracts"][0]["ok"] is True
 
 
 # ---------------------------------------------------------------------------

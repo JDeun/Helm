@@ -4,6 +4,10 @@ Helm task state is append-only. Commands such as `helm task block` and
 `helm task complete` do not rewrite old ledger rows; they append a newer row
 for the same `task_id`.
 
+Task state is control state, not chat memory. Compaction may summarize prose,
+but it must not replace append-only ledger rows, state snapshots, approvals,
+completion evidence, checkpoint references, or active blockers.
+
 ## Commands
 
 List latest task states.
@@ -79,6 +83,23 @@ Runner-owned states currently include:
 - `handoff_required`
 - `guard_audit`
 
+Long-running runtime states are stored separately in
+`.helm/long-running-runtime.json` by `scripts/long_running_runtime.py`.
+That file is the resumable control plane for work that can outlive one model
+turn. Its `task_runs` use:
+
+- `pending`
+- `running`
+- `paused`
+- `completed`
+- `failed`
+- `cancelled`
+
+Each task run can carry `checkpoint_ids`, embedded phase checkpoints,
+`artifact_paths`, `evidence_refs`, `idempotency_keys`, and
+`pending_approval_id`. This keeps restart and approval context outside the
+chat transcript.
+
 Manual task-state commands add:
 
 - `ready` for retry tasks waiting to be picked up
@@ -94,6 +115,10 @@ postflight can propose or append review states such as `needs_verification`,
 but they do not decide that work is operationally complete without explicit
 evidence. Risky follow-up actions such as retrying, reclaiming, pruning, or
 marking work complete remain explicit operator commands.
+
+The model can propose a state transition, but the harness or operator must
+validate and record it. Completion is not a natural-language claim; it is an
+append-only state transition backed by evidence.
 
 ## Evidence
 
@@ -111,6 +136,17 @@ Use a compact `kind:value` shape such as `test:pytest`,
 `diff:reviewed`, `provider:response-id`, or `healthcheck:ok`.
 For harness-managed tasks, use `helm harness record-evidence --completion-evidence`
 to append reviewed evidence without marking the task complete automatically.
+
+When a tool call is denied, times out, errors, aborts, pauses for approval, or
+requires handoff, record that as the result observation. Leaving the call
+without a result makes later state recovery and compaction safety ambiguous.
+
+When the command guard returns `require_approval`, `run_with_profile.py` now
+records a runtime approval pause before returning the guard exit code. The
+approval gate stores the pending action, resource, risk reason, risk class,
+approval options, expiry, and resume command. External send/delete/financial,
+security, and high-risk mutation actions should consult that gate and must not
+execute until a matching approval is resolved as `approved`.
 
 The adaptive harness also uses these fields for its profile-level completion
 gate. At `balanced` enforcement or higher, high-risk profiles must carry
@@ -153,3 +189,24 @@ Use `helm checkpoint policy` to inspect the default policy or a workspace-local
 `references/checkpoint_policy.json` override. When prune flags are omitted,
 `helm checkpoint prune` uses that policy for `keep_recent`, `keep_days`, and
 `max_total_mb`.
+
+## Specialist Registry
+
+`scripts/long_running_runtime.py` also owns the lightweight specialist
+registry used by coordinator-style workflows. Each entry records:
+
+- `agent_id`
+- `role`
+- `allowed_tools`
+- `memory_scope`
+- `model_policy`
+- `skill_profile`
+- `timeout`
+- `owner`
+- `version`
+- `output_contract`
+
+Specialist events are appended to the owning `task_run` as recoverable or
+non-recoverable observations. A failed source fetcher or verifier can therefore
+be recorded without forcing the whole coordinator task to lose its checkpoint
+or approval context.
