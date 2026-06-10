@@ -102,6 +102,8 @@ If your agent only runs one-off demos, you do not need Helm. If you run it for h
 - **File-backed memory** with ranked retrieval (`helm context --explain-ranking`)
 - **Skill lifecycle** governs how skill rules promote / decay
 - **Adaptive harness** integrates failure signatures → policy transitions
+- **Shadow reports & promotion queues** surface when guarded features or skill
+  candidates are ready to enforce
 
 </td>
 </tr>
@@ -213,6 +215,18 @@ helm skill-lifecycle revalidate-claim \
 </details>
 
 <details>
+<summary><b>Review run contracts and improvement candidates</b></summary>
+
+```bash
+helm run-contract --json
+helm capability-diff --json
+helm skill-promotion digest --json
+helm shadow-report --since 14 --format md --with-recommendations
+```
+
+</details>
+
+<details>
 <summary><b>Probe model health</b></summary>
 
 ```bash
@@ -239,7 +253,7 @@ helm health select --json
 - **Profile pause / resume** — secret-token-gated hard stop per profile, gated by `OPENCLAW_PAUSE_GATE`.
 - **Browser work verifier** — pre-flight decision (`allow_single_session`, `block_mutation`, `require_user_login`, `require_confirmation`, `pause_profile`, `require_cleanup_evidence`) with a runner-side enforcement gate.
 - **Model repair + synthetic respond hooks** — library entry points for small-model fallback proxies; gated by `HELM_MODEL_REPAIR` and `HELM_SYNTHETIC_RESPOND`.
-- **Shadow-mode reporter** — `helm shadow-report --since 14d --with-recommendations` aggregates 14 days of signals and emits `ready_to_enforce / needs_more_data / caution / no_signal` per feature.
+- **Shadow-mode reporter** — `helm shadow-report --since 14 --with-recommendations` aggregates 14 days of signals and emits `ready_to_enforce / needs_more_data / caution / no_signal` per feature.
 
 See [the full v0.10.0 notes](docs/releases/0.10.0.md) and the 13-document [`docs/harness-engineering/`](docs/harness-engineering/) directory for the design.
 
@@ -285,6 +299,7 @@ See deeper comparisons in [`docs/comparisons/`](docs/comparisons/).
 - [Onboarding](docs/onboarding.md)
 - [Demos](docs/demos.md)
 - [OpenClaw integration](docs/integrations/openclaw.md)
+- [OpenHands integration](docs/integrations/openhands.md)
 - [Existing agent workspace](docs/integrations/existing-agent-workspace.md)
 
 </td>
@@ -294,6 +309,7 @@ See deeper comparisons in [`docs/comparisons/`](docs/comparisons/).
 - [Privacy boundary](docs/privacy-boundary.md)
 - [Task state](docs/task-state.md)
 - [Task finalization](docs/task-finalization.md)
+- [Action governance](docs/action-governance.md)
 - [Proactive discovery](docs/proactive-discovery.md)
 - [Memory operations policy](docs/memory-operations-policy.md)
 - [Ops memory query](docs/ops-memory-query.md)
@@ -306,6 +322,7 @@ See deeper comparisons in [`docs/comparisons/`](docs/comparisons/).
 - [Harness engineering — index](docs/harness-engineering/)
 - [Control Flow Is Not Memory](docs/harness-engineering/05-control-flow-is-not-memory.md)
 - [Helm vs Forge](docs/harness-engineering/06-helm-vs-forge.md)
+- [Skill self-improvement](docs/skill-self-improvement.md)
 - [HITL decision patterns](docs/hitl-decision-patterns.md)
 - [Evidence label convention](docs/evidence-label-convention.md)
 - [Helm dogfooding reference](docs/helm-dogfooding-reference.md)
