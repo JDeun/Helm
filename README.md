@@ -294,6 +294,7 @@ See deeper comparisons in [`docs/comparisons/`](docs/comparisons/).
 - [Privacy boundary](docs/privacy-boundary.md)
 - [Task state](docs/task-state.md)
 - [Task finalization](docs/task-finalization.md)
+- [Proactive discovery](docs/proactive-discovery.md)
 - [Memory operations policy](docs/memory-operations-policy.md)
 - [Ops memory query](docs/ops-memory-query.md)
 - [Adaptive harness](docs/adaptive-harness.md)
