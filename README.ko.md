@@ -102,6 +102,8 @@ agent가 일회성 데모만 돌린다면 Helm 필요 없음. 같은 workspace�
 - **File-backed memory** + ranked retrieval (`helm context --explain-ranking`)
 - **Skill lifecycle**이 skill 규칙의 promote / decay 관리
 - **Adaptive harness**가 failure signature → policy transition 연결
+- **Shadow report & promotion queue**가 guarded feature와 skill 후보의
+  enforce 준비 상태를 드러냄
 
 </td>
 </tr>
@@ -213,6 +215,18 @@ helm skill-lifecycle revalidate-claim \
 </details>
 
 <details>
+<summary><b>Run contract와 개선 후보 검토</b></summary>
+
+```bash
+helm run-contract --json
+helm capability-diff --json
+helm skill-promotion digest --json
+helm shadow-report --since 14 --format md --with-recommendations
+```
+
+</details>
+
+<details>
 <summary><b>Model health probe</b></summary>
 
 ```bash
@@ -239,7 +253,7 @@ helm health select --json
 - **Profile pause / resume** — profile 단위 secret-token-gated hard stop, `OPENCLAW_PAUSE_GATE` flag.
 - **Browser work verifier** — 사전 결정 (`allow_single_session`, `block_mutation`, `require_user_login`, `require_confirmation`, `pause_profile`, `require_cleanup_evidence`) + runner enforcement gate.
 - **Model repair + synthetic respond hook** — 소형 모델 fallback proxy 위한 library 진입점; `HELM_MODEL_REPAIR` / `HELM_SYNTHETIC_RESPOND`.
-- **Shadow-mode reporter** — `helm shadow-report --since 14d --with-recommendations`로 14일 신호 집계 + feature별 `ready_to_enforce / needs_more_data / caution / no_signal` 추천.
+- **Shadow-mode reporter** — `helm shadow-report --since 14 --with-recommendations`로 14일 신호 집계 + feature별 `ready_to_enforce / needs_more_data / caution / no_signal` 추천.
 
 자세한 내용은 [v0.10.0 릴리즈 노트](docs/releases/0.10.0.md)와 13개 [`docs/harness-engineering/`](docs/harness-engineering/) 문서 참조.
 
@@ -285,6 +299,7 @@ Helm은 dedicated workspace에서 동작하며, 기존 시스템을 read-only co
 - [온보딩](docs/onboarding.md)
 - [데모 모음](docs/demos.md)
 - [OpenClaw 통합](docs/integrations/openclaw.md)
+- [OpenHands 통합](docs/integrations/openhands.md)
 - [기존 agent workspace](docs/integrations/existing-agent-workspace.md)
 
 </td>
@@ -294,6 +309,8 @@ Helm은 dedicated workspace에서 동작하며, 기존 시스템을 read-only co
 - [Privacy boundary](docs/privacy-boundary.md)
 - [Task state](docs/task-state.md)
 - [Task finalization](docs/task-finalization.md)
+- [Action governance](docs/action-governance.md)
+- [Proactive discovery](docs/proactive-discovery.md)
 - [Memory operations 정책](docs/memory-operations-policy.md)
 - [Ops memory query](docs/ops-memory-query.md)
 - [Adaptive harness](docs/adaptive-harness.md)
@@ -305,6 +322,7 @@ Helm은 dedicated workspace에서 동작하며, 기존 시스템을 read-only co
 - [Harness engineering — 인덱스](docs/harness-engineering/)
 - [Control Flow Is Not Memory](docs/harness-engineering/05-control-flow-is-not-memory.md)
 - [Helm vs Forge](docs/harness-engineering/06-helm-vs-forge.md)
+- [Skill self-improvement](docs/skill-self-improvement.md)
 - [HITL 결정 패턴](docs/hitl-decision-patterns.md)
 - [Evidence label convention](docs/evidence-label-convention.md)
 - [Helm dogfooding 참고](docs/helm-dogfooding-reference.md)
