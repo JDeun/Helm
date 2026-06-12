@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import helm as helm_module  # noqa: E402  (ROOT injected above)
+from scripts import run_with_profile  # noqa: E402  (ROOT injected above)
 
 
 def _ok(_args: argparse.Namespace) -> int:
@@ -86,6 +87,18 @@ def test_main_passthrough_path_after_forwarded_is_not_consumed() -> None:
     # First forwarded token "report" precedes --path, so --path is forwarded.
     assert seen["path"] is None
     assert seen["args"] == ["report", "--path", "/tmp/ws"]
+
+
+def test_run_with_profile_help_lists_readme_run_command() -> None:
+    """README examples use ``helm profile run ...``; the child CLI help must expose it."""
+    parser = run_with_profile.build_parser()
+
+    assert "run" in parser.format_help()
+
+    args = run_with_profile.parse_run_args(["inspect_local", "--task-name", "readme smoke", "--", "true"])
+    assert args.profile == "inspect_local"
+    assert args.task_name == "readme smoke"
+    assert args.command == ["true"]
 
 
 def test_main_passthrough_missing_path_value_raises() -> None:

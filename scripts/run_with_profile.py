@@ -766,6 +766,16 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     return 0
 
 
+def _strip_command_separator(args: argparse.Namespace) -> argparse.Namespace:
+    if getattr(args, "command", None) and args.command[0] == "--":
+        args.command = args.command[1:]
+    return args
+
+
+def cmd_run_from_parser(args: argparse.Namespace) -> int:
+    return cmd_run(_strip_command_separator(args))
+
+
 def _attach_advisory_action_scope(task: dict, args: argparse.Namespace) -> None:
     """Attach a Phase-A action-scope evaluation to ``task`` for observability.
 
@@ -1187,6 +1197,76 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a shell command under a declared execution profile.")
     subparsers = parser.add_subparsers(dest="command_name", required=True)
 
+    run = subparsers.add_parser("run", help="Run a shell command under a declared execution profile.")
+    run.add_argument("profile", type=str)
+    run.add_argument("--task-name", help="Human-readable task name, recommended for service_ops.")
+    run.add_argument("--task-goal", help="Detailed task intent used by guard and governance scope checks.")
+    run.add_argument("--task-id", help="Explicit task id override for harness-controlled runs.")
+    run.add_argument("--skill", help="Owning skill slug for policy enforcement.")
+    run.add_argument("--meta-json", help="Structured metadata JSON to embed in the task ledger.")
+    run.add_argument("--label", help="Checkpoint label when the profile requires one.")
+    run.add_argument("--path", action="append", help="Checkpoint path override. May be repeated.")
+    run.add_argument("--runtime-target", help="Named runtime target such as local, ssh:host, container:name, or node label.")
+    run.add_argument("--runtime-note", help="Short note for backend/runtime handoff context.")
+    run.add_argument(
+        "--delivery-mode",
+        choices=["inline", "background", "announce", "none"],
+        default="inline",
+        help="Delivery mode for task-ledger context.",
+    )
+    run.add_argument(
+        "--guard-mode",
+        choices=["enforce", "audit", "off"],
+        default=None,
+        help="Guard evaluation mode. Default: enforce (or HELM_GUARD_MODE env).",
+    )
+    run.add_argument(
+        "--approve-risk",
+        action="store_true",
+        help="Approve commands that require_approval. Does not override deny.",
+    )
+    run.add_argument(
+        "--governance-live-source-confirmed",
+        action="store_true",
+        help="Confirm current live-source/readback evidence for governed external actions.",
+    )
+    run.add_argument(
+        "--guard-json",
+        action="store_true",
+        help="Print guard decision as JSON and exit without running the command.",
+    )
+    run.add_argument(
+        "--timeout",
+        type=int,
+        default=1800,
+        help="Subprocess timeout in seconds (default: 1800 / 30 minutes). 0 disables the timeout.",
+    )
+    run.add_argument(
+        "--browser-action",
+        choices=sorted(_BROWSER_ACTIONS),
+        default=None,
+        help=(
+            "Treat this command as a browser task and consult the verifier. "
+            "When absent all other --browser-* flags are ignored."
+        ),
+    )
+    run.add_argument("--browser-url-pattern", default=None, help="URL pattern for the browser task.")
+    run.add_argument(
+        "--browser-logged-in",
+        action="store_true",
+        default=False,
+        help="Indicate the browser session requires a logged-in account.",
+    )
+    run.add_argument(
+        "--browser-parallel",
+        action="store_true",
+        default=False,
+        help="Indicate the browser task may run in parallel with other sessions.",
+    )
+    run.add_argument("--browser-site-note", default=None, help="Path to an existing site note for the target URL.")
+    run.add_argument("command", nargs=argparse.REMAINDER, help="Command to run after --.")
+    run.set_defaults(func=cmd_run_from_parser)
+
     listing = subparsers.add_parser("list", help="List configured execution profiles.")
     listing.set_defaults(func=cmd_list)
 
@@ -1217,9 +1297,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_run_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run a command with a declared execution profile.")
-    parser.add_argument("command_name")
+def parse_run_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="run_with_profile.py run",
+        description="Run a command with a declared execution profile.",
+    )
     parser.add_argument("profile", type=str)
     parser.add_argument("--task-name", help="Human-readable task name, recommended for service_ops.")
     parser.add_argument("--task-goal", help="Detailed task intent used by guard and governance scope checks.")
@@ -1298,7 +1380,7 @@ def parse_run_args() -> argparse.Namespace:
         help="Path to an existing site note for the target URL (optional).",
     )
     # --- End browser gate flags ---
-    args, remainder = parser.parse_known_args()
+    args, remainder = parser.parse_known_args(argv)
     if remainder and remainder[0] == "--":
         remainder = remainder[1:]
     args.command = remainder
@@ -1307,7 +1389,7 @@ def parse_run_args() -> argparse.Namespace:
 
 def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "run":
-        return cmd_run(parse_run_args())
+        return cmd_run(parse_run_args(sys.argv[2:]))
 
     parser = build_parser()
     args = parser.parse_args()
