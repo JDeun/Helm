@@ -91,7 +91,7 @@ If your agent only runs one-off demos, you do not need Helm. If you run it for h
 ### 💾 Recover after the fact
 
 - **Checkpoints** before broad edits give a clear rollback target
-- **Task ledger** & **command log** keep durable history independent of the chat
+- **Task ledger** & **command log** keep durable history independent of the chat, including tool grants and experience attribution
 - **Browser & profile gates** can pause runaway work and require evidence of cleanup
 
 </td>
@@ -240,9 +240,21 @@ helm health select --json
 
 ---
 
+## v0.10.1 — ledger attribution patch
+
+*Current release: v0.10.1 — released 2026-06-20.* This patch keeps task-ledger attribution inspectable across profiled runs and chat memory captures.
+
+- Completed, blocked, and guard-audit ledger rows now record `experience_attribution`.
+- `helm memory capture-chat` keeps `queued` / `running` rows free of final-only memory and attribution payloads.
+- Chat capture rows preserve `conversation` as the selected tool for attribution.
+
+See [the full v0.10.1 notes](docs/releases/0.10.1.md).
+
+---
+
 ## v0.10.0 — harness-engineering layer
 
-*Current release: v0.10.0 — released 2026-05-22.* Everything new ships in shadow mode by default — decisions are logged but not enforced until you opt in.
+*Released 2026-05-22.* Everything new ships in shadow mode by default — decisions are logged but not enforced until you opt in.
 
 - **Failure signature classification** — every failure event normalizes to `{component, tool, profile, error_class, target, fingerprint}` so the same failure is recognizable across runs.
 - **Profile → tool-group grants** — each execution profile exposes only the tools it should; runner records the grant in every ledger row.
@@ -346,7 +358,7 @@ Cite Helm:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.10.0}
+  version = {0.10.1}
 }
 ```
 
@@ -359,7 +371,7 @@ See [`CITATION.cff`](CITATION.cff) for the machine-readable form.
 Issues and pull requests welcome.
 
 - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a PR.
-- Run the test suite: `python -m pytest -q` (currently 1,372 tests).
+- Run the test suite: `python -m pytest -q` (currently 1,426 tests).
 - Run the release checks: `python scripts/release_version_check.py --version <next>`.
 - Security reports: see [`SECURITY.md`](SECURITY.md).
 
@@ -367,8 +379,8 @@ Issues and pull requests welcome.
 
 ## Release history
 
-- **Latest**: [v0.10.0](docs/releases/0.10.0.md) — harness-engineering layer (2026-05-22)
-- **Previous**: [v0.9.6](docs/releases/0.9.6.md), [v0.9.5](docs/releases/0.9.5.md), [v0.9.0](docs/releases/0.9.0.md)
+- **Latest**: [v0.10.1](docs/releases/0.10.1.md) — ledger attribution patch (2026-06-20)
+- **Previous**: [v0.10.0](docs/releases/0.10.0.md), [v0.9.6](docs/releases/0.9.6.md), [v0.9.5](docs/releases/0.9.5.md)
 - **Full changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [older release notes](docs/releases/)
 
 ---

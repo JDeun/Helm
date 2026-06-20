@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 from helm_workspace import get_workspace_layout
 from scripts.env_flags import env_flag
+from scripts.experience_attribution import attach_experience_attribution
 from scripts.memory_capture import build_memory_capture_plan
 from scripts.state_io import append_jsonl_atomic
 from scripts.command_guard import CommandClassification, GuardDecision, evaluate_command_guard, decision_to_json
@@ -211,6 +212,7 @@ def _best_effort_index(task: dict) -> None:
 
 def finalize_task(task: dict) -> None:
     task["memory_capture"] = build_memory_capture_plan(task)
+    attach_experience_attribution(task)
     try:
         task["state_snapshot"] = write_state_snapshot(task, workspace=WORKSPACE, state_root=STATE_ROOT)
     except OSError as exc:
@@ -221,6 +223,7 @@ def finalize_task(task: dict) -> None:
 def record_guard_audit(task: dict) -> None:
     task["status"] = "guard_audit"
     task["finished_at"] = utc_now_iso()
+    attach_experience_attribution(task)
     append_ledger(task)
 
 
@@ -229,6 +232,7 @@ def block_task(task: dict, *, reason: str, stage: str = "guard") -> None:
     task["finished_at"] = utc_now_iso()
     task["failure_stage"] = stage
     task["failure_reason"] = reason
+    attach_experience_attribution(task)
     append_ledger(task)
 
 

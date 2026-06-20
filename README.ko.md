@@ -91,7 +91,7 @@ agent가 일회성 데모만 돌린다면 Helm 필요 없음. 같은 workspace�
 ### 💾 사후 복구
 
 - 광범위한 수정 전 **Checkpoint** 생성으로 명확한 rollback target
-- **Task ledger** & **command log**가 chat과 무관하게 durable history 유지
+- **Task ledger** & **command log**가 chat과 무관하게 tool grant와 experience attribution까지 포함한 durable history 유지
 - **Browser & profile gate**로 runaway 작업 중지 + cleanup 증거 요구
 
 </td>
@@ -240,9 +240,21 @@ helm health select --json
 
 ---
 
+## v0.10.1 — ledger attribution patch
+
+*현재 릴리즈: v0.10.1 — 2026-06-20 릴리즈.* 이 patch는 profiled run과 chat memory capture 모두에서 task-ledger attribution을 검토 가능하게 유지합니다.
+
+- completed, blocked, guard-audit ledger row에 `experience_attribution` 기록.
+- `helm memory capture-chat`의 `queued` / `running` row에는 final-only memory와 attribution payload가 섞이지 않음.
+- chat capture attribution에서 selected tool을 `conversation`으로 보존.
+
+자세한 내용은 [v0.10.1 릴리즈 노트](docs/releases/0.10.1.md) 참조.
+
+---
+
 ## v0.10.0 — harness-engineering 레이어
 
-*현재 릴리즈: v0.10.0 — 2026-05-22 릴리즈.* 모든 신규 기능은 기본 shadow mode — 결정은 기록되지만 enforce 안 됨. opt-in 시점은 누적 데이터 기반으로.
+*2026-05-22 릴리즈.* 모든 신규 기능은 기본 shadow mode — 결정은 기록되지만 enforce 안 됨. opt-in 시점은 누적 데이터 기반으로.
 
 - **Failure signature 분류** — 모든 failure event를 `{component, tool, profile, error_class, target, fingerprint}`로 정규화, 같은 실패가 run을 가로질러 식별 가능.
 - **Profile → tool-group grant** — 각 profile이 노출하는 도구 제한; runner가 매 ledger row에 grant 기록.
@@ -346,7 +358,7 @@ Helm 인용:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.10.0}
+  version = {0.10.1}
 }
 ```
 
@@ -359,7 +371,7 @@ machine-readable 형식은 [`CITATION.cff`](CITATION.cff) 참조.
 Issue와 PR 환영합니다.
 
 - PR 전에 [`CONTRIBUTING.md`](CONTRIBUTING.md) 읽기.
-- 테스트 실행: `python -m pytest -q` (현재 1,372 tests).
+- 테스트 실행: `python -m pytest -q` (현재 1,426 tests).
 - Release 검사: `python scripts/release_version_check.py --version <next>`.
 - 보안 보고: [`SECURITY.md`](SECURITY.md) 참조.
 
@@ -367,8 +379,8 @@ Issue와 PR 환영합니다.
 
 ## 릴리즈 이력
 
-- **최신**: [v0.10.0](docs/releases/0.10.0.md) — harness-engineering 레이어 (2026-05-22)
-- **이전**: [v0.9.6](docs/releases/0.9.6.md), [v0.9.5](docs/releases/0.9.5.md), [v0.9.0](docs/releases/0.9.0.md)
+- **최신**: [v0.10.1](docs/releases/0.10.1.md) — ledger attribution patch (2026-06-20)
+- **이전**: [v0.10.0](docs/releases/0.10.0.md), [v0.9.6](docs/releases/0.9.6.md), [v0.9.5](docs/releases/0.9.5.md)
 - **전체 changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [이전 릴리즈 노트](docs/releases/)
 
 ---
