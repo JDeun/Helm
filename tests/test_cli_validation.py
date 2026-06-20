@@ -1188,9 +1188,16 @@ def test_memory_capture_chat_writes_ledger_entries() -> None:
         assert payload["memory_capture"]["touched_paths"] == ["README.md", "CHANGELOG.md"]
         lines = (root / ".helm" / "task-ledger.jsonl").read_text(encoding="utf-8").splitlines()
         assert len(lines) == 3
+        queued = json.loads(lines[0])
+        running = json.loads(lines[1])
         final = json.loads(lines[-1])
+        assert "memory_capture" not in queued
+        assert "experience_attribution" not in queued
+        assert "memory_capture" not in running
+        assert "experience_attribution" not in running
         assert final["status"] == "completed"
         assert final["memory_capture"]["finalization_status"] == "capture_planned"
+        assert final["experience_attribution"]["tool_selected"] == ["conversation"]
 
 
 def test_run_contract_and_capability_diff_report_recent_task_state() -> None:

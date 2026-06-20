@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## [0.10.1] — 2026-06-20
+
+### Added
+
+- Record `experience_attribution` on completed, blocked, and guard-audit task ledger rows so tool/skill selection and missing evidence can be reviewed after the run.
+
+### Fixed
+
+- Keep chat memory capture `queued` / `running` rows free of final-only memory and attribution payloads.
+
+### Verification
+
+- `python3 scripts/release_version_check.py --version 0.10.1`
+- `python3 -m pytest -q` → 1426 passed
+- `bash scripts/release_smoke.sh /tmp/helm-release-smoke-0.10.1`
+
 ## [0.10.0] — 2026-05-22
 
 ### Added

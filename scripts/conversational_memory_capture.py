@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import get_workspace_layout
+from scripts.experience_attribution import attach_experience_attribution
 from scripts.memory_capture import build_memory_capture_plan
 from scripts.state_io import append_jsonl_atomic
 from scripts.time_helpers import utc_now_iso
@@ -41,11 +42,12 @@ def build_ledger_entries(task: dict, final_status: str) -> list[dict]:
     created_at = utc_now_iso()
     started_at = utc_now_iso()
     finished_at = utc_now_iso()
+    initial_task = {key: value for key, value in task.items() if key not in {"memory_capture", "experience_attribution"}}
 
-    queued = dict(task)
+    queued = dict(initial_task)
     queued.update({"status": "queued", "created_at": created_at})
 
-    running = dict(task)
+    running = dict(initial_task)
     running.update(
         {
             "status": "running",
@@ -107,6 +109,7 @@ def main() -> int:
     payload = build_memory_capture_plan(task, touched_paths=args.path)
     final_task = dict(task)
     final_task["memory_capture"] = payload
+    attach_experience_attribution(final_task)
     for entry in build_ledger_entries(final_task, args.status):
         append_jsonl_atomic(TASK_LEDGER, entry)
 
