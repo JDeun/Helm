@@ -240,9 +240,21 @@ helm health select --json
 
 ---
 
+## v0.10.2 — loop and skill-intake primitives
+
+*Current release: v0.10.2 — released 2026-06-24.* This patch adds read-only loop validation and conservative external skill-intake classification.
+
+- `helm loops validate` and `helm loops inspect` validate reusable workflow contracts.
+- Completion-evidence and docs-sweep loop examples define evidence and stop conditions before runner work.
+- `helm skill-intake classify` and `helm skill-intake validate` provide a conservative review path for external skill candidates.
+
+See [the full v0.10.2 notes](docs/releases/0.10.2.md).
+
+---
+
 ## v0.10.1 — ledger attribution patch
 
-*Current release: v0.10.1 — released 2026-06-20.* This patch keeps task-ledger attribution inspectable across profiled runs and chat memory captures.
+*Released 2026-06-20.* This patch keeps task-ledger attribution inspectable across profiled runs and chat memory captures.
 
 - Completed, blocked, and guard-audit ledger rows now record `experience_attribution`.
 - `helm memory capture-chat` keeps `queued` / `running` rows free of final-only memory and attribution payloads.
@@ -321,6 +333,7 @@ See deeper comparisons in [`docs/comparisons/`](docs/comparisons/).
 - [Privacy boundary](docs/privacy-boundary.md)
 - [Task state](docs/task-state.md)
 - [Task finalization](docs/task-finalization.md)
+- [Loops](docs/loops.md)
 - [Action governance](docs/action-governance.md)
 - [Proactive discovery](docs/proactive-discovery.md)
 - [Memory operations policy](docs/memory-operations-policy.md)
@@ -358,7 +371,7 @@ Cite Helm:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.10.1}
+  version = {0.10.2}
 }
 ```
 
@@ -371,7 +384,7 @@ See [`CITATION.cff`](CITATION.cff) for the machine-readable form.
 Issues and pull requests welcome.
 
 - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a PR.
-- Run the test suite: `python -m pytest -q` (currently 1,426 tests).
+- Run the test suite: `python -m pytest -q` (currently 1,432 tests).
 - Run the release checks: `python scripts/release_version_check.py --version <next>`.
 - Security reports: see [`SECURITY.md`](SECURITY.md).
 
@@ -379,8 +392,8 @@ Issues and pull requests welcome.
 
 ## Release history
 
-- **Latest**: [v0.10.1](docs/releases/0.10.1.md) — ledger attribution patch (2026-06-20)
-- **Previous**: [v0.10.0](docs/releases/0.10.0.md), [v0.9.6](docs/releases/0.9.6.md), [v0.9.5](docs/releases/0.9.5.md)
+- **Latest**: [v0.10.2](docs/releases/0.10.2.md) — loop and skill-intake primitives (2026-06-24)
+- **Previous**: [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md), [v0.9.6](docs/releases/0.9.6.md)
 - **Full changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [older release notes](docs/releases/)
 
 ---

@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "helm-agent-ops"
-version = "0.10.1"
+version = "0.10.2"
 description = "Stability-first operations CLI for long-lived agent workspaces."
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = ["PyYAML>=6"]
 license = "MIT"
 authors = [{ name = "JDeun" }]
 keywords = [
@@ -53,7 +54,7 @@ include-package-data = true
 include = ["scripts", "scripts.*", "commands", "references", "memory_tree", "memory_tree.*"]
 
 [tool.setuptools.package-data]
-references = ["*.json", "*.md"]
+references = ["*.json", "*.md", "*.yaml"]
 "scripts.compression" = ["*.md"]
 
 [tool.pytest.ini_options]
