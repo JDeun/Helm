@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## [0.10.2] — 2026-06-24
+
+### Added
+
+- Add `helm loops validate` and `helm loops inspect` for reusable loop definitions.
+- Add completion-evidence and docs-sweep loop examples.
+- Add conservative `helm skill-intake classify` / `validate` commands for external skill candidate review.
+- Add a coding-task-finalization pipeline reference and loop documentation.
+
+### Changed
+
+- Declare `PyYAML` as the package dependency for YAML loop files.
+
+### Verification
+
+- `python3 -m pytest tests/test_loop_and_skill_intake.py -q`
+- `python3 scripts/release_version_check.py --version 0.10.2`
+- `python3 -m pytest -q` → 1432 passed
+- `bash scripts/release_smoke.sh /tmp/helm-release-smoke-0.10.2`
+
 ## [0.10.1] — 2026-06-20
 
 ### Added

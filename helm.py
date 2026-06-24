@@ -31,10 +31,12 @@ from commands.doctor import cmd_doctor, cmd_survey
 from commands.harness import cmd_harness
 from commands.health import cmd_health
 from commands.memory import cmd_memory
+from commands.loops import cmd_loops
 from commands.ops import cmd_ops
 from commands.privacy import cmd_privacy
 from commands.profile import cmd_profile
 from commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_skill_reject, cmd_skill_review
+from commands.skill_intake import cmd_skill_intake
 from commands.skill_lifecycle import (
     cmd_skill_lifecycle_archive,
     cmd_skill_lifecycle_events,
@@ -194,6 +196,18 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     validate.add_argument("--json", action="store_true")
     validate.set_defaults(func=cmd_validate)
+
+    loops = subparsers.add_parser("loops", help="Validate and inspect reusable loop definitions.")
+    loops.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
+    loops_subparsers = loops.add_subparsers(dest="loops_command", required=True)
+    loops_validate = loops_subparsers.add_parser("validate", help="Validate one loop YAML or JSON file.")
+    loops_validate.add_argument("file")
+    loops_validate.add_argument("--json", action="store_true")
+    loops_validate.set_defaults(func=cmd_loops)
+    loops_inspect = loops_subparsers.add_parser("inspect", help="Inspect a loop by id from references/loops or examples/loops.")
+    loops_inspect.add_argument("loop_id")
+    loops_inspect.add_argument("--json", action="store_true")
+    loops_inspect.set_defaults(func=cmd_loops)
 
     status = subparsers.add_parser("status", help="Summarize recent Helm operational state.")
     status.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
@@ -407,6 +421,20 @@ def build_parser() -> argparse.ArgumentParser:
     skill.add_argument("--path", help="Workspace path to target.")
     skill.add_argument("args", nargs=argparse.REMAINDER)
     skill.set_defaults(func=cmd_skill)
+
+    skill_intake = subparsers.add_parser("skill-intake", help="Classify and validate external skill intake candidates.")
+    skill_intake_subparsers = skill_intake.add_subparsers(dest="skill_intake_command", required=True)
+    si_classify = skill_intake_subparsers.add_parser("classify", help="Classify an external skill candidate.")
+    si_classify.add_argument("name")
+    si_classify.add_argument("--description", default="")
+    si_classify.add_argument("--json", action="store_true")
+    si_classify.set_defaults(func=cmd_skill_intake)
+    si_validate = skill_intake_subparsers.add_parser("validate", help="Validate normalized candidate metadata.")
+    si_validate.add_argument("name")
+    si_validate.add_argument("--risk-class", required=True)
+    si_validate.add_argument("--default-action", required=True)
+    si_validate.add_argument("--json", action="store_true")
+    si_validate.set_defaults(func=cmd_skill_intake)
 
     skill_diff = subparsers.add_parser("skill-diff", help="Show the diff between a draft skill and the live skill, if any.")
     skill_diff.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")

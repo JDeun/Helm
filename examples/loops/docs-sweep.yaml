@@ -1,0 +1,26 @@
+id: docs-sweep
+title: Documentation Sweep Loop
+use_when:
+  - command, schema, skill, or workflow behavior changed
+  - docs or examples may be stale
+steps:
+  - list changed surface
+  - search docs and examples for matching names
+  - update only stale current-behavior text
+  - validate changed docs
+required_evidence:
+  - changed_surface
+  - edited_doc_path
+  - validation
+stop_conditions:
+  success:
+    - docs match behavior and validation passes
+  blocked:
+    - intended behavior is unclear
+  incomplete:
+    - candidate docs found but mutation not permitted
+approval_boundaries:
+  - private evidence promotion
+outputs:
+  - doc diff summary
+  - validation result

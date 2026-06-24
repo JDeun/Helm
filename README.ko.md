@@ -240,9 +240,21 @@ helm health select --json
 
 ---
 
+## v0.10.2 — loop 및 skill-intake primitive
+
+*현재 릴리즈: v0.10.2 — 2026-06-24 릴리즈.* 이 patch는 read-only loop 검증과 보수적인 외부 skill intake 분류를 추가합니다.
+
+- `helm loops validate`와 `helm loops inspect`가 재사용 workflow contract를 검증.
+- completion-evidence, docs-sweep loop 예시가 evidence와 stop condition을 먼저 정의.
+- `helm skill-intake classify`와 `helm skill-intake validate`가 외부 skill 후보를 보수적으로 검토.
+
+자세한 내용은 [v0.10.2 릴리즈 노트](docs/releases/0.10.2.md) 참조.
+
+---
+
 ## v0.10.1 — ledger attribution patch
 
-*현재 릴리즈: v0.10.1 — 2026-06-20 릴리즈.* 이 patch는 profiled run과 chat memory capture 모두에서 task-ledger attribution을 검토 가능하게 유지합니다.
+*2026-06-20 릴리즈.* 이 patch는 profiled run과 chat memory capture 모두에서 task-ledger attribution을 검토 가능하게 유지합니다.
 
 - completed, blocked, guard-audit ledger row에 `experience_attribution` 기록.
 - `helm memory capture-chat`의 `queued` / `running` row에는 final-only memory와 attribution payload가 섞이지 않음.
@@ -321,6 +333,7 @@ Helm은 dedicated workspace에서 동작하며, 기존 시스템을 read-only co
 - [Privacy boundary](docs/privacy-boundary.md)
 - [Task state](docs/task-state.md)
 - [Task finalization](docs/task-finalization.md)
+- [Loops](docs/loops.md)
 - [Action governance](docs/action-governance.md)
 - [Proactive discovery](docs/proactive-discovery.md)
 - [Memory operations 정책](docs/memory-operations-policy.md)
@@ -358,7 +371,7 @@ Helm 인용:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.10.1}
+  version = {0.10.2}
 }
 ```
 
@@ -371,7 +384,7 @@ machine-readable 형식은 [`CITATION.cff`](CITATION.cff) 참조.
 Issue와 PR 환영합니다.
 
 - PR 전에 [`CONTRIBUTING.md`](CONTRIBUTING.md) 읽기.
-- 테스트 실행: `python -m pytest -q` (현재 1,426 tests).
+- 테스트 실행: `python -m pytest -q` (현재 1,432 tests).
 - Release 검사: `python scripts/release_version_check.py --version <next>`.
 - 보안 보고: [`SECURITY.md`](SECURITY.md) 참조.
 
@@ -379,8 +392,8 @@ Issue와 PR 환영합니다.
 
 ## 릴리즈 이력
 
-- **최신**: [v0.10.1](docs/releases/0.10.1.md) — ledger attribution patch (2026-06-20)
-- **이전**: [v0.10.0](docs/releases/0.10.0.md), [v0.9.6](docs/releases/0.9.6.md), [v0.9.5](docs/releases/0.9.5.md)
+- **최신**: [v0.10.2](docs/releases/0.10.2.md) — loop 및 skill-intake primitive (2026-06-24)
+- **이전**: [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md), [v0.9.6](docs/releases/0.9.6.md)
 - **전체 changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [이전 릴리즈 노트](docs/releases/)
 
 ---

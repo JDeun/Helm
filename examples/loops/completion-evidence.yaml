@@ -1,0 +1,29 @@
+id: completion-evidence
+title: Completion Evidence Loop
+use_when:
+  - user-facing completion claim
+  - file, git, browser, service, or external-state mutation
+steps:
+  - identify the claimed outcome
+  - collect direct readback or tool result
+  - compare evidence with requested scope
+  - block completion when evidence is missing
+required_evidence:
+  - completion_evidence
+  - process_exit
+  - file_diff
+stop_conditions:
+  success:
+    - every required evidence item is present
+  blocked:
+    - source unavailable
+    - permission missing
+  incomplete:
+    - partial evidence explains remaining work
+approval_boundaries:
+  - external send
+  - delete
+  - public posting
+outputs:
+  - concise user report
+  - task ledger evidence

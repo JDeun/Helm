@@ -1,0 +1,39 @@
+pipeline_id: coding-task-finalization-pipeline
+version: 1
+category: helm-coding
+trigger_conditions:
+  - coding task changed files
+  - user-visible completion claim needs proof
+allowed_input_types:
+  - repository_path
+  - task_request
+stages:
+  - name: inspect
+    director_skill: helm/inspect
+    produces:
+      - changed_surface
+    mutation_allowed: false
+  - name: implement
+    director_skill: helm/implement
+    produces:
+      - file_diff
+    mutation_allowed: true
+  - name: verify
+    director_skill: helm/verify
+    produces:
+      - test_or_lint_result
+    mutation_allowed: false
+  - name: final_evidence
+    director_skill: helm/finalization
+    produces:
+      - completion_evidence
+    mutation_allowed: false
+checkpoint_policy:
+  enabled: true
+  storage: .helm/checkpoints
+  required_before_mutation: true
+final_evidence_contract:
+  - completion_evidence
+  - process_exit
+  - file_diff
+  - test_or_lint_or_diff
