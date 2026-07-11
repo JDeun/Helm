@@ -47,7 +47,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.social_privacy_gate import SocialRiskLevel, evaluate_social_privacy
+try:
+    from scripts.social_privacy_gate import SocialRiskLevel, evaluate_social_privacy
+except ModuleNotFoundError:
+    from social_privacy_gate import SocialRiskLevel, evaluate_social_privacy
 
 
 # ---------------------------------------------------------------------------

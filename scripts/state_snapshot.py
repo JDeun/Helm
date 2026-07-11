@@ -52,6 +52,7 @@ def build_state_snapshot(task: dict, *, workspace: Path) -> dict:
     checkpoint_id = task.get("checkpoint_id")
     memory_capture = task.get("memory_capture") or {}
     harness_meta = ((task.get("meta") or {}).get("harness") or {})
+    active = task.get("active_workspace") or ((task.get("meta") or {}).get("active_workspace") or {})
     failure_reason = task.get("failure_reason")
     exit_code = task.get("exit_code")
 
@@ -115,6 +116,12 @@ def build_state_snapshot(task: dict, *, workspace: Path) -> dict:
     return {
         "task_id": task.get("task_id"),
         "objective": str(task_name),
+        "in_scope_targets": active.get("in_scope_targets") or memory_capture.get("touched_paths", []),
+        "loaded_context": active.get("loaded_context") or harness_meta.get("loaded_context", []),
+        "planned_mutations": active.get("planned_mutations") or [],
+        "pending_claims": active.get("pending_claims") or task.get("completion_claims", []),
+        "evidence_refs": active.get("evidence_refs") or task.get("evidence_refs", []),
+        "retrieval_trace": active.get("retrieval_trace") or task.get("retrieval_trace", []),
         "current_state": f"Task is {status}.",
         "confirmed_facts": confirmed_facts,
         "attempted_actions": [command_preview],
@@ -129,6 +136,12 @@ def render_state_snapshot(snapshot: dict) -> str:
     ordered_keys = (
         "task_id",
         "objective",
+        "in_scope_targets",
+        "loaded_context",
+        "planned_mutations",
+        "pending_claims",
+        "evidence_refs",
+        "retrieval_trace",
         "current_state",
         "confirmed_facts",
         "attempted_actions",
