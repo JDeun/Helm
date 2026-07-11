@@ -101,6 +101,8 @@ agent가 일회성 데모만 돌린다면 Helm 필요 없음. 같은 workspace�
 
 - **File-backed memory** + ranked retrieval (`helm context --explain-ranking`)
 - **Skill lifecycle**이 skill 규칙의 promote / decay 관리
+- **Workflow contract**가 source, mutation, verification, handoff, stop condition을 선언
+- **Evidence-aware reply gate**가 완료 주장을 검토 가능한 증거에 연결
 - **Adaptive harness**가 failure signature → policy transition 연결
 - **Shadow report & promotion queue**가 guarded feature와 skill 후보의
   enforce 준비 상태를 드러냄
@@ -240,9 +242,22 @@ helm health select --json
 
 ---
 
+## v0.11.0 — 증거 기반 workflow governance
+
+*현재 릴리즈: v0.11.0 — 2026-07-11 릴리즈.* 이 릴리즈는 workflow 경계와 완료 주장을 명시적이고 검토 가능하게 만듭니다.
+
+- `references/workflow_units.yaml`이 허용 입력, live source, mutation surface, verification, reporting, handoff, stop contract를 정의.
+- `python3 scripts/workflow_registry.py`로 해당 contract를 도입 전에 검증.
+- Reply gate가 구조화된 claim, evidence reference, refuter finding, arbiter decision을 전달.
+- State snapshot이 active scope, loaded context, planned mutation, pending claim, evidence, retrieval trace를 보존.
+
+자세한 내용은 [v0.11.0 릴리즈 노트](docs/releases/0.11.0.md) 참조.
+
+---
+
 ## v0.10.2 — loop 및 skill-intake primitive
 
-*현재 릴리즈: v0.10.2 — 2026-06-24 릴리즈.* 이 patch는 read-only loop 검증과 보수적인 외부 skill intake 분류를 추가합니다.
+*2026-06-24 릴리즈.* 이 patch는 read-only loop 검증과 보수적인 외부 skill intake 분류를 추가합니다.
 
 - `helm loops validate`와 `helm loops inspect`가 재사용 workflow contract를 검증.
 - completion-evidence, docs-sweep loop 예시가 evidence와 stop condition을 먼저 정의.
@@ -384,7 +399,7 @@ machine-readable 형식은 [`CITATION.cff`](CITATION.cff) 참조.
 Issue와 PR 환영합니다.
 
 - PR 전에 [`CONTRIBUTING.md`](CONTRIBUTING.md) 읽기.
-- 테스트 실행: `python -m pytest -q` (현재 1,432 tests).
+- 테스트 실행: `python -m pytest -q` (현재 1,440 tests).
 - Release 검사: `python scripts/release_version_check.py --version <next>`.
 - 보안 보고: [`SECURITY.md`](SECURITY.md) 참조.
 
@@ -392,8 +407,8 @@ Issue와 PR 환영합니다.
 
 ## 릴리즈 이력
 
-- **최신**: [v0.10.2](docs/releases/0.10.2.md) — loop 및 skill-intake primitive (2026-06-24)
-- **이전**: [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md), [v0.9.6](docs/releases/0.9.6.md)
+- **최신**: [v0.11.0](docs/releases/0.11.0.md) — 증거 기반 workflow governance (2026-07-11)
+- **이전**: [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **전체 changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [이전 릴리즈 노트](docs/releases/)
 
 ---

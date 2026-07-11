@@ -1,0 +1,12 @@
+schema_version: helm.workflow/v1
+units:
+  - name: profiled-command
+    trigger_condition: explicit user request executed through run_with_profile
+    allowed_inputs: [task_name, profile, command, skill]
+    required_live_sources: []
+    mutable_surfaces: [workspace_files]
+    forbidden_actions: [undeclared_external_send, unapproved_delete]
+    verification_steps: [process_exit, touched_path_readback, finalization_gate]
+    final_reporting_rules: [report blockers, cite evidence refs]
+    handoff_conditions: [permission_boundary, remote_runtime]
+    stop_conditions: [verified_complete, failed, timeout, handoff_required]

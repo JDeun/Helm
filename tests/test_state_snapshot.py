@@ -23,6 +23,13 @@ def test_write_state_snapshot_creates_markdown_artifact() -> None:
             "status": "completed",
             "finished_at": "2026-04-22T12:00:00+00:00",
             "memory_capture": {"finalization_status": "capture_planned", "recommended_layers": ["notes"]},
+            "active_workspace": {
+                "in_scope_targets": ["docs/demo.md"],
+                "loaded_context": ["README.md"],
+                "planned_mutations": ["write docs/demo.md"],
+                "pending_claims": [{"claim": "file_written", "evidence_type": "filesystem_stat"}],
+                "evidence_refs": ["stat:docs/demo.md"],
+            },
             "meta": {
                 "harness": {
                     "interaction_workflow": {"mode": "converge"},
@@ -41,6 +48,9 @@ def test_write_state_snapshot_creates_markdown_artifact() -> None:
         assert "- objective: demo task" in content
         assert "harness=" in content
         assert "skill_relevance" in content
+        assert "- in_scope_targets:" in content
+        assert "  - docs/demo.md" in content
+        assert "file_written" in content
 
 
 def test_finalize_task_links_state_snapshot_in_ledger_entry() -> None:

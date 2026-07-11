@@ -101,6 +101,8 @@ If your agent only runs one-off demos, you do not need Helm. If you run it for h
 
 - **File-backed memory** with ranked retrieval (`helm context --explain-ranking`)
 - **Skill lifecycle** governs how skill rules promote / decay
+- **Workflow contracts** declare sources, mutations, verification, handoff, and stop conditions
+- **Evidence-aware reply gates** keep completion claims tied to inspectable proof
 - **Adaptive harness** integrates failure signatures → policy transitions
 - **Shadow reports & promotion queues** surface when guarded features or skill
   candidates are ready to enforce
@@ -240,9 +242,22 @@ helm health select --json
 
 ---
 
+## v0.11.0 — evidence-aware workflow governance
+
+*Current release: v0.11.0 — released 2026-07-11.* This release makes workflow boundaries and completion claims explicit and inspectable.
+
+- `references/workflow_units.yaml` defines allowed inputs, live sources, mutation surfaces, verification, reporting, handoff, and stop contracts.
+- `python3 scripts/workflow_registry.py` validates those contracts before adoption.
+- Reply gates carry structured claims, evidence references, refuter findings, and arbiter decisions.
+- State snapshots preserve active scope, loaded context, planned mutations, pending claims, evidence, and retrieval traces.
+
+See [the full v0.11.0 notes](docs/releases/0.11.0.md).
+
+---
+
 ## v0.10.2 — loop and skill-intake primitives
 
-*Current release: v0.10.2 — released 2026-06-24.* This patch adds read-only loop validation and conservative external skill-intake classification.
+*Released 2026-06-24.* This patch adds read-only loop validation and conservative external skill-intake classification.
 
 - `helm loops validate` and `helm loops inspect` validate reusable workflow contracts.
 - Completion-evidence and docs-sweep loop examples define evidence and stop conditions before runner work.
@@ -384,7 +399,7 @@ See [`CITATION.cff`](CITATION.cff) for the machine-readable form.
 Issues and pull requests welcome.
 
 - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a PR.
-- Run the test suite: `python -m pytest -q` (currently 1,432 tests).
+- Run the test suite: `python -m pytest -q` (currently 1,440 tests).
 - Run the release checks: `python scripts/release_version_check.py --version <next>`.
 - Security reports: see [`SECURITY.md`](SECURITY.md).
 
@@ -392,8 +407,8 @@ Issues and pull requests welcome.
 
 ## Release history
 
-- **Latest**: [v0.10.2](docs/releases/0.10.2.md) — loop and skill-intake primitives (2026-06-24)
-- **Previous**: [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md), [v0.9.6](docs/releases/0.9.6.md)
+- **Latest**: [v0.11.0](docs/releases/0.11.0.md) — evidence-aware workflow governance (2026-07-11)
+- **Previous**: [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **Full changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [older release notes](docs/releases/)
 
 ---

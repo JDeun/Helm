@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## [0.11.0] — 2026-07-11
+
+### Added
+
+- Add a versioned workflow-unit registry with explicit inputs, live sources, mutation surfaces, verification, reporting, handoff, and stop contracts.
+- Add structured completion claims, evidence references, refuter findings, and arbiter decisions to the reply gate.
+- Add active-workspace scope, loaded context, planned mutations, pending claims, evidence, and retrieval trace fields to state snapshots.
+
+### Changed
+
+- Make `action_scope` imports work both as a package module and as a directly executed Helm script.
+
+### Verification
+
+- `python3 scripts/workflow_registry.py`
+- `python3 scripts/release_version_check.py --version 0.11.0`
+- `python3 -m pytest -q` → 1440 passed
+- `bash scripts/release_smoke.sh /tmp/helm-release-smoke-0.11.0`
+
 ## [0.10.2] — 2026-06-24
 
 ### Added

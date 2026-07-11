@@ -55,6 +55,43 @@ def select_entry(task_id: str | None) -> dict | None:
     return entries[-1]
 
 
+def evaluate_claims(entry: dict) -> dict:
+    claims = entry.get("completion_claims") or []
+    active = entry.get("active_workspace") or ((entry.get("meta") or {}).get("active_workspace") or {})
+    evidence_refs = {str(ref) for ref in (entry.get("evidence_refs") or active.get("evidence_refs") or [])}
+    planned_mutations = active.get("planned_mutations") or []
+    results: list[dict] = []
+    for claim in claims:
+        if not isinstance(claim, dict):
+            results.append({"claim": str(claim), "ok": False, "reason": "claim_not_structured"})
+            continue
+        required = claim.get("evidence_type")
+        refs = {str(ref) for ref in (claim.get("evidence_refs") or [])}
+        candidates = refs & evidence_refs if refs else evidence_refs
+        matched = sorted(ref for ref in candidates if required and ref.startswith(f"{required}:"))
+        ok = bool(required and matched)
+        results.append(
+            {
+                "claim": claim.get("claim") or claim.get("text") or "unnamed",
+                "evidence_type": required,
+                "evidence_refs": matched,
+                "ok": ok,
+                "reason": "evidence_present" if ok else "required_evidence_missing",
+            }
+        )
+    scope_violation = entry.get("profile") == "inspect_local" and bool(planned_mutations)
+    return {
+        "ok": all(item["ok"] for item in results) and not scope_violation,
+        "claims": results,
+        "refuter": {
+            "scope_violation": scope_violation,
+            "planned_mutations": planned_mutations,
+            "missing_claims": [item["claim"] for item in results if not item["ok"]],
+        },
+        "arbiter": "pass" if all(item["ok"] for item in results) and not scope_violation else "hold",
+    }
+
+
 def _advisory_phase_modules(entry: dict) -> dict:
     """Return advisory Phase-A / Phase-F evaluations for ``entry``.
 
@@ -139,11 +176,18 @@ def evaluate(entry: dict | None) -> dict:
     enforcement = harness.get("enforcement_level", "light")
     finalization = (entry.get("memory_capture") or {}).get("finalization_status", "unknown")
     status = entry.get("status")
+    claim_gate = evaluate_claims(entry)
+    recorded_gate = entry.get("finalization_gate") or {}
     contract_present = bool(harness.get("skill_contract_present"))
     context_required = bool(harness.get("context_required"))
     context_satisfied = bool(harness.get("context_satisfied"))
     checks = [
         {"name": "task_status", "ok": status in {"completed", "handoff_required"}, "detail": f"status={status}"},
+        {
+            "name": "claim_evidence",
+            "ok": claim_gate["ok"] and recorded_gate.get("ok", True) is True,
+            "detail": f"arbiter={claim_gate['arbiter']}, claims={len(claim_gate['claims'])}",
+        },
     ]
     if enforcement in {"balanced", "strict"}:
         checks.append(
@@ -203,6 +247,7 @@ def evaluate(entry: dict | None) -> dict:
             "skill_contract_present": contract_present,
         },
         "checks": checks,
+        "claim_gate": claim_gate,
     }
     # Advisory Phase-A / Phase-F wiring (R2 I1). Best-effort, never blocks.
     advisory = _advisory_phase_modules(entry)

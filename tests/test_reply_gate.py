@@ -307,6 +307,112 @@ def test_evaluate_result_contains_task_summary() -> None:
     assert result["task"]["enforcement_level"] == "light"
 
 
+def test_claim_gate_blocks_completion_claim_without_evidence() -> None:
+    entry = {
+        "task_id": "t-claim",
+        "task_name": "write file",
+        "profile": "workspace_edit",
+        "status": "completed",
+        "completion_claims": [{"claim": "file_written", "evidence_type": "filesystem_stat"}],
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+
+    result = evaluate(entry)
+
+    assert result["ok"] is False
+    assert result["claim_gate"]["arbiter"] == "hold"
+    assert result["claim_gate"]["refuter"]["missing_claims"] == ["file_written"]
+
+
+def test_claim_gate_accepts_matching_evidence_reference() -> None:
+    entry = {
+        "task_id": "t-claim",
+        "task_name": "write file",
+        "profile": "workspace_edit",
+        "status": "completed",
+        "completion_claims": [{
+            "claim": "file_written",
+            "evidence_type": "filesystem_stat",
+            "evidence_refs": ["filesystem_stat:docs/result.md"],
+        }],
+        "evidence_refs": ["filesystem_stat:docs/result.md"],
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+
+    result = evaluate(entry)
+
+    assert result["ok"] is True
+    assert result["claim_gate"]["arbiter"] == "pass"
+
+
+def test_claim_gate_refutes_inspect_profile_mutation() -> None:
+    entry = {
+        "task_id": "t-inspect",
+        "task_name": "inspect files",
+        "profile": "inspect_local",
+        "status": "completed",
+        "active_workspace": {"planned_mutations": ["write docs/result.md"]},
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+
+    result = evaluate(entry)
+
+    assert result["ok"] is False
+    assert result["claim_gate"]["refuter"]["scope_violation"] is True
+
+
+def test_claim_gate_rejects_wrong_evidence_type() -> None:
+    entry = {
+        "task_id": "t-wrong-evidence",
+        "task_name": "push repository",
+        "profile": "workspace_edit",
+        "status": "completed",
+        "completion_claims": [{"claim": "pushed", "evidence_type": "remote_head"}],
+        "evidence_refs": ["filesystem_stat:.git/HEAD"],
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+
+    result = evaluate(entry)
+
+    assert result["ok"] is False
+    assert result["claim_gate"]["refuter"]["missing_claims"] == ["pushed"]
+
+
+def test_claim_gate_rejects_unstructured_claim() -> None:
+    entry = {
+        "task_id": "t-string-claim",
+        "task_name": "write file",
+        "profile": "workspace_edit",
+        "status": "completed",
+        "completion_claims": ["done"],
+        "evidence_refs": ["filesystem_stat:result.md"],
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+
+    result = evaluate(entry)
+
+    assert result["ok"] is False
+    assert result["claim_gate"]["claims"][0]["reason"] == "claim_not_structured"
+
+
+def test_reply_gate_blocks_recorded_openclaw_finalization_failure() -> None:
+    entry = {
+        "task_id": "t-recorded-gate",
+        "task_name": "inspect",
+        "profile": "inspect_local",
+        "status": "completed",
+        "finalization_gate": {"ok": False, "arbiter": "hold"},
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+    assert evaluate(entry)["ok"] is False
+
+
 # ---------------------------------------------------------------------------
 # Advisory Phase-A / Phase-F wiring (R2 I1)
 # ---------------------------------------------------------------------------
