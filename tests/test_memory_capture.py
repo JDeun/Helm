@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 
 import pytest
 from unittest.mock import patch
+from scripts import task_capture_core
 
 from scripts.memory_capture import (
     _crystallization,
@@ -69,6 +70,18 @@ def test_build_memory_capture_plan_basic_completed_task() -> None:
     assert isinstance(plan["reasons"], list)
     assert len(plan["reasons"]) > 0
     assert plan["finalization_status"] == "capture_planned"
+
+
+def test_operational_capture_invokes_memory_decay_policy() -> None:
+    task = _make_task(status="completed", profile="service_ops", finished_at="2026-07-13T01:02:03Z")
+    with patch("scripts.memory_capture._recent_final_tasks", return_value=[]), patch.object(
+        task_capture_core,
+        "decay_memory_label",
+        wraps=task_capture_core.decay_memory_label,
+    ) as decay:
+        plan = build_memory_capture_plan(task)
+    decay.assert_called_once()
+    assert plan["quality_label"]["automatic_action"] == "downrank_only"
 
 
 def test_build_memory_capture_plan_irrelevant_task() -> None:

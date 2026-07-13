@@ -28,6 +28,7 @@
     "ollama": "http://localhost:11434/api/tags",
     "lm_studio": "http://localhost:1234/v1/models",
     "llama_cpp": "http://localhost:8080/v1/models",
-    "vllm": "http://localhost:8000/v1/models"
+    "vllm": "http://localhost:8000/v1/models",
+    "omfm": "http://127.0.0.1:4567/v1/models"
   }
 }

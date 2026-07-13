@@ -533,6 +533,12 @@ def completion_policy_active(policy: dict, profile: str | None, enforcement_leve
 
 def evaluate_completion_policy(entry: dict, policy: dict, enforcement_level: str) -> tuple[bool, str]:
     profile = str(entry.get("profile") or "")
+    recorded_gate = entry.get("finalization_gate")
+    if not (
+        (recorded_gate is None and not entry.get("completion_claims"))
+        or isinstance(recorded_gate, dict) and recorded_gate.get("ok") is True
+    ):
+        return False, f"profile={profile or 'unknown'} recorded finalization gate failed"
     if not completion_policy_active(policy, profile, enforcement_level):
         return True, f"profile={profile or 'unknown'} completion policy not active"
 

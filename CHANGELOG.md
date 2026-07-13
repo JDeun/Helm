@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- Guarded OMFM recovery with runtime context checks and canary evidence.
+- Verified execution, source-bundle quality gates, memory quality/decay, and parallel worktree review.
+- Documentation and README updates for evidence-aware execution and guarded model recovery.
+
+### Verification
+
+- Full test suite: 1,523 passed.
+
 ## [0.11.0] — 2026-07-11
 
 ### Added

@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 from helm_workspace import get_workspace_layout
 from scripts.discovery import discover_environment, snapshot_to_json
 from scripts.model_provider_probe import probe_api_providers_from_env, probe_local_providers
+from scripts.omfm_status import build_omfm_status, context_guard_allows
 from scripts.time_helpers import utc_now_iso
 
 # Single layout lookup at import time (was 2 separate calls).
@@ -37,6 +38,11 @@ _DEFAULT_MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         "probe": {"kind": "google_generate_content", "model": "gemini-2.5-flash"},
     },
     "ollama": {"ref": "ollama/llama3.2:latest", "probe": {"kind": "ollama_generate", "model": "llama3.2:latest"}},
+    "omfm": {
+        "ref": "omfm/balanced",
+        "probe": {"kind": "openai_compatible_chat_completion", "model": "omfm/balanced"},
+        "context_window": 131_072,
+    },
 }
 _OPENAI_COMPATIBLE_PROVIDERS = {
     "openrouter",
@@ -49,7 +55,9 @@ _OPENAI_COMPATIBLE_PROVIDERS = {
     "perplexity",
     "cerebras",
     "nvidia_nim",
+    "omfm",
 }
+_OMFM_LOW_RISK_PROFILES = frozenset({"inspect_local", "research"})
 
 
 @dataclass(frozen=True)
@@ -138,6 +146,7 @@ def _default_entry_for_provider(provider: str, priority: int) -> dict[str, Any] 
             "provider": provider_key,
             "priority": priority,
             "probe": dict(template["probe"]),
+            **({"context_window": template["context_window"]} if template.get("context_window") else {}),
         }
     if provider_key in _OPENAI_COMPATIBLE_PROVIDERS:
         return {
@@ -153,8 +162,7 @@ def policy_models(policy: dict[str, Any]) -> list[dict[str, Any]]:
     models = policy.get("models")
     if isinstance(models, list):
         valid = [item for item in models if isinstance(item, dict) and item.get("ref")]
-        if valid:
-            return sorted(valid, key=lambda item: int(item.get("priority", 9999)))
+        return sorted(valid, key=lambda item: int(item.get("priority", 9999)))
 
     derived: list[dict[str, Any]] = []
     priority = 10
@@ -223,7 +231,83 @@ def discovery_available_providers(snapshot_payload: dict[str, Any]) -> set[str]:
     return available
 
 
-def choose_model_from_discovery(policy: dict[str, Any] | None = None, workspace: Path | None = None) -> ModelHealthChoice | None:
+def model_context_allows(entry: dict[str, Any], context_tokens: int | None) -> bool:
+    if not _is_omfm_entry(entry):
+        return True
+    if context_tokens is None:
+        return False
+    if isinstance(context_tokens, bool) or not isinstance(context_tokens, int) or context_tokens < 0:
+        return False
+    window = entry.get("context_window")
+    reserve = entry.get("context_reserve_tokens", 16_384)
+    if (
+        isinstance(window, bool)
+        or not isinstance(window, int)
+        or isinstance(reserve, bool)
+        or not isinstance(reserve, int)
+        or reserve < 0
+    ):
+        return False
+    return window > reserve and context_tokens <= window - reserve
+
+
+def _is_omfm_entry(entry: dict[str, Any]) -> bool:
+    return (
+        str(entry.get("provider") or "").casefold() == "omfm"
+        or str(entry.get("ref") or "").casefold().startswith("omfm/")
+    )
+
+
+def resolve_runtime_model(
+    *,
+    profile: str,
+    model_policy: dict[str, Any],
+    policy: dict[str, Any] | None = None,
+    state: dict[str, Any] | None = None,
+    workspace: Path | None = None,
+) -> ModelHealthChoice:
+    """Resolve a task model while keeping OMFM behind explicit runtime gates."""
+    policy = policy or load_policy()
+    state = state or load_state(policy, workspace=workspace)
+    context_tokens = model_policy.get("context_tokens")
+    choice = select_model(policy, state, workspace=workspace, context_tokens=context_tokens)
+    selected_entry = model_entry(policy, str(choice.model or "")) or {}
+    if not _is_omfm_entry(selected_entry) and not str(choice.model or "").casefold().startswith("omfm/"):
+        return choice
+
+    opted_in = model_policy.get("allow_free_router") is True
+    low_risk = profile in _OMFM_LOW_RISK_PROFILES
+    live_guard = False
+    if opted_in and low_risk and isinstance(context_tokens, int) and not isinstance(context_tokens, bool):
+        try:
+            live_guard = context_guard_allows(build_omfm_status(), str(choice.model), context_tokens)
+        except Exception:
+            live_guard = False
+    if opted_in and low_risk and live_guard:
+        return choice
+
+    fallback_policy = dict(policy)
+    fallback_policy["models"] = [
+        dict(item)
+        for item in policy_models(policy)
+        if not _is_omfm_entry(item)
+    ]
+    fallback = select_model(fallback_policy, state, workspace=workspace, context_tokens=context_tokens)
+    fallback_entry = model_entry(fallback_policy, str(fallback.model or "")) or {}
+    if _is_omfm_entry(fallback_entry) or str(fallback.model or "").casefold().startswith("omfm/"):
+        fallback = ModelHealthChoice(None, "no non-OMFM runtime fallback is available", "omfm-runtime-gate")
+    reason = "OMFM runtime gate rejected automatic use"
+    if fallback.reason:
+        reason = f"{reason}; {fallback.reason}"
+    return ModelHealthChoice(fallback.model, reason, "omfm-runtime-gate")
+
+
+def choose_model_from_discovery(
+    policy: dict[str, Any] | None = None,
+    workspace: Path | None = None,
+    *,
+    context_tokens: int | None = None,
+) -> ModelHealthChoice | None:
     policy = policy or load_policy()
     workspace = workspace or WORKSPACE
     try:
@@ -234,6 +318,8 @@ def choose_model_from_discovery(policy: dict[str, Any] | None = None, workspace:
     if not providers:
         return None
     for item in policy_models(policy):
+        if not model_context_allows(item, context_tokens):
+            continue
         ref = str(item.get("ref") or "")
         provider = str(item.get("provider") or ref.split("/", 1)[0] if "/" in ref else "")
         if provider_aliases(provider).intersection(providers):
@@ -241,12 +327,18 @@ def choose_model_from_discovery(policy: dict[str, Any] | None = None, workspace:
     return None
 
 
-def select_model(policy: dict[str, Any] | None = None, state: dict[str, Any] | None = None, workspace: Path | None = None) -> ModelHealthChoice:
+def select_model(
+    policy: dict[str, Any] | None = None,
+    state: dict[str, Any] | None = None,
+    workspace: Path | None = None,
+    *,
+    context_tokens: int | None = None,
+) -> ModelHealthChoice:
     policy = policy or load_policy()
     workspace = workspace or WORKSPACE
     state = state or load_state(policy, workspace=workspace)
     models = state.get("models") if isinstance(state.get("models"), dict) else {}
-    ordered = policy_models(policy)
+    ordered = [item for item in policy_models(policy) if model_context_allows(item, context_tokens)]
     primary = str(ordered[0]["ref"]) if ordered else None
     now = time.time()
     ttl = int(policy.get("fresh_after_seconds", 300))
@@ -267,7 +359,7 @@ def select_model(policy: dict[str, Any] | None = None, state: dict[str, Any] | N
             continue
         if degraded_seen and health.get("last_ok_at") and is_fresh({"checked_at": health.get("last_ok_at")}, now=now, ttl_seconds=stale_ttl):
             return ModelHealthChoice(ref, "higher-priority model is degraded; using recently healthy fallback", "model-health-state")
-    discovery_choice = choose_model_from_discovery(policy, workspace=workspace)
+    discovery_choice = choose_model_from_discovery(policy, workspace=workspace, context_tokens=context_tokens)
     if discovery_choice is not None:
         return discovery_choice
     return ModelHealthChoice(primary, "no fresh health state; use primary and let runtime fallback handle failures", "default")
@@ -369,6 +461,8 @@ def _compatible_provider_config(provider: str, probe: dict[str, Any]) -> tuple[s
     if env_key and env_base:
         return _env(env_key), _env(env_base)
     provider = provider.casefold()
+    if provider == "omfm":
+        return "omfm-local", "http://127.0.0.1:4567/v1"
     if provider == "openrouter":
         return _env("OPENROUTER_API_KEY"), "https://openrouter.ai/api/v1"
     if provider == "groq":
@@ -400,21 +494,53 @@ def probe_openai_compatible_chat_completion(model: str, probe: dict[str, Any], p
         return ProbeOutcome(False, f"missing base URL for {provider}", status="down", auth_status="failed")
     api_model = str(probe.get("model") or model.split("/", 1)[1] if "/" in model else model)
     timeout = int(probe.get("timeout_seconds", 45))
+    if provider == "omfm":
+        omfm = build_omfm_status(timeout=min(timeout, 1.5))
+        if not context_guard_allows(omfm, model, 0):
+            stopped = omfm.get("status") in {"not_installed", "stopped", "error"}
+            return ProbeOutcome(
+                False,
+                "omfm daemon unavailable" if stopped else "omfm model group failed context guard",
+                status="down" if stopped else "degraded",
+                auth_status="local",
+                generation_status="failed" if stopped else "context_guard",
+            )
     prompt = str(probe.get("prompt") or "Reply with exactly: ok")
     body = {"model": api_model, "messages": [{"role": "user", "content": prompt}], "temperature": 0}
     try:
         payload = _openai_like_request(f"{base_url.rstrip('/')}/chat/completions", api_key, body, timeout)
     except urllib.error.HTTPError as exc:
         detail = http_error_detail(exc)
-        status = "degraded" if exc.code == 429 else "down"
-        generation = "rate_limit" if exc.code == 429 else "failed"
-        return ProbeOutcome(False, detail, status=status, auth_status="healthy" if exc.code == 429 else "failed", generation_status=generation)
+        limited = exc.code in {402, 429}
+        status = "degraded" if limited else "down"
+        generation = "quota" if exc.code == 402 else "rate_limit" if exc.code == 429 else "failed"
+        auth = "local" if provider == "omfm" else "healthy" if limited else "failed"
+        return ProbeOutcome(False, detail, status=status, auth_status=auth, generation_status=generation)
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        return ProbeOutcome(False, str(exc), status="down", generation_status="failed")
+        generation = "timeout" if isinstance(exc, TimeoutError) or "timed out" in str(exc).casefold() else "failed"
+        return ProbeOutcome(
+            False,
+            str(exc),
+            status="down",
+            auth_status="local" if provider == "omfm" else None,
+            generation_status=generation,
+        )
     choices = payload.get("choices") if isinstance(payload, dict) else None
     if not isinstance(choices, list) or not choices:
-        return ProbeOutcome(False, "chat completion returned no choices", status="down", auth_status="healthy", generation_status="empty")
-    return ProbeOutcome(True, f"{provider} chat completion succeeded", status="healthy", auth_status="healthy", generation_status="healthy")
+        return ProbeOutcome(
+            False,
+            "chat completion returned no choices",
+            status="down",
+            auth_status="local" if provider == "omfm" else "healthy",
+            generation_status="empty",
+        )
+    return ProbeOutcome(
+        True,
+        f"{provider} chat completion succeeded",
+        status="healthy",
+        auth_status="local" if provider == "omfm" else "healthy",
+        generation_status="healthy",
+    )
 
 
 def probe_ollama_generate(model: str, probe: dict[str, Any]) -> ProbeOutcome:
@@ -455,6 +581,7 @@ def update_state_with_probe(model: str, policy: dict[str, Any] | None = None, wo
     provider = str(entry.get("provider") or model.split("/", 1)[0] if "/" in model else "")
     probe = dict(entry.get("probe") or {})
     kind = str(probe.get("kind") or "")
+    started = time.monotonic()
     try:
         if kind == "google_generate_content":
             outcome = probe_google_generate_content(model, probe)
@@ -476,6 +603,7 @@ def update_state_with_probe(model: str, policy: dict[str, Any] | None = None, wo
         "provider": provider,
         "status": outcome.status or ("healthy" if outcome.ok else "down"),
         "checked_at": utc_now_iso(),
+        "latency_ms": int((time.monotonic() - started) * 1000),
         "detail": outcome.detail,
     }
     if outcome.auth_status:

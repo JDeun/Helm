@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
 import pytest
 from unittest.mock import patch
 
-from scripts.reply_gate import evaluate, latest_entries, load_entries, select_entry
+from scripts.reply_gate import evaluate, evaluate_claims, latest_entries, load_entries, select_entry
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +382,28 @@ def test_claim_gate_rejects_wrong_evidence_type() -> None:
     assert result["claim_gate"]["refuter"]["missing_claims"] == ["pushed"]
 
 
+def test_claim_gate_rejects_malformed_evidence_type_and_empty_value() -> None:
+    entry = {
+        "profile": "workspace_edit",
+        "completion_claims": [
+            {"claim": "numeric", "evidence_type": 7, "evidence_refs": ["7:any"]},
+            {"claim": "empty", "evidence_type": "test", "evidence_refs": ["test:", "test::x"]},
+        ],
+        "completion_evidence": ["7:any", "test:", "test::x"],
+    }
+
+    assert evaluate_claims(entry)["ok"] is False
+
+    entry["completion_claims"] = [{"claim": "valid", "evidence_type": "test", "evidence_refs": ["test:pytest"]}]
+    entry["completion_evidence"] = ["test:pytest"]
+    assert evaluate_claims(entry)["ok"] is True
+
+    entry["completion_claims"] = [
+        {"claim_id": ["bad"], "claim": "invalid id", "evidence_type": "test", "evidence_refs": ["test:pytest"]}
+    ]
+    assert evaluate_claims(entry)["ok"] is False
+
+
 def test_claim_gate_rejects_unstructured_claim() -> None:
     entry = {
         "task_id": "t-string-claim",
@@ -400,6 +422,68 @@ def test_claim_gate_rejects_unstructured_claim() -> None:
     assert result["claim_gate"]["claims"][0]["reason"] == "claim_not_structured"
 
 
+def test_claim_gate_uses_completion_evidence_and_enforces_prerequisites() -> None:
+    entry = {
+        "task_id": "t-dependent-claims",
+        "task_name": "prepare merge",
+        "profile": "workspace_edit",
+        "status": "completed",
+        "completion_claims": [
+            {
+                "claim_id": "merge_ready",
+                "claim": "merge ready",
+                "evidence_type": "review",
+                "evidence_refs": ["review:passed"],
+                "depends_on": ["verified"],
+            },
+            {
+                "criterion_id": "verified",
+                "claim": "verification passed",
+                "evidence_type": "test",
+                "evidence_refs": ["test:pytest"],
+            },
+        ],
+        "evidence_refs": ["review:passed"],
+        "active_workspace": {"evidence_refs": ["test:pytest"]},
+        "completion_evidence": ["test:pytest"],
+        "meta": {"harness": {"enforcement_level": "light"}},
+        "memory_capture": {"finalization_status": "capture_written"},
+    }
+
+    assert evaluate(entry)["ok"] is True
+
+    entry["completion_evidence"] = []
+    claims = evaluate(entry)["claim_gate"]["claims"]
+    merge_ready = next(item for item in claims if item.get("claim_id") == "merge_ready")
+    assert merge_ready["ok"] is False
+    assert merge_ready["missing_dependencies"] == ["verified"]
+
+    legacy = {
+        "profile": "workspace_edit",
+        "completion_claims": [{"claim": "legacy", "evidence_type": "test"}],
+        "evidence_refs": ["test:pytest"],
+    }
+    assert evaluate_claims(legacy)["ok"] is True
+    legacy["completion_claims"][0]["claim_id"] = "strict"
+    assert evaluate_claims(legacy)["ok"] is False
+
+
+def test_claim_gate_rejects_dependency_cycles() -> None:
+    entry = {
+        "profile": "workspace_edit",
+        "completion_claims": [
+            {"claim_id": "a", "claim": "a", "evidence_type": "test", "depends_on": ["b"]},
+            {"claim_id": "b", "claim": "b", "evidence_type": "review", "depends_on": ["a"]},
+        ],
+        "completion_evidence": ["test:passed", "review:passed"],
+    }
+
+    result = evaluate_claims(entry)
+
+    assert result["ok"] is False
+    assert all(item["reason"] == "claim_dependency_cycle" for item in result["claims"])
+
+
 def test_reply_gate_blocks_recorded_openclaw_finalization_failure() -> None:
     entry = {
         "task_id": "t-recorded-gate",
@@ -410,6 +494,9 @@ def test_reply_gate_blocks_recorded_openclaw_finalization_failure() -> None:
         "meta": {"harness": {"enforcement_level": "light"}},
         "memory_capture": {"finalization_status": "capture_written"},
     }
+    assert evaluate(entry)["ok"] is False
+
+    entry["finalization_gate"] = "malformed"
     assert evaluate(entry)["ok"] is False
 
 

@@ -27,3 +27,4 @@ python3 scripts/eval_runner.py --scenario 3
 | 4 | `test_scenario_4_approval_log_contract_and_action_scope.py` | Approval-log contract (`record_approval` shape) + real `action_scope` gate for `telegram_outbound`. Scoped as a contract test — no production "send" entrypoint consults the approval log yet; see file docstring. |
 | 5 | `test_scenario_5_compaction_no_false_complete.py` | `is_finalized=False` after compaction when a required step is missing (no false completion) |
 | 6 | `test_scenario_6_partial_completion_not_reported_as_complete.py` | Partial run (2/3 steps + raise): ledger `outcome!="completed"`, `completed_steps` length 2 |
+| 7 | `test_scenario_7_completion_claim_evidence_chain.py` | Typed evidence and claim prerequisites gate completion and postflight |

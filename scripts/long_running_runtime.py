@@ -19,6 +19,8 @@ from typing import Any
 
 from helm_workspace import get_workspace_layout
 from scripts.io_utils import atomic_write_json
+from scripts.model_health_lib import resolve_runtime_model
+from scripts.role_catalog import expand_role_markers, load_role_catalog, resolve_role
 from scripts.time_helpers import utc_now_iso
 
 RUNTIME_STATE_SCHEMA_VERSION = 1
@@ -340,12 +342,38 @@ def register_agent(
         raise ValueError("agent_id is required")
     if timeout <= 0:
         raise ValueError("timeout must be positive")
+    role_contract = None
+    role_warning = None
+    if role.startswith("[role:"):
+        expanded = expand_role_markers(role)
+        role_contract = expanded["role"]
+    elif role in load_role_catalog():
+        role_contract = resolve_role(role)
+    else:
+        role_warning = "legacy free-form role; migrate to [role:<role-id>]"
+    resolved_model_policy = copy.deepcopy(model_policy)
+    requested_models = [
+        str(resolved_model_policy.get(key) or "").casefold()
+        for key in ("model", "ref", "selected_model")
+    ]
+    requested_omfm = any(value.startswith("omfm/") for value in requested_models) or str(
+        resolved_model_policy.get("provider") or ""
+    ).casefold() == "omfm"
+    if resolved_model_policy.get("runtime_recovery") is True or requested_omfm:
+        choice = resolve_runtime_model(profile=skill_profile, model_policy=resolved_model_policy)
+        resolved_model_policy["selected_model"] = choice.model
+        resolved_model_policy["selection_reason"] = choice.reason
+        resolved_model_policy["selection_source"] = choice.source
     entry = {
         "agent_id": agent_id,
         "role": role,
+        "role_id": (role_contract or {}).get("role_id"),
+        "role_marker": f"[role:{role_contract['role_id']}]" if role_contract else None,
+        "role_prompt": (role_contract or {}).get("prompt"),
+        "role_warning": role_warning,
         "allowed_tools": sorted(dict.fromkeys(allowed_tools)),
         "memory_scope": memory_scope,
-        "model_policy": copy.deepcopy(model_policy),
+        "model_policy": resolved_model_policy,
         "skill_profile": skill_profile,
         "timeout": timeout,
         "owner": owner,

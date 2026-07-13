@@ -73,6 +73,12 @@ At minimum, a knowledge operation should be able to carry:
 Helm does not force one scoring formula.
 It does require that runtimes avoid pretending old and new claims are equally trustworthy.
 
+### Quality labels and decay
+
+Runtime capture plans use `raw`, `candidate`, `promoted`, `stale`, and `deprecated`. A completed task becomes a candidate, not an automatically promoted fact. Promotion requires visible revalidation evidence, medium/high confidence, no unresolved review flag, and explicit approval. Failed executions remain `raw` error-prevention memory instead of disappearing.
+
+`scripts/memory_quality.py` applies label-only decay. Old entries become `stale` and require live revalidation; automatic deletion is never authorized. `requires_live_source` remains true for mutable operational facts such as schedules, amounts, current briefings, and file state, so historical memory cannot settle those claims by itself.
+
 ## Supersession
 
 Knowledge systems need a clean way to say that newer state replaced older state.

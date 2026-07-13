@@ -87,6 +87,14 @@ _SCENARIOS: dict[str, dict[str, str]] = {
         ),
         "test_path": "tests/eval/test_scenario_6_partial_completion_not_reported_as_complete.py",
     },
+    "7": {
+        "name": "completion_claim_evidence_chain",
+        "description": (
+            "typed claim evidence and prerequisites pass when complete; "
+            "missing prerequisite evidence blocks finalization and postflight"
+        ),
+        "test_path": "tests/eval/test_scenario_7_completion_claim_evidence_chain.py",
+    },
 }
 
 
@@ -157,7 +165,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--scenario",
         metavar="ID",
         help=(
-            "Scenario ID to run (1-6), or 'all' to run every scenario. "
+            "Scenario ID to run (1-7), or 'all' to run every scenario. "
             "Example: --scenario 3"
         ),
     )

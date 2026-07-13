@@ -9,7 +9,10 @@
     "gemma": "constrained",
     "gemma4": "constrained",
     "gemma4:e4b": "constrained",
-    "gemma-local": "constrained"
+    "gemma-local": "constrained",
+    "omfm/balanced": "free_router",
+    "omfm/fast": "free_router",
+    "omfm/capable": "free_router"
   },
   "enforcement_order": ["light", "balanced", "strict"],
   "tiers": {
@@ -28,6 +31,14 @@
       }
     },
     "constrained": {
+      "default_enforcement": "balanced",
+      "profile_overrides": {
+        "risky_edit": "strict",
+        "service_ops": "strict",
+        "remote_handoff": "strict"
+      }
+    },
+    "free_router": {
       "default_enforcement": "balanced",
       "profile_overrides": {
         "risky_edit": "strict",

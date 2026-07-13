@@ -17,8 +17,8 @@ from scripts.model_health_lib import (
     load_policy,
     load_state,
     policy_models,
+    resolve_runtime_model,
     save_state,
-    select_model,
     utc_now_iso,
     update_state_with_probe,
 )
@@ -64,7 +64,15 @@ def cmd_watch(args: argparse.Namespace) -> int:
 def cmd_select(args: argparse.Namespace) -> int:
     policy = load_policy()
     state = load_state(policy)
-    choice = select_model(policy, state)
+    choice = resolve_runtime_model(
+        profile=args.profile,
+        model_policy={
+            "context_tokens": args.context_tokens,
+            "allow_free_router": args.allow_free_router,
+        },
+        policy=policy,
+        state=state,
+    )
     state["selected_model"] = {"model": choice.model, "reason": choice.reason, "source": choice.source, "checked_at": utc_now_iso()}
     save_state(state, policy)
     print_payload({"model": choice.model, "reason": choice.reason, "source": choice.source}, as_json=args.json)
@@ -100,6 +108,9 @@ def build_parser() -> argparse.ArgumentParser:
     watch.set_defaults(func=cmd_watch)
 
     select = subparsers.add_parser("select", help="Select the highest-priority fresh healthy model.")
+    select.add_argument("--profile", default="inspect_local", help="Execution profile for runtime risk gating.")
+    select.add_argument("--context-tokens", type=int, help="Known request context size; OMFM is skipped when omitted.")
+    select.add_argument("--allow-free-router", action="store_true", help="Explicitly allow OMFM for a low-risk profile.")
     select.add_argument("--json", action="store_true")
     select.set_defaults(func=cmd_select)
 

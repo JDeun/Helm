@@ -233,7 +233,8 @@ helm shadow-report --since 14 --format md --with-recommendations
 
 ```bash
 helm health state --json
-helm health select --json
+helm health select --profile inspect_local --context-tokens 4096 --json
+python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 ```
 
 </details>
@@ -250,6 +251,9 @@ helm health select --json
 - `python3 scripts/workflow_registry.py` validates those contracts before adoption.
 - Reply gates carry structured claims, evidence references, refuter findings, and arbiter decisions.
 - State snapshots preserve active scope, loaded context, planned mutations, pending claims, evidence, and retrieval traces.
+- Verified execution runs executor → evidence gatherer → criterion verifier with bounded retries; service readback is trusted only from its dedicated allowlist or actual remote/provider readback.
+- Source bundles centralize claims, lineage, derived-artifact readback, fidelity, cross-bundle conflict, and transactional materialization checks.
+- Memory quality labels are decayed on capture and retrieval; the optional OMFM router remains behind context, canary, and low-risk runtime gates.
 
 See [the full v0.11.0 notes](docs/releases/0.11.0.md).
 
@@ -386,7 +390,7 @@ Cite Helm:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.10.2}
+  version = {0.11.0}
 }
 ```
 
@@ -399,7 +403,7 @@ See [`CITATION.cff`](CITATION.cff) for the machine-readable form.
 Issues and pull requests welcome.
 
 - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a PR.
-- Run the test suite: `python -m pytest -q` (currently 1,440 tests).
+- Run the test suite: `python -m pytest -q` (currently 1,523 tests).
 - Run the release checks: `python scripts/release_version_check.py --version <next>`.
 - Security reports: see [`SECURITY.md`](SECURITY.md).
 
@@ -407,7 +411,7 @@ Issues and pull requests welcome.
 
 ## Release history
 
-- **Latest**: [v0.11.0](docs/releases/0.11.0.md) — evidence-aware workflow governance (2026-07-11)
+- **Latest**: [v0.11.0](docs/releases/0.11.0.md) — evidence-aware execution, source bundles, memory quality, and guarded model recovery
 - **Previous**: [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **Full changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [older release notes](docs/releases/)
 

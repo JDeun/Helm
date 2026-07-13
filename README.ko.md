@@ -233,7 +233,8 @@ helm shadow-report --since 14 --format md --with-recommendations
 
 ```bash
 helm health state --json
-helm health select --json
+helm health select --profile inspect_local --context-tokens 4096 --json
+python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 ```
 
 </details>
@@ -250,6 +251,9 @@ helm health select --json
 - `python3 scripts/workflow_registry.py`로 해당 contract를 도입 전에 검증.
 - Reply gate가 구조화된 claim, evidence reference, refuter finding, arbiter decision을 전달.
 - State snapshot이 active scope, loaded context, planned mutation, pending claim, evidence, retrieval trace를 보존.
+- 검증 실행은 executor → evidence gatherer → criterion verifier 루프를 제한된 재시도로 수행하며, service readback은 전용 allowlist 또는 실제 원격/provider readback만 신뢰.
+- Source bundle은 claim, lineage, 파생 산출물 readback, fidelity, cross-bundle conflict, transactional materialization을 중앙화.
+- Memory quality label은 capture와 retrieval 양쪽에서 감쇠하며, 선택적 OMFM router는 context·canary·저위험 runtime gate 뒤에 둔다.
 
 자세한 내용은 [v0.11.0 릴리즈 노트](docs/releases/0.11.0.md) 참조.
 
@@ -386,7 +390,7 @@ Helm 인용:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.10.2}
+  version = {0.11.0}
 }
 ```
 
@@ -399,7 +403,7 @@ machine-readable 형식은 [`CITATION.cff`](CITATION.cff) 참조.
 Issue와 PR 환영합니다.
 
 - PR 전에 [`CONTRIBUTING.md`](CONTRIBUTING.md) 읽기.
-- 테스트 실행: `python -m pytest -q` (현재 1,440 tests).
+- 테스트 실행: `python -m pytest -q` (현재 1,523 tests).
 - Release 검사: `python scripts/release_version_check.py --version <next>`.
 - 보안 보고: [`SECURITY.md`](SECURITY.md) 참조.
 
@@ -407,7 +411,7 @@ Issue와 PR 환영합니다.
 
 ## 릴리즈 이력
 
-- **최신**: [v0.11.0](docs/releases/0.11.0.md) — 증거 기반 workflow governance (2026-07-11)
+- **최신**: [v0.11.0](docs/releases/0.11.0.md) — 증거 기반 실행, source bundle, memory quality, guarded model recovery
 - **이전**: [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **전체 changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [이전 릴리즈 노트](docs/releases/)
 

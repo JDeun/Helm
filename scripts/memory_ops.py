@@ -14,6 +14,7 @@ from helm_workspace import get_workspace_layout
 from scripts.jsonl_io import read_jsonl as _shared_read_jsonl
 from scripts.state_io import append_jsonl_atomic
 from scripts.time_helpers import utc_now_iso
+from scripts.memory_quality import decay_memory_label
 
 
 def _state_root() -> Path:
@@ -126,6 +127,8 @@ def review_queue_items(state_root: Path, limit: int | None = None) -> list[dict]
         review_flags = list(memory_capture.get("review_flags") or [])
         supersession = memory_capture.get("supersession") or {}
         claim_state = memory_capture.get("claim_state") or {}
+        stored_quality = memory_capture.get("quality_label") or {}
+        quality_label = decay_memory_label(stored_quality) if stored_quality.get("status") else None
         task_id = str(task.get("task_id") or "")
         if task_id and task_id in resolved_task_ids:
             continue
@@ -157,6 +160,9 @@ def review_queue_items(state_root: Path, limit: int | None = None) -> list[dict]
         if claim_state.get("confidence_hint") == "low":
             blockers.append("low_confidence")
             actions.append("reconfirm evidence before promotion")
+        if quality_label and quality_label.get("status") == "stale":
+            blockers.append("memory_quality=stale")
+            actions.append("revalidate stale memory against live sources")
 
         if not blockers:
             continue
@@ -172,6 +178,7 @@ def review_queue_items(state_root: Path, limit: int | None = None) -> list[dict]
                 "review_flags": review_flags,
                 "supersession": supersession,
                 "claim_state": claim_state,
+                "quality_label": quality_label,
             }
         )
         if limit is not None and len(queue) >= limit:
