@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://helm.local/schemas/source-bundle-v1.json",
+  "title": "SourceBundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "source_url", "source_type", "captured_at", "access_status", "claims", "interpretations", "uncertainties", "derived_artifacts"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}$"},
+    "source_url": {"type": "string", "format": "uri", "pattern": "^https?://"},
+    "source_type": {"type": "string", "minLength": 1},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "published_at": {"type": ["string", "null"]},
+    "access_status": {"enum": ["full", "partial", "blocked"]},
+    "summary": {"type": "string"},
+    "official_source": {"type": "boolean"},
+    "official_expected": {"type": "boolean"},
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim_id", "cluster_key", "polarity", "text", "confidence", "evidence", "evidence_gate"],
+        "properties": {
+          "claim_id": {"type": "string"},
+          "cluster_key": {"type": "string", "minLength": 1},
+          "polarity": {"enum": ["positive", "negative"]},
+          "text": {"type": "string", "minLength": 1},
+          "confidence": {"enum": ["low", "medium", "high"]},
+          "official_expected": {"type": "boolean"},
+          "freshness_required": {"type": "boolean"},
+          "max_age_days": {"type": "integer", "minimum": 1},
+          "evidence": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+          "evidence_gate": {
+            "type": "object",
+            "required": ["claim_id", "status", "source_count", "official_source_count", "contradictions", "decision"],
+            "properties": {
+              "status": {"enum": ["verified", "single_source", "conflicted", "official_unread", "stale_or_unclear"]},
+              "decision": {"enum": ["promote", "hold", "reject"]}
+            }
+          }
+        }
+      }
+    },
+    "interpretations": {"type": "array", "items": {"type": "object", "required": ["interpretation_id", "text", "based_on_claim_ids"]}},
+    "uncertainties": {"type": "array", "items": {"type": "string"}},
+    "risks": {"type": "array", "items": {"type": "string"}},
+    "non_goals": {"type": "array", "items": {"type": "string"}},
+    "protected_terms": {"type": "array", "items": {"type": "string"}},
+    "derived_artifacts": {"type": "array", "items": {"type": "object", "required": ["type", "path", "sha256"]}},
+    "quality": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"access_status": {"enum": ["partial", "blocked"]}}},
+      "then": {"properties": {"uncertainties": {"minItems": 1}}}
+    }
+  ]
+}

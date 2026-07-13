@@ -154,6 +154,37 @@ def test_review_queue_surfaces_partial_and_missing_follow_up() -> None:
         assert "finalization=capture_partial" in payload["items"][1]["blockers"]
 
 
+def test_review_queue_applies_decay_to_stored_memory_quality() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        create_workspace(root)
+        entry = {
+            "task_id": "task-stale",
+            "task_name": "old operational fact",
+            "profile": "service_ops",
+            "status": "completed",
+            "memory_capture": {
+                "relevant": True,
+                "finalization_status": "capture_written",
+                "claim_state": {"confidence_hint": "high"},
+                "review_flags": [],
+                "supersession": {"state": "none", "supersedes_task_ids": []},
+                "quality_label": {
+                    "status": "promoted",
+                    "freshness": "fresh",
+                    "confidence": "high",
+                    "last_confirmed_at": "2020-01-01T00:00:00+00:00",
+                },
+            },
+        }
+        (root / ".helm" / "task-ledger.jsonl").write_text(json.dumps(entry) + "\n", encoding="utf-8")
+        result = run_cli(root, "memory", "review-queue", "--json")
+        assert result.returncode == 0, result.stderr
+        item = json.loads(result.stdout)["items"][0]
+        assert item["quality_label"]["status"] == "stale"
+        assert "memory_quality=stale" in item["blockers"]
+
+
 def test_review_queue_hides_task_closed_by_supersede_operation() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)

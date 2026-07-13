@@ -45,6 +45,10 @@ Pick the narrowest profile that matches the real risk:
 - If the right answer is `remote_handoff`, say so early instead of silently faking local execution.
 - Name the real runtime target with `--runtime-target` whenever the backend is not just the local workspace shell.
 
+## Capability boundaries
+
+`references/capability_boundaries.json` maps the semantic lanes `read_only`, `local_write`, `workflow_edit`, `external_send`, and `high_risk_control` onto these existing profiles plus the action-scope gate. The mapping is intentionally not a second profile hierarchy. `high_risk_control` is disabled by default; inspect verbs remain locked to `read_only` regardless of older memory or recovered chat context.
+
 ## Harness Contract
 
 Execution profiles are not prompt advice. They are the boundary where Helm

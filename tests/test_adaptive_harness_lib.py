@@ -286,6 +286,30 @@ def test_completion_policy_requires_service_ops_evidence_at_balanced() -> None:
     assert "healthcheck" in detail
 
 
+def test_postflight_blocks_recorded_finalization_failure() -> None:
+    entry = {
+        "profile": "service_ops",
+        "status": "completed",
+        "finalization_gate": {"ok": False, "arbiter": "hold"},
+    }
+
+    payload = postflight_payload_for_entry(
+        entry,
+        task_id="task-dependent-claims",
+        contract={},
+        enforcement_level="light",
+        harness_policy={},
+    )
+    check = next(item for item in payload["checks"] if item["name"] == "completion_policy")
+
+    assert not check["ok"]
+    assert "recorded finalization gate failed" in check["detail"]
+
+    entry["finalization_gate"] = "malformed"
+    ok, _ = evaluate_completion_policy(entry, {}, "light")
+    assert not ok
+
+
 def test_postflight_enforces_risky_edit_checkpoint_and_evidence() -> None:
     policy = {
         "enforcement_order": ["light", "balanced", "strict"],

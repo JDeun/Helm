@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "note": "Semantic capability lanes map onto existing execution profiles and action-scope kinds; they are not a second profile axis.",
+  "capabilities": {
+    "read_only": {"enabled": true, "execution_profile": "inspect_local", "action_scope": "inspect", "explicit_approval_required": false},
+    "local_write": {"enabled": true, "execution_profile": "workspace_edit", "action_scope": "save", "explicit_approval_required": false},
+    "workflow_edit": {"enabled": true, "execution_profile": "risky_edit", "action_scope": "edit", "explicit_approval_required": false},
+    "external_send": {"enabled": true, "execution_profile": "service_ops", "action_scope": "external_send", "explicit_approval_required": false},
+    "high_risk_control": {"enabled": false, "execution_profile": "service_ops", "action_scope": "external_send", "explicit_approval_required": true}
+  }
+}

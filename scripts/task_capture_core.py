@@ -11,6 +11,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from scripts.time_helpers import utc_now_iso  # noqa: E402 — re-export
+from scripts.memory_quality import build_memory_label, decay_memory_label  # noqa: E402
 
 
 PROFILE_SIGNAL_MAP = {
@@ -347,6 +348,7 @@ def build_memory_capture_plan(
     supersession = infer_supersession(task, touched_paths, load_recent_final_tasks=load_recent_final_tasks)
     crystallization = infer_crystallization(task, event_types, reasons, touched_paths)
     review_flags = infer_review_flags(task, claim_state, supersession, touched_paths)
+    quality_label = decay_memory_label(build_memory_label(task, claim_state, event_types, review_flags))
 
     return {
         "relevant": relevant,
@@ -357,6 +359,7 @@ def build_memory_capture_plan(
         "suggested_entries": suggestions,
         "claim_state": claim_state,
         "retention": retention,
+        "quality_label": quality_label,
         "supersession": supersession,
         "crystallization": crystallization,
         "review_flags": review_flags,

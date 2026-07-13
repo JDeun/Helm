@@ -33,6 +33,21 @@
         "model": "gemini-2.5-flash",
         "timeout_seconds": 45
       }
+    },
+    {
+      "ref": "omfm/balanced",
+      "provider": "omfm",
+      "role": "free_router_fallback",
+      "model_tier": "free_router",
+      "context_group": "balanced",
+      "context_window": 131072,
+      "context_reserve_tokens": 16384,
+      "priority": 40,
+      "probe": {
+        "kind": "openai_compatible_chat_completion",
+        "model": "omfm/balanced",
+        "timeout_seconds": 20
+      }
     }
   ]
 }

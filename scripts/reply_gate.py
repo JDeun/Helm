@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,29 +57,113 @@ def select_entry(task_id: str | None) -> dict | None:
 
 
 def evaluate_claims(entry: dict) -> dict:
+    def refs(value: object) -> list[str]:
+        if isinstance(value, str):
+            return [value] if value else []
+        return [str(item) for item in value] if isinstance(value, list) else []
+
     claims = entry.get("completion_claims") or []
     active = entry.get("active_workspace") or ((entry.get("meta") or {}).get("active_workspace") or {})
-    evidence_refs = {str(ref) for ref in (entry.get("evidence_refs") or active.get("evidence_refs") or [])}
+    canonical_evidence = refs(entry.get("evidence_refs")) or refs(active.get("evidence_refs"))
+    evidence_refs = {
+        str(ref)
+        for ref in canonical_evidence + refs(entry.get("completion_evidence"))
+    }
     planned_mutations = active.get("planned_mutations") or []
     results: list[dict] = []
     for claim in claims:
         if not isinstance(claim, dict):
             results.append({"claim": str(claim), "ok": False, "reason": "claim_not_structured"})
             continue
-        required = claim.get("evidence_type")
-        refs = {str(ref) for ref in (claim.get("evidence_refs") or [])}
-        candidates = refs & evidence_refs if refs else evidence_refs
-        matched = sorted(ref for ref in candidates if required and ref.startswith(f"{required}:"))
-        ok = bool(required and matched)
+        has_explicit_id = "claim_id" in claim or "criterion_id" in claim
+        raw_claim_id = claim.get("claim_id") if "claim_id" in claim else claim.get("criterion_id")
+        stable_id = raw_claim_id.strip() if isinstance(raw_claim_id, str) else ""
+        claim_id = stable_id or str(claim.get("claim") or claim.get("text") or "unnamed")
+        raw_required = claim.get("evidence_type")
+        required = raw_required.strip() if isinstance(raw_required, str) else ""
+        required_valid = bool(required and ":" not in required)
+        claim_refs = set(refs(claim.get("evidence_refs")))
+        candidates = claim_refs & evidence_refs if stable_id or claim_refs else evidence_refs
+        matched = sorted(
+            ref
+            for ref in candidates
+            if required_valid
+            and ref.startswith(f"{required}:")
+            and ref[len(required) + 1 :].strip()
+            and not ref[len(required) + 1 :].lstrip().startswith(":")
+        )
+        raw_dependencies = claim.get("depends_on")
+        dependencies_valid = raw_dependencies is None or (
+            isinstance(raw_dependencies, list)
+            and all(isinstance(item, str) and item.strip() for item in raw_dependencies)
+        )
+        dependencies = [item.strip() for item in raw_dependencies or []] if dependencies_valid else []
+        dependencies_valid = dependencies_valid and (not has_explicit_id or bool(stable_id)) and (not dependencies or bool(stable_id))
+        evidence_ok = bool(required_valid and matched)
         results.append(
             {
+                "claim_id": claim_id,
                 "claim": claim.get("claim") or claim.get("text") or "unnamed",
                 "evidence_type": required,
                 "evidence_refs": matched,
-                "ok": ok,
-                "reason": "evidence_present" if ok else "required_evidence_missing",
+                "depends_on": dependencies,
+                "missing_dependencies": [],
+                "ok": evidence_ok,
+                "reason": "evidence_present" if evidence_ok else "required_evidence_missing",
+                "_stable_id": stable_id,
+                "_evidence_ok": evidence_ok,
+                "_dependencies_valid": dependencies_valid,
             }
         )
+
+    id_counts: dict[str, int] = {}
+    for item in results:
+        if item.get("_stable_id"):
+            id_counts[item["_stable_id"]] = id_counts.get(item["_stable_id"], 0) + 1
+    by_id = {
+        item["_stable_id"]: item
+        for item in results
+        if item.get("_stable_id") and id_counts[item["_stable_id"]] == 1 and item.get("_dependencies_valid")
+    }
+    dependency_ok: dict[str, bool] = {}
+    dependency_cycle = False
+    try:
+        dependency_order = TopologicalSorter(
+            {claim_id: item["depends_on"] for claim_id, item in by_id.items()}
+        ).static_order()
+        for claim_id in dependency_order:
+            item = by_id.get(claim_id)
+            dependency_ok[claim_id] = bool(
+                item
+                and item["_evidence_ok"]
+                and all(dependency_ok.get(dep, False) for dep in item["depends_on"])
+            )
+    except CycleError:
+        dependency_cycle = True
+
+    for item in results:
+        stable_id = item.get("_stable_id")
+        if not item.get("claim_id"):
+            continue
+        if stable_id and id_counts[stable_id] > 1:
+            item["ok"] = False
+            item["reason"] = "duplicate_claim_id"
+        elif not item.get("_dependencies_valid"):
+            item["ok"] = False
+            item["reason"] = "invalid_claim_dependencies"
+        elif dependency_cycle and item["depends_on"]:
+            item["ok"] = False
+            item["reason"] = "claim_dependency_cycle"
+        else:
+            missing = [dep for dep in item["depends_on"] if not dependency_ok.get(dep, False)]
+            item["missing_dependencies"] = missing
+            item["ok"] = item["_evidence_ok"] and not missing
+            if missing:
+                item["reason"] = "prerequisite_claim_missing"
+    for item in results:
+        for key in ("_stable_id", "_evidence_ok", "_dependencies_valid"):
+            item.pop(key, None)
+
     scope_violation = entry.get("profile") == "inspect_local" and bool(planned_mutations)
     return {
         "ok": all(item["ok"] for item in results) and not scope_violation,
@@ -177,7 +262,10 @@ def evaluate(entry: dict | None) -> dict:
     finalization = (entry.get("memory_capture") or {}).get("finalization_status", "unknown")
     status = entry.get("status")
     claim_gate = evaluate_claims(entry)
-    recorded_gate = entry.get("finalization_gate") or {}
+    recorded_gate = entry.get("finalization_gate")
+    recorded_gate_ok = recorded_gate is None or (
+        isinstance(recorded_gate, dict) and recorded_gate.get("ok") is True
+    )
     contract_present = bool(harness.get("skill_contract_present"))
     context_required = bool(harness.get("context_required"))
     context_satisfied = bool(harness.get("context_satisfied"))
@@ -185,7 +273,7 @@ def evaluate(entry: dict | None) -> dict:
         {"name": "task_status", "ok": status in {"completed", "handoff_required"}, "detail": f"status={status}"},
         {
             "name": "claim_evidence",
-            "ok": claim_gate["ok"] and recorded_gate.get("ok", True) is True,
+            "ok": claim_gate["ok"] and recorded_gate_ok,
             "detail": f"arbiter={claim_gate['arbiter']}, claims={len(claim_gate['claims'])}",
         },
     ]

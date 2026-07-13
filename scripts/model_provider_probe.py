@@ -21,7 +21,7 @@ ProviderKind = Literal[
     "aws_bedrock", "google_vertex", "mistral", "groq", "together",
     "fireworks", "cohere", "deepseek", "xai", "replicate", "perplexity",
     "huggingface", "cerebras", "nvidia_nim",
-    "ollama", "lm_studio", "llama_cpp", "vllm", "openai_compatible", "unknown",
+    "ollama", "lm_studio", "llama_cpp", "vllm", "omfm", "openai_compatible", "unknown",
 ]
 ProviderLocation = Literal["api", "local", "runtime_config", "unknown"]
 ProviderRole = Literal["runtime_llm", "helm_intelligence", "both", "unknown"]
@@ -77,6 +77,7 @@ _LOCAL_PROVIDER_ENDPOINTS: dict[str, str] = {
     "lm_studio": "http://localhost:1234/v1/models",
     "llama_cpp": "http://localhost:8080/v1/models",
     "vllm": "http://localhost:8000/v1/models",
+    "omfm": "http://127.0.0.1:4567/v1/models",
 }
 
 # Priority order: lower number = higher priority
@@ -93,6 +94,7 @@ _LOCAL_PRIORITY: dict[str, int] = {
     "lm_studio": 2,
     "llama_cpp": 3,
     "vllm": 4,
+    "omfm": 5,
 }
 
 _BUILTIN_API_REGISTRY = _API_PROVIDER_ENV_REGISTRY

@@ -7,9 +7,12 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+_SUBPROCESS_RUN = subprocess.run
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -21,7 +24,11 @@ from scripts.experience_attribution import attach_experience_attribution
 from scripts.memory_capture import build_memory_capture_plan
 from scripts.state_io import append_jsonl_atomic
 from scripts.command_guard import CommandClassification, GuardDecision, evaluate_command_guard, decision_to_json
+from scripts.consensus_plan_gate import attach_consensus_plan, default_scope, evaluate_scope, requires_consensus
+from scripts.evidence_gatherer import gather_evidence, load_config as load_evidence_config, validate_command as validate_evidence_command
+from scripts.runtime_contract import evaluate_finalization, freeze_task_bundle, prepare_runtime_contract
 from scripts.state_snapshot import latest_snapshot_path, write_state_snapshot
+from scripts.task_state_bundle import write_task_state_bundle
 
 # Module-top advisory_log import keeps the "advisory never raises" invariant
 # (R6 Minor M1). Falls back to a noop counter if advisory_log itself fails.
@@ -57,6 +64,8 @@ EXIT_GUARD_DENY = 25
 EXIT_PAUSED = 26
 EXIT_BROWSER_BLOCKED = 27
 EXIT_CLEANUP_REQUIRED = 28  # OQ-7: finalization blocked — cleanup evidence missing
+EXIT_CONSENSUS_BLOCKED = 29
+EXIT_VERIFICATION_FAILED = 30
 
 def _pause_gate_enabled() -> bool:
     """Return True only when OPENCLAW_PAUSE_GATE is truthy ('1', 'true', 'yes').
@@ -210,9 +219,20 @@ def _best_effort_index(task: dict) -> None:
         pass
 
 
-def finalize_task(task: dict) -> None:
+def finalize_task(task: dict, touched_paths: list[str] | None = None) -> None:
+    touched_paths = list(touched_paths if touched_paths is not None else task.get("touched_paths") or [])
+    consensus = task.get("consensus_plan") or {}
+    if consensus:
+        task["scope_gate"] = evaluate_scope(touched_paths, consensus.get("plan"))
+    prepare_runtime_contract(task, touched_paths, workspace=WORKSPACE)
+    task["finalization_gate"] = evaluate_finalization(task)
+    if task.get("status") not in {"completed", "handoff_required"}:
+        task["operational_status"] = str(task.get("status") or "failed")
+    else:
+        task["operational_status"] = "verified" if task["finalization_gate"]["ok"] else "needs_verification"
     task["memory_capture"] = build_memory_capture_plan(task)
     attach_experience_attribution(task)
+    task["state_bundle"] = freeze_task_bundle(task, touched_paths, WORKSPACE, STATE_ROOT)
     try:
         task["state_snapshot"] = write_state_snapshot(task, workspace=WORKSPACE, state_root=STATE_ROOT)
     except OSError as exc:
@@ -233,6 +253,10 @@ def block_task(task: dict, *, reason: str, stage: str = "guard") -> None:
     task["failure_stage"] = stage
     task["failure_reason"] = reason
     attach_experience_attribution(task)
+    try:
+        task["state_bundle"] = write_task_state_bundle(task, touched_paths=[], workspace=WORKSPACE, state_root=STATE_ROOT)
+    except (OSError, ValueError) as exc:
+        task["state_bundle_error"] = str(exc)
     append_ledger(task)
 
 
@@ -506,6 +530,219 @@ def evaluate_guard_for_run(
         return fallback_guard_decision(command, args, exc)
 
 
+def _parse_command_json_argument(raw: str) -> list[str]:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise argparse.ArgumentTypeError(f"invalid evidence command JSON: {exc}") from exc
+    if not isinstance(payload, list) or not payload or not all(isinstance(token, str) and token for token in payload):
+        raise argparse.ArgumentTypeError("evidence command JSON must be a non-empty string array")
+    return payload
+
+
+def _parse_service_json_argument(raw: str) -> dict:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise argparse.ArgumentTypeError(f"invalid service evidence JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise argparse.ArgumentTypeError("service evidence JSON must be an object")
+    return payload
+
+
+def _verification_commands(args: argparse.Namespace) -> list[list[str]]:
+    raw = getattr(args, "evidence_command_json", None)
+    if not isinstance(raw, list):
+        return []
+    return [list(command) for command in raw if isinstance(command, list)]
+
+
+def _service_evidence(args: argparse.Namespace) -> list[dict]:
+    raw = getattr(args, "service_evidence_json", None)
+    if not isinstance(raw, list):
+        return []
+    return [dict(row) for row in raw if isinstance(row, dict)]
+
+
+def _verified_execution_required(task: dict, args: argparse.Namespace) -> bool:
+    if getattr(args, "verified_execution", False) is True or getattr(args, "verified_attempt", False) is True:
+        return True
+    if task.get("profile") != "risky_edit":
+        return False
+    blob = " ".join(
+        [str(task.get("task_name") or ""), str(task.get("skill") or ""), *(str(token) for token in task.get("command") or [])]
+    ).casefold()
+    return any(hint in blob for hint in ("briefing", "memory", "skill-router", "workflow", "release"))
+
+
+def _run_verified_cli(args: argparse.Namespace, command: list[str]) -> int:
+    from scripts.verified_execution import execute_verified_plan
+
+    plan_id = str(getattr(args, "task_id", None) or uuid.uuid4())
+    scope = list(getattr(args, "path", None) or default_scope({"command": command}))
+    criteria = list(getattr(args, "acceptance", None) or ["primary command exits successfully"])
+    evidence_commands = _verification_commands(args) or [command]
+    plan = {
+        "task_id": plan_id,
+        "objective": str(getattr(args, "task_name", None) or shlex.join(command)),
+        "profile": args.profile,
+        "scope": scope,
+        "tasks": [{
+            "task_id": "command",
+            "title": str(getattr(args, "task_name", None) or "execute verified command"),
+            "command": command,
+            "scope": scope,
+            "acceptance_criteria": criteria,
+            "evidence_commands": evidence_commands,
+            "max_attempts": 3,
+        }],
+    }
+
+    def run_attempt(active_plan: dict, atomic_task: dict, attempt: int) -> dict:
+        inner = argparse.Namespace(**vars(args))
+        inner.verified_execution = False
+        inner.verified_attempt = True
+        inner.task_id = f"{active_plan['task_id']}-{atomic_task['task_id']}-a{attempt}"
+        inner.parent_task_id = active_plan["task_id"]
+        inner.task_name = atomic_task.get("title") or atomic_task["task_id"]
+        inner.path = list(atomic_task["scope"])
+        inner.acceptance = list(atomic_task["acceptance_criteria"])
+        inner.evidence_command_json = list(atomic_task["evidence_commands"])
+        inner.command = list(atomic_task["command"])
+        try:
+            meta = json.loads(inner.meta_json) if inner.meta_json else {}
+        except json.JSONDecodeError:
+            meta = {}
+        meta.update({key: atomic_task[key] for key in ("role_marker", "role_prompt", "role_contract", "expanded_role_input")})
+        inner.meta_json = json.dumps(meta)
+        return {"run_id": inner.task_id, "exit_code": cmd_run(inner), "stdout": "", "stderr": ""}
+
+    result = execute_verified_plan(plan, workspace=WORKSPACE, state_root=STATE_ROOT, executor=run_attempt)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") is True else EXIT_VERIFICATION_FAILED
+
+
+def _load_plan_override(args: argparse.Namespace) -> dict | None:
+    raw = getattr(args, "consensus_plan", None)
+    if not isinstance(raw, (str, Path)) or not str(raw):
+        return None
+    path = Path(raw).expanduser()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise SystemExit(f"Consensus plan not found: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid consensus plan JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit("Consensus plan must be a JSON object")
+    return payload
+
+
+def _run_consensus_gate(task: dict, args: argparse.Namespace) -> bool:
+    if not requires_consensus(
+        str(task.get("profile") or ""),
+        task_name=str(task.get("task_name") or ""),
+        command=[str(token) for token in task.get("command") or []],
+    ):
+        return True
+    result = attach_consensus_plan(
+        task,
+        state_root=STATE_ROOT,
+        plan=_load_plan_override(args),
+        verification_commands=_verification_commands(args),
+        acceptance_criteria=list(getattr(args, "acceptance", None) or []) if isinstance(getattr(args, "acceptance", None), list) else [],
+    )
+    task["verified_execution"] = {"required": _verified_execution_required(task, args), "mode": "ralph", "max_attempts": 3}
+    write_task_state_bundle(task, touched_paths=[], workspace=WORKSPACE, state_root=STATE_ROOT)
+    return bool(result.get("ok"))
+
+
+def _collect_deleted_paths(root: Path) -> set[str]:
+    deleted: set[str] = set()
+    for cached in (False, True):
+        command = ["git", "diff"]
+        if cached:
+            command.append("--cached")
+        command.extend(["--name-only", "--diff-filter=D", "-z", "--"])
+        try:
+            result = _SUBPROCESS_RUN(command, cwd=root, capture_output=True, text=True, timeout=5)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if result.returncode == 0:
+            deleted.update(path for path in (result.stdout or "").split("\0") if path)
+    return deleted
+
+
+def _collect_recent_paths(root: Path, since_ns: int, *, deleted_before: set[str] | None = None) -> list[str]:
+    touched = []
+    for name in ("docs", "scripts", "skills", "references", "tests", "AGENTS.md", "TOOLS.md"):
+        target = root / name
+        if not target.exists():
+            continue
+        paths = [target] if target.is_file() else target.rglob("*")
+        for path in paths:
+            if path.is_file() and ".git" not in path.parts and path.stat().st_mtime_ns >= since_ns:
+                touched.append(str(path.relative_to(root)))
+    if deleted_before is not None:
+        touched.extend(_collect_deleted_paths(root) - deleted_before)
+    return sorted(dict.fromkeys(touched))
+
+
+def _attach_verification_claim(task: dict, *, ok: bool) -> None:
+    evidence = list(task.get("evidence_refs") or [])
+    if ok:
+        evidence.append("verification_result:passed")
+    task["evidence_refs"] = list(dict.fromkeys(evidence))
+    claims = list(task.get("completion_claims") or [])
+    if not any(isinstance(item, dict) and item.get("claim_id") == "verified_execution" for item in claims):
+        claims.append({
+            "claim_id": "verified_execution",
+            "claim": "verified_execution",
+            "evidence_type": "verification_result",
+            "evidence_refs": ["verification_result:passed"],
+            "depends_on": ["command_completed"],
+        })
+    task["completion_claims"] = claims
+
+
+def _gather_task_evidence(task: dict, args: argparse.Namespace, touched_paths: list[str]) -> bool:
+    commands = _verification_commands(args)
+    service_rows = _service_evidence(args)
+    required = bool((task.get("verified_execution") or {}).get("required"))
+    config = load_evidence_config()
+    primary = [str(token) for token in task.get("command") or []]
+    if not commands and primary:
+        allowed, _, _ = validate_evidence_command(primary, config=config, cwd=WORKSPACE)
+        if allowed:
+            commands = [primary]
+    if not commands and not service_rows and not required:
+        return True
+    output_path = STATE_ROOT / "task-bundles" / str(task["task_id"]) / "verification-evidence.json"
+    payload = gather_evidence(
+        commands,
+        cwd=WORKSPACE,
+        config=config,
+        files=touched_paths,
+        service_evidence=service_rows,
+        output_path=output_path,
+    )
+    task["evidence_gathering"] = payload
+    command_verified = bool(payload.get("command_results")) and all(row.get("ok") is True for row in payload.get("command_results") or [])
+    service_verified = bool(payload.get("service_results")) and all(row.get("ok") is True for row in payload.get("service_results") or [])
+    if service_verified:
+        refs = list(task.get("evidence_refs") or [])
+        refs.extend(
+            f"service_readback:{row.get('source') or row.get('reference')}"
+            for row in payload.get("service_results") or []
+            if row.get("source") or row.get("reference")
+        )
+        task["evidence_refs"] = list(dict.fromkeys(refs))
+    appropriate = service_verified if task.get("profile") == "service_ops" else command_verified
+    verified = bool(payload.get("ok")) and appropriate
+    _attach_verification_claim(task, ok=verified)
+    return verified
+
+
 def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dict:
     config = load_profiles()[profile]
     if args.meta_json:
@@ -519,6 +756,7 @@ def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dic
         meta = {}
     return {
         "task_id": args.task_id or str(uuid.uuid4()),
+        "parent_task_id": getattr(args, "parent_task_id", None),
         "task_name": args.task_name or " ".join(command[:3]),
         "task_goal": args.task_goal,
         "skill": args.skill,
@@ -535,10 +773,15 @@ def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dic
         "started_at": utc_now_iso(),
         "status": "queued",
         "checkpoint_label": args.label,
-        "checkpoint_paths": args.path or [],
+        "checkpoint_paths": args.path if isinstance(args.path, list) else [],
         "checkpoint_id": None,
         "delivery_mode": args.delivery_mode,
         "meta": meta,
+        "verified_execution": {
+            "required": getattr(args, "verified_execution", False) is True or getattr(args, "verified_attempt", False) is True,
+            "mode": "ralph" if getattr(args, "verified_execution", False) is True or getattr(args, "verified_attempt", False) is True else "standard",
+            "max_attempts": 3,
+        },
     }
 
 
@@ -951,6 +1194,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     if not command:
         raise SystemExit("No command supplied. Use `-- <command> ...`")
 
+    if getattr(args, "verified_execution", False) is True and not getattr(args, "verified_attempt", False):
+        return _run_verified_cli(args, command)
+
     # --- Pause gate (OPENCLAW_PAUSE_GATE) ---
     # Feature flag check FIRST: no side effects when disabled.
     if _pause_gate_enabled():
@@ -974,6 +1220,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     validate_skill_profile(args.skill, args.profile)
 
     task = task_stub(args.profile, args, command)
+    execution_start_ns = time.time_ns()
     # Advisory Phase-A wiring (R2 I1): best-effort, silent on failure.
     _attach_advisory_action_scope(task, args)
     # Tool-grant wiring: records the profile grant and enforces denied tool groups
@@ -1077,6 +1324,17 @@ def cmd_run(args: argparse.Namespace) -> int:
             print("Hint: use --approve-risk after verifying the target and risk.", file=sys.stderr)
             return EXIT_GUARD_REQUIRE_APPROVAL
 
+    if config["backend"] != "manual-remote" and not _run_consensus_gate(task, args):
+        task["status"] = "blocked"
+        task["failure_stage"] = "consensus_plan"
+        task["failure_reason"] = str((task.get("consensus_plan") or {}).get("reason") or "consensus plan blocked")
+        task["blocked_reason"] = task["failure_reason"]
+        task["next_action"] = "resolve consensus findings or request a user decision"
+        task["finished_at"] = utc_now_iso()
+        finalize_task(task)
+        print(f"CONSENSUS BLOCKED: {task['failure_reason']}", file=sys.stderr)
+        return EXIT_CONSENSUS_BLOCKED
+
     # --- Backend-specific handling ---
     if config["backend"] == "manual-remote":
         if not args.runtime_target:
@@ -1108,6 +1366,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     task["status"] = "running"
     task["started_execution_at"] = utc_now_iso()
     append_ledger(task)
+    try:
+        task["state_bundle"] = write_task_state_bundle(task, touched_paths=[], workspace=WORKSPACE, state_root=STATE_ROOT)
+    except (OSError, ValueError) as exc:
+        task["state_bundle_error"] = str(exc)
     record_runner_event(
         WORKSPACE,
         skill_id=task.get("skill"),
@@ -1143,6 +1405,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if raw_timeout is not None and raw_timeout < 0:
         raw_timeout = 0
     timeout_seconds = raw_timeout or None  # 0 → None (no limit)
+    deleted_before = _collect_deleted_paths(WORKSPACE)
     try:
         result = subprocess.run(command, cwd=str(WORKSPACE), env=child_env, timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
@@ -1150,6 +1413,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         task["status"] = "timeout"
         task["failure_stage"] = "execution"
         task["failure_reason"] = f"command timed out after {timeout_seconds}s"
+        task["touched_paths"] = _collect_recent_paths(WORKSPACE, execution_start_ns, deleted_before=deleted_before)
         finalize_task(task)
         record_runner_event(
             WORKSPACE,
@@ -1187,14 +1451,50 @@ def cmd_run(args: argparse.Namespace) -> int:
             return EXIT_CLEANUP_REQUIRED
 
     task["status"] = "completed" if result.returncode == 0 else "failed"
+    touched_paths = _collect_recent_paths(WORKSPACE, execution_start_ns, deleted_before=deleted_before)
+    verification_ok = True
+    if result.returncode == 0:
+        verification_ok = _gather_task_evidence(task, args, touched_paths)
+        if not verification_ok:
+            task["status"] = "failed"
+            task["failure_stage"] = "verification"
+            task["failure_reason"] = "required allowlisted verification or readback evidence failed"
+            task["next_action"] = "inspect verification-evidence.json, fix the failure, and retry"
+    task["touched_paths"] = touched_paths
     finalize_task(task)
     record_runner_event(
         WORKSPACE,
         skill_id=task.get("skill"),
-        event="skill_success" if result.returncode == 0 else "skill_failure",
-        extra={"task_id": task["task_id"], "exit_code": result.returncode},
+        event="skill_success" if result.returncode == 0 and verification_ok else "skill_failure",
+        extra={
+            "task_id": task["task_id"],
+            "exit_code": result.returncode if verification_ok else EXIT_VERIFICATION_FAILED,
+            "command_exit_code": result.returncode,
+        },
     )
-    return result.returncode
+    return result.returncode if result.returncode != 0 or verification_ok else EXIT_VERIFICATION_FAILED
+
+
+def _add_omh_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--parent-task-id", help="Parent plan/task id for verified retries.")
+    parser.add_argument("--consensus-plan", type=Path, help="Optional proposed consensus plan JSON.")
+    parser.add_argument("--acceptance", action="append", help="Acceptance criterion. May repeat.")
+    parser.add_argument(
+        "--evidence-command-json",
+        action="append",
+        type=_parse_command_json_argument,
+        default=[],
+        help="Allowlisted verification command as a JSON string array. May repeat.",
+    )
+    parser.add_argument(
+        "--service-evidence-json",
+        action="append",
+        type=_parse_service_json_argument,
+        default=[],
+        help="Live service readback evidence JSON object. May repeat.",
+    )
+    parser.add_argument("--verified-execution", action="store_true", help="Require independent evidence before completion.")
+    parser.add_argument("--verified-attempt", action="store_true", help=argparse.SUPPRESS)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1208,6 +1508,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--task-id", help="Explicit task id override for harness-controlled runs.")
     run.add_argument("--skill", help="Owning skill slug for policy enforcement.")
     run.add_argument("--meta-json", help="Structured metadata JSON to embed in the task ledger.")
+    _add_omh_args(run)
     run.add_argument("--label", help="Checkpoint label when the profile requires one.")
     run.add_argument("--path", action="append", help="Checkpoint path override. May be repeated.")
     run.add_argument("--runtime-target", help="Named runtime target such as local, ssh:host, container:name, or node label.")
@@ -1312,6 +1613,7 @@ def parse_run_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--task-id", help="Explicit task id override for harness-controlled runs.")
     parser.add_argument("--skill", help="Owning skill slug for policy enforcement.")
     parser.add_argument("--meta-json", help="Structured metadata JSON to embed in the task ledger.")
+    _add_omh_args(parser)
     parser.add_argument("--label", help="Checkpoint label when the profile requires one.")
     parser.add_argument("--path", action="append", help="Checkpoint path override. May be repeated.")
     parser.add_argument("--runtime-target", help="Named runtime target such as local, ssh:host, container:name, or node label.")

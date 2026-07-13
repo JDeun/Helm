@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "limits": {
+    "max_commands": 8,
+    "timeout_seconds": 300,
+    "output_chars": 12000
+  },
+  "allowed_prefixes": [
+    ["npm", "test"],
+    ["npm", "run", "test"],
+    ["npm", "run", "build"],
+    ["npm", "run", "lint"],
+    ["npm", "run", "typecheck"],
+    ["python3", "-m", "pytest"],
+    ["python3", "-m", "unittest"],
+    ["python3", "-m", "mypy"],
+    ["ruff", "check"],
+    ["black", "--check"],
+    ["go", "test"],
+    ["go", "build"]
+  ],
+  "service_readback_prefixes": [],
+  "repository_prefixes": []
+}
