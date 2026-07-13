@@ -12,6 +12,17 @@
 
 - Full test suite: 1,523 passed.
 
+## [0.12.0] — 2026-07-13
+
+### Added
+
+- Add personal operations registry, relationship graph sync, lifecycle radar, OCR ingest, natural-language Telegram state routing, and daily/weekly launchd delivery.
+- Add guarded OMFM recovery, verified execution, source-bundle quality gates, and memory quality controls.
+
+### Verification
+
+- Full regression and adversarial suites passed.
+
 ## [0.11.0] — 2026-07-11
 
 ### Added
