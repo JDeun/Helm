@@ -243,9 +243,9 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 
 ---
 
-## v0.11.0 — 증거 기반 workflow governance
+## v0.12.0 — 증거 기반 workflow governance
 
-*현재 릴리즈: v0.11.0 — 2026-07-11 릴리즈.* 이 릴리즈는 workflow 경계와 완료 주장을 명시적이고 검토 가능하게 만듭니다.
+*현재 릴리즈: v0.12.0 — 2026-07-13 릴리즈.* 이 릴리즈는 workflow 경계와 완료 주장을 명시적이고 검토 가능하게 만듭니다.
 
 - `references/workflow_units.yaml`이 허용 입력, live source, mutation surface, verification, reporting, handoff, stop contract를 정의.
 - `python3 scripts/workflow_registry.py`로 해당 contract를 도입 전에 검증.
@@ -255,7 +255,7 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 - Source bundle은 claim, lineage, 파생 산출물 readback, fidelity, cross-bundle conflict, transactional materialization을 중앙화.
 - Memory quality label은 capture와 retrieval 양쪽에서 감쇠하며, 선택적 OMFM router는 context·canary·저위험 runtime gate 뒤에 둔다.
 
-자세한 내용은 [v0.11.0 릴리즈 노트](docs/releases/0.11.0.md) 참조.
+자세한 내용은 [v0.12.0 릴리즈 노트](docs/releases/0.12.0.md) 참조.
 
 ---
 
@@ -390,7 +390,7 @@ Helm 인용:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.11.0}
+  version = {0.12.0}
 }
 ```
 
@@ -411,7 +411,7 @@ Issue와 PR 환영합니다.
 
 ## 릴리즈 이력
 
-- **최신**: [v0.11.0](docs/releases/0.11.0.md) — 증거 기반 실행, source bundle, memory quality, guarded model recovery
+- **최신**: [v0.12.0](docs/releases/0.12.0.md) — 증거 기반 실행, source bundle, memory quality, guarded model recovery
 - **이전**: [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **전체 changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [이전 릴리즈 노트](docs/releases/)
 

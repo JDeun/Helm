@@ -243,9 +243,9 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 
 ---
 
-## v0.11.0 — evidence-aware workflow governance
+## v0.12.0 — evidence-aware workflow governance
 
-*Current release: v0.11.0 — released 2026-07-11.* This release makes workflow boundaries and completion claims explicit and inspectable.
+*Current release: v0.12.0 — released 2026-07-13.* This release makes workflow boundaries and completion claims explicit and inspectable.
 
 - `references/workflow_units.yaml` defines allowed inputs, live sources, mutation surfaces, verification, reporting, handoff, and stop contracts.
 - `python3 scripts/workflow_registry.py` validates those contracts before adoption.
@@ -255,7 +255,7 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 - Source bundles centralize claims, lineage, derived-artifact readback, fidelity, cross-bundle conflict, and transactional materialization checks.
 - Memory quality labels are decayed on capture and retrieval; the optional OMFM router remains behind context, canary, and low-risk runtime gates.
 
-See [the full v0.11.0 notes](docs/releases/0.11.0.md).
+See [the full v0.12.0 notes](docs/releases/0.12.0.md).
 
 ---
 
@@ -390,7 +390,7 @@ Cite Helm:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.11.0}
+  version = {0.12.0}
 }
 ```
 
@@ -411,7 +411,7 @@ Issues and pull requests welcome.
 
 ## Release history
 
-- **Latest**: [v0.11.0](docs/releases/0.11.0.md) — evidence-aware execution, source bundles, memory quality, and guarded model recovery
+- **Latest**: [v0.12.0](docs/releases/0.12.0.md) — evidence-aware execution, source bundles, memory quality, and guarded model recovery
 - **Previous**: [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **Full changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [older release notes](docs/releases/)
 
