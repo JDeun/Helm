@@ -243,9 +243,22 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 
 ---
 
+## v0.13.0 — 운영층 강화
+
+*현재 릴리즈: v0.13.0 — 2026-07-16 릴리즈.* 실제 에이전트 운영에서 검증된 패턴을 도입합니다.
+
+- `helm reconcile`: 워크스페이스 reference 파일을 패키지 desired 스냅샷과 대조해 재적용 — drift 내성·멱등, 로컬 override를 덮어쓰지 않고 drift를 보고.
+- `helm verify-contract`: 행동 기반 운영 불변식(guard deny/fail-closed, 승인 TTL/consume-once, 원자적 ledger)을 검증 — 구조 검사 `doctor`/`validate` 보완.
+- 결정론적 skill routing(`scripts/skill_router.py`), 범용 tool/MCP adapter 레지스트리(`scripts/tool_adapter.py` + `references/connectors.json`), 결정론 템플릿 폴백을 갖춘 grounding-by-guidance-injection(`scripts/grounding.py`).
+- source-provenance tiering이 model-generated 전용 claim의 승격을 거부; fast-ACK intake가 재시도 delivery를 dedup; task가 인터프리터 fingerprint를 기록하고 `run_checkpoint`가 `sys.executable` 사용; 비파일 checkpoint 백엔드가 런타임 bump 전 의존성을 fingerprint.
+
+자세한 내용은 [v0.13.0 릴리즈 노트](docs/releases/0.13.0.md) 참조.
+
+---
+
 ## v0.12.0 — 증거 기반 workflow governance
 
-*현재 릴리즈: v0.12.0 — 2026-07-13 릴리즈.* 이 릴리즈는 workflow 경계와 완료 주장을 명시적이고 검토 가능하게 만듭니다.
+*v0.12.0 — 2026-07-13 릴리즈.* 이 릴리즈는 workflow 경계와 완료 주장을 명시적이고 검토 가능하게 만듭니다.
 
 - `references/workflow_units.yaml`이 허용 입력, live source, mutation surface, verification, reporting, handoff, stop contract를 정의.
 - `python3 scripts/workflow_registry.py`로 해당 contract를 도입 전에 검증.
@@ -390,7 +403,7 @@ Helm 인용:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.12.0}
+  version = {0.13.0}
 }
 ```
 
@@ -403,7 +416,7 @@ machine-readable 형식은 [`CITATION.cff`](CITATION.cff) 참조.
 Issue와 PR 환영합니다.
 
 - PR 전에 [`CONTRIBUTING.md`](CONTRIBUTING.md) 읽기.
-- 테스트 실행: `python -m pytest -q` (현재 1,523 tests).
+- 테스트 실행: `python -m pytest -q` (현재 1,596 tests).
 - Release 검사: `python scripts/release_version_check.py --version <next>`.
 - 보안 보고: [`SECURITY.md`](SECURITY.md) 참조.
 
@@ -411,8 +424,8 @@ Issue와 PR 환영합니다.
 
 ## 릴리즈 이력
 
-- **최신**: [v0.12.0](docs/releases/0.12.0.md) — 증거 기반 실행, source bundle, memory quality, guarded model recovery
-- **이전**: [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
+- **최신**: [v0.13.0](docs/releases/0.13.0.md) — reconcile, 운영-계약 검증기, skill router, tool/MCP adapter, grounding, source-tiering, fast-ACK intake, 인터프리터 pinning
+- **이전**: [v0.12.0](docs/releases/0.12.0.md), [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **전체 changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [이전 릴리즈 노트](docs/releases/)
 
 ---

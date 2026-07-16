@@ -2,15 +2,26 @@
 
 ## Unreleased
 
+## [0.13.0] — 2026-07-16
+
 ### Added
 
 - Guarded OMFM recovery with runtime context checks and canary evidence.
 - Verified execution, source-bundle quality gates, memory quality/decay, and parallel worktree review.
 - Documentation and README updates for evidence-aware execution and guarded model recovery.
+- `helm reconcile`: drift-tolerant, idempotent re-apply of workspace reference files against the packaged desired snapshot. Classifies each file as unchanged/missing/drifted/source_missing, adds missing files on `--apply`, preserves local overrides unless `--force`, and reports drift instead of clobbering (dry-run by default). Reports `converged`/`ok`.
+- `helm verify-contract`: behavioral operating-invariant battery that asserts command-guard deny/fail-closed behavior, approval-gate consume-once/TTL semantics, and atomic ledger writes still hold — complements the structural `doctor`/`validate` checks (e.g. after a runtime/dependency bump).
+- Deterministic skill router (`scripts/skill_router.py`): scores installed skill manifests against a request and returns a single direct route when exactly one clears the confidence threshold, letting callers skip model-based skill classification for unambiguous requests.
+- Generic tool-adapter layer (`scripts/tool_adapter.py`): new external tools / MCP servers register via a `references/connectors.json` data entry instead of new code; includes a built-in echo adapter, a documented MCP stub extension point, and a guard hook for `command_guard`/`tool_groups` policy integration.
+- Source-provenance tiering in the SourceBundle evidence gate: `evaluate_claim_cluster` refuses to promote a claim to `verified` when its only readable corroboration is `model_generated`, ranking sources `primary`/`raw` > `derived` > `model_generated` (untiered evidence keeps prior behavior).
+- Grounding-by-guidance-injection (`scripts/grounding.py`): assembles a skill's guidance/reference sections plus memory context into a model preamble, with a deterministic template fallback and a local-downgrade signal for weak-model grounded output.
+- Fast-ACK request intake (`scripts/request_intake.py`): dedups retried webhook/queue deliveries by `delivery_id` (falling back to a payload hash) into a single pending task_run, collapsing caller retry-storms.
+- Per-task interpreter fingerprint (`run_with_profile.interpreter_fingerprint`/`check_interpreter_match`): the task ledger now records `runtime_env` (python executable + version) so a runtime drift is detectable, and `run_checkpoint` invokes `sys.executable` instead of a hardcoded `python3` — fixing a silent pre-op checkpoint failure under a daemon whose PATH lacks the interpreter's directory.
+- Non-file checkpoint backends (`scripts/checkpoint_backends.py`): capture runtime state (installed-distribution fingerprint via `importlib.metadata`) with `diff_fingerprints`, so a dependency/runtime bump has a concrete before-state; a destructive command now forces a pre-op checkpoint regardless of the profile's static checkpoint flag.
 
 ### Verification
 
-- Full test suite: 1,523 passed.
+- Full test suite: 1,596 passed (8 gap features, +73 tests over the 0.12.0 baseline of 1,523).
 
 ## [0.12.0] — 2026-07-13
 
