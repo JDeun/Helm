@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.13.0] — 2026-07-16
+
 ### Added
 
 - Guarded OMFM recovery with runtime context checks and canary evidence.
