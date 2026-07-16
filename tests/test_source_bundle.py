@@ -17,6 +17,7 @@ import source_bundle as source_bundle_module
 from source_bundle import (
     build_bundle,
     canonicalize_source_url,
+    classify_source_tier,
     contextless_review,
     evaluate_claim_cluster,
     evaluate_risk_lane,
@@ -25,6 +26,7 @@ from source_bundle import (
     load_registry,
     materialize_artifacts,
     retro_note,
+    source_tier_rank,
     upsert_bundle,
 )
 
@@ -347,3 +349,115 @@ def test_retro_note_is_deduplicated_and_never_auto_promoted(tmp_path: Path) -> N
     assert first["candidate"]["quality_label"] == "raw"
     assert first["candidate"]["promotion_requires_review"] is True
     assert len(log.read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_source_tier_ordering_helper_ranks_primary_and_raw_above_derived_above_model_generated() -> None:
+    assert source_tier_rank("primary") == source_tier_rank("raw")
+    assert source_tier_rank("primary") > source_tier_rank("derived") > source_tier_rank("model_generated")
+    # Absent/unknown tiers default to primary rank so untiered evidence is unaffected.
+    assert source_tier_rank(None) == source_tier_rank("primary")
+    assert source_tier_rank("") == source_tier_rank("primary")
+    assert source_tier_rank("not-a-real-tier") == source_tier_rank("primary")
+    assert classify_source_tier({}) == "primary"
+    assert classify_source_tier({"source_tier": "MODEL_GENERATED"}) == "model_generated"
+    assert classify_source_tier({"source_tier": "bogus"}) == "primary"
+
+
+def test_model_generated_only_cluster_is_not_promoted() -> None:
+    gate = evaluate_claim_cluster(
+        "c1",
+        [
+            {"source_url": "https://a.example/x", "official": True, "access_status": "full", "source_tier": "model_generated"},
+            {"source_url": "https://b.example/y", "official": True, "access_status": "full", "source_tier": "model_generated"},
+        ],
+    )
+    # Absent the tier gate this would satisfy the readable-urls>=2 + official verified rule.
+    assert gate["status"] != "verified"
+    assert gate["decision"] in {"hold", "reject"}
+    assert gate["model_generated_only"] is True
+
+
+def test_primary_or_raw_source_with_corroboration_still_promotes() -> None:
+    primary_plus_model_generated = evaluate_claim_cluster(
+        "c1",
+        [
+            {"source_url": "https://official.example/report", "official": True, "access_status": "full", "source_tier": "primary"},
+            {"source_url": "https://helper.example/note", "official": False, "access_status": "full", "source_tier": "model_generated"},
+        ],
+    )
+    raw_plus_model_generated = evaluate_claim_cluster(
+        "c2",
+        [
+            {"source_url": "https://official.example/report", "official": True, "access_status": "full", "source_tier": "raw"},
+            {"source_url": "https://helper.example/note", "official": False, "access_status": "full", "source_tier": "model_generated"},
+        ],
+    )
+    for gate in (primary_plus_model_generated, raw_plus_model_generated):
+        assert gate["status"] == "verified"
+        assert gate["decision"] == "promote"
+        assert gate["model_generated_only"] is False
+
+
+def test_tier_ordering_respected_when_mixing_sources() -> None:
+    # A derived source (someone's write-up) still counts as real corroboration alongside a
+    # model-generated assertion, even with no primary/raw source present.
+    derived_plus_model_generated = evaluate_claim_cluster(
+        "c1",
+        [
+            {"source_url": "https://writeup.example/a", "official": True, "access_status": "full", "source_tier": "derived"},
+            {"source_url": "https://helper.example/b", "official": False, "access_status": "full", "source_tier": "model_generated"},
+        ],
+    )
+    assert derived_plus_model_generated["status"] == "verified"
+    assert derived_plus_model_generated["model_generated_only"] is False
+
+    # The same URL tiered differently across evidence records should be scored by its best tier.
+    best_tier_wins = evaluate_claim_cluster(
+        "c2",
+        [
+            {"source_url": "https://official.example/report", "official": True, "access_status": "full", "source_tier": "model_generated"},
+            {"source_url": "https://official.example/report", "official": True, "access_status": "full", "source_tier": "primary"},
+            {"source_url": "https://helper.example/b", "official": False, "access_status": "full", "source_tier": "model_generated"},
+        ],
+    )
+    assert best_tier_wins["model_generated_only"] is False
+    assert best_tier_wins["status"] == "verified"
+
+
+def test_tier_absent_inputs_reproduce_existing_behavior() -> None:
+    # No source_tier field anywhere: must behave exactly as before tiering existed.
+    untiered = evaluate_claim_cluster(
+        "c1",
+        [
+            {"source_url": "https://official.example/a", "official": True, "access_status": "full"},
+            {"source_url": "https://independent.example/a", "official": False, "access_status": "full"},
+        ],
+    )
+    assert untiered["status"] == "verified"
+    assert untiered["decision"] == "promote"
+    assert untiered["model_generated_only"] is False
+
+    single = evaluate_claim_cluster(
+        "c2", [{"source_url": "https://one.example/a", "official": True, "access_status": "full"}]
+    )
+    assert single["status"] == "single_source"
+    assert single["model_generated_only"] is False
+
+
+def test_claim_level_model_generated_only_evidence_is_not_verified_in_built_bundle() -> None:
+    raw = sample_bundle()
+    raw["claims"] = [
+        {
+            "claim_id": "c1",
+            "text": "SystemX supports 2 reusable outputs.",
+            "evidence": [
+                {"source_url": "https://official.example/report", "official": True, "access_status": "full", "source_tier": "model_generated"},
+                {"source_url": "https://independent.example/review", "official": False, "access_status": "full", "source_tier": "model_generated"},
+            ],
+        }
+    ]
+    bundle = build_bundle(raw)
+    gate = bundle["claims"][0]["evidence_gate"]
+    assert gate["status"] != "verified"
+    assert gate["model_generated_only"] is True
+    assert bundle["claims"][0]["evidence"][0]["source_tier"] == "model_generated"
