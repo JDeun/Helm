@@ -7,10 +7,11 @@
 - Guarded OMFM recovery with runtime context checks and canary evidence.
 - Verified execution, source-bundle quality gates, memory quality/decay, and parallel worktree review.
 - Documentation and README updates for evidence-aware execution and guarded model recovery.
+- `helm reconcile`: drift-tolerant, idempotent re-apply of workspace reference files against the packaged desired snapshot. Classifies each file as unchanged/missing/drifted/source_missing, adds missing files on `--apply`, preserves local overrides unless `--force`, and reports drift instead of clobbering (dry-run by default). Reports `converged`/`ok`.
 
 ### Verification
 
-- Full test suite: 1,523 passed.
+- Full test suite: 1,532 passed (9 new reconcile tests).
 
 ## [0.12.0] — 2026-07-13
 

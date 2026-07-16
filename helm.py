@@ -81,6 +81,7 @@ from commands.task import (
     cmd_task_show,
 )
 from commands.validate import cmd_validate
+from commands.reconcile import cmd_reconcile
 from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status, cmd_db_query
 from commands.skill_promotion import cmd_skill_promotion
 from commands.shadow_report import cmd_shadow_report
@@ -196,6 +197,20 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
     validate.add_argument("--json", action="store_true")
     validate.set_defaults(func=cmd_validate)
+
+    reconcile = subparsers.add_parser(
+        "reconcile",
+        help="Reconcile workspace reference files against the packaged desired snapshot (drift-tolerant, idempotent).",
+    )
+    reconcile.add_argument("--path", help=f"Workspace path to reconcile. Defaults to {DEFAULT_WORKSPACE}.")
+    reconcile.add_argument("--apply", action="store_true", help="Write changes (add missing files). Without it, dry-run report only.")
+    reconcile.add_argument(
+        "--force",
+        action="store_true",
+        help="With --apply, overwrite drifted files from the desired snapshot (default: preserve local overrides).",
+    )
+    reconcile.add_argument("--json", action="store_true")
+    reconcile.set_defaults(func=cmd_reconcile)
 
     loops = subparsers.add_parser("loops", help="Validate and inspect reusable loop definitions.")
     loops.add_argument("--path", help="Workspace path to inspect. Defaults to the current directory.")
