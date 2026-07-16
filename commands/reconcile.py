@@ -165,7 +165,7 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         "summary "
         f"unchanged={s['unchanged']} added={s['added']} overwritten={s['overwritten']} "
         f"drift_skipped={s['drift_skipped']} missing_skipped={s['missing_skipped']} "
-        f"source_missing={s['source_missing']}"
+        f"blocked={s['blocked']} source_missing={s['source_missing']}"
     )
     print(f"converged={report['converged']}")
     return 0 if report["ok"] else 1
