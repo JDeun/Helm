@@ -141,6 +141,8 @@ Each command leaves a structured record on disk: task ledger, command log, check
 helm doctor
 helm status --brief
 helm dashboard
+helm reconcile              # dry-run: report reference drift vs the desired snapshot
+helm verify-contract        # assert behavioral operating invariants still hold
 ```
 
 </details>
@@ -243,9 +245,22 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 
 ---
 
+## v0.13.0 — operations-layer hardening
+
+*Current release: v0.13.0 — released 2026-07-16.* This release imports patterns proven in live agent operation.
+
+- `helm reconcile` re-applies workspace reference files against the packaged desired snapshot — drift-tolerant and idempotent, reporting drift instead of clobbering local overrides.
+- `helm verify-contract` asserts behavioral operating invariants (guard deny/fail-closed, approval TTL/consume-once, atomic ledger), complementing structural `doctor`/`validate`.
+- Deterministic skill routing (`scripts/skill_router.py`), a generic tool/MCP adapter registry (`scripts/tool_adapter.py` + `references/connectors.json`), and grounding-by-guidance-injection with a deterministic template fallback (`scripts/grounding.py`).
+- Source-provenance tiering refuses to promote model-generated-only claims; fast-ACK intake dedups retried deliveries; tasks record their interpreter fingerprint and `run_checkpoint` uses `sys.executable`; non-file checkpoint backends fingerprint dependencies before a runtime bump.
+
+See [the full v0.13.0 notes](docs/releases/0.13.0.md).
+
+---
+
 ## v0.12.0 — evidence-aware workflow governance
 
-*Current release: v0.12.0 — released 2026-07-13.* This release makes workflow boundaries and completion claims explicit and inspectable.
+*v0.12.0 — released 2026-07-13.* This release makes workflow boundaries and completion claims explicit and inspectable.
 
 - `references/workflow_units.yaml` defines allowed inputs, live sources, mutation surfaces, verification, reporting, handoff, and stop contracts.
 - `python3 scripts/workflow_registry.py` validates those contracts before adoption.
@@ -390,7 +405,7 @@ Cite Helm:
   author = {Cho, Yong Eun},
   year   = {2026},
   url    = {https://github.com/JDeun/Helm},
-  version = {0.12.0}
+  version = {0.13.0}
 }
 ```
 
@@ -403,7 +418,7 @@ See [`CITATION.cff`](CITATION.cff) for the machine-readable form.
 Issues and pull requests welcome.
 
 - Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a PR.
-- Run the test suite: `python -m pytest -q` (currently 1,523 tests).
+- Run the test suite: `python -m pytest -q` (currently 1,596 tests).
 - Run the release checks: `python scripts/release_version_check.py --version <next>`.
 - Security reports: see [`SECURITY.md`](SECURITY.md).
 
@@ -411,8 +426,8 @@ Issues and pull requests welcome.
 
 ## Release history
 
-- **Latest**: [v0.12.0](docs/releases/0.12.0.md) — evidence-aware execution, source bundles, memory quality, and guarded model recovery
-- **Previous**: [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
+- **Latest**: [v0.13.0](docs/releases/0.13.0.md) — reconcile, operating-contract verifier, skill router, tool/MCP adapter, grounding, source-tiering, fast-ACK intake, interpreter pinning
+- **Previous**: [v0.12.0](docs/releases/0.12.0.md), [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **Full changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [older release notes](docs/releases/)
 
 ---
