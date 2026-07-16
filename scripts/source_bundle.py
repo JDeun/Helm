@@ -30,6 +30,13 @@ ACCESS_STATUSES = frozenset({"full", "partial", "blocked"})
 EVIDENCE_STATUSES = frozenset({"verified", "single_source", "conflicted", "official_unread", "stale_or_unclear"})
 CONFIDENCE_LEVELS = frozenset({"low", "medium", "high"})
 POLARITIES = frozenset({"positive", "negative"})
+# Provenance tiers, ordered weakest -> strongest. "raw" ranks with "primary": both are
+# first-hand material (a raw capture vs. a curated/official primary document), as opposed
+# to "derived" (someone's write-up of a source) or "model_generated" (an LLM asserted it
+# with no external source backing it).
+SOURCE_TIERS = ("model_generated", "derived", "primary", "raw")
+_SOURCE_TIER_RANK = {"model_generated": 0, "derived": 1, "primary": 2, "raw": 2}
+DEFAULT_SOURCE_TIER = "primary"  # untiered evidence ranks as primary, preserving pre-tiering behavior
 TRACKING_KEYS = frozenset({"fbclid", "gclid", "mc_cid", "mc_eid"})
 TRACKING_PREFIXES = ("utm_",)
 CLAIM_REF_RE = re.compile(r"\[([A-Za-z0-9_.:-]+)\]")
@@ -100,6 +107,22 @@ def _unique_strings(values: Iterable[object]) -> list[str]:
     return result
 
 
+def source_tier_rank(tier: object) -> int:
+    """Ordinal rank of a provenance tier: primary/raw > derived > model_generated.
+
+    Absent or unrecognized tiers rank as DEFAULT_SOURCE_TIER so evidence that predates
+    (or simply omits) tiering is scored exactly as it was before tiering existed.
+    """
+    text = str(tier or "").strip().casefold()
+    return _SOURCE_TIER_RANK.get(text, _SOURCE_TIER_RANK[DEFAULT_SOURCE_TIER])
+
+
+def classify_source_tier(item: object) -> str:
+    """Read the normalized provenance tier off a source/claim evidence mapping."""
+    text = str((item or {}).get("source_tier") if isinstance(item, dict) else "").strip().casefold()
+    return text if text in _SOURCE_TIER_RANK else DEFAULT_SOURCE_TIER
+
+
 def _normalize_evidence(raw: object, bundle: dict[str, Any]) -> dict[str, Any]:
     if isinstance(raw, str):
         item: dict[str, Any] = {"locator": raw}
@@ -121,6 +144,7 @@ def _normalize_evidence(raw: object, bundle: dict[str, Any]) -> dict[str, Any]:
         "access_status": access_status,
         "stance": stance,
         "published_at": item.get("published_at") or bundle.get("published_at"),
+        "source_tier": item.get("source_tier"),
     }
 
 
@@ -154,6 +178,21 @@ def evaluate_claim_cluster(
         for item in items
         if item.get("stance") == "contradicts"
     ]
+    # Prefer the highest-tier evidence available per source when weighing corroboration:
+    # if the same URL shows up tiered differently across evidence records, its best tier wins.
+    readable_tier_rank_by_url: dict[str, int] = {}
+    for item in readable:
+        if not item.get("source_url"):
+            continue
+        url = canonicalize_source_url(str(item["source_url"]))
+        rank = source_tier_rank(classify_source_tier(item))
+        if rank > readable_tier_rank_by_url.get(url, -1):
+            readable_tier_rank_by_url[url] = rank
+    model_generated_rank = _SOURCE_TIER_RANK["model_generated"]
+    corroborated_by_non_model_source = any(
+        rank > model_generated_rank for rank in readable_tier_rank_by_url.values()
+    )
+    model_generated_only = bool(readable_tier_rank_by_url) and not corroborated_by_non_model_source
     status = "single_source"
     if contradictions:
         status = "conflicted"
@@ -164,9 +203,9 @@ def evaluate_claim_cluster(
         reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
         if not dates or max(dates) < reference - timedelta(days=max_age_days):
             status = "stale_or_unclear"
-        elif len(readable_urls) >= 2 and official_readable:
+        elif len(readable_urls) >= 2 and official_readable and not model_generated_only:
             status = "verified"
-    elif len(readable_urls) >= 2 and official_readable:
+    elif len(readable_urls) >= 2 and official_readable and not model_generated_only:
         status = "verified"
     decision = "promote" if status == "verified" else "reject" if status == "conflicted" else "hold"
     return {
@@ -177,6 +216,7 @@ def evaluate_claim_cluster(
         "official_source_count": len({item.get("source_url") for item in official_readable}),
         "contradictions": contradictions,
         "decision": decision,
+        "model_generated_only": model_generated_only,
     }
 
 
