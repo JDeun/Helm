@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "_spec": "Registry of tool / MCP-server adapters loadable by scripts.tool_adapter.load_adapters(). New external tools are onboarded by adding a DATA entry here, not by writing new invocation code. Unknown/malformed entries are skipped and reported to stderr (drift-tolerant), never crash. See scripts/tool_adapter.py for the adapter interface and scripts/tool_groups.py + scripts/freshness_lib.py for the connector-id naming convention (lower_snake_case, matches CONNECTOR_DEFAULTS keys where the same external system is also freshness-tracked).",
+  "connectors": [
+    {
+      "name": "echo",
+      "type": "local_callable",
+      "ops": ["echo"],
+      "config": {}
+    }
+  ]
+}
