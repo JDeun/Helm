@@ -135,16 +135,44 @@ def test_reapply_is_idempotent(tmp_path):
     assert second["converged"] is True
 
 
-def test_unreadable_target_does_not_crash(tmp_path):
+def test_directory_target_is_blocked_not_copied_into(tmp_path):
+    # A directory shadowing a reference path must be reported (blocked), never
+    # copied into — and must not report false success / converged.
     desired, root, req = _setup(tmp_path)
-    # make target 'a.json' a directory so byte-read fails; must be tolerated
     (root / "references" / "a.json").mkdir()
     report = reconcile_workspace_references(
-        root, apply=False, required_files=req, references_root=desired
+        root, apply=True, required_files=req, references_root=desired
     )
-    # treated as missing (unreadable), reported, no exception
     statuses = {e["file"]: e["status"] for e in report["files"]}
-    assert statuses["a.json"] == "missing"
+    assert statuses["a.json"] == "not_a_regular_file"
+    assert report["summary"]["blocked"] == 1
+    assert report["converged"] is False
+    assert report["ok"] is False
+    # nothing was written into the directory
+    assert (root / "references" / "a.json").is_dir()
+    assert not (root / "references" / "a.json" / "a.json").exists()
+
+
+def test_symlink_target_not_followed_outside_workspace(tmp_path):
+    # A drifted reference that is a symlink to an external file must NOT be
+    # overwritten through the link (which would write outside the workspace).
+    desired, root, req = _setup(tmp_path)
+    outside = tmp_path / "OUTSIDE_secret.json"
+    outside.write_text('{"secret": true}\n', encoding="utf-8")
+    link = root / "references" / "a.json"
+    link.symlink_to(outside)
+    (root / "references" / "b.json").write_text(
+        (desired / "b.json").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    report = reconcile_workspace_references(
+        root, apply=True, force=True, required_files=req, references_root=desired
+    )
+    statuses = {e["file"]: e["status"] for e in report["files"]}
+    assert statuses["a.json"] == "not_a_regular_file"
+    assert report["summary"]["blocked"] == 1
+    assert report["ok"] is False
+    # the external victim file was NOT overwritten
+    assert outside.read_text(encoding="utf-8") == '{"secret": true}\n'
 
 
 def test_cli_smoke_against_packaged_references(tmp_path, capsys):

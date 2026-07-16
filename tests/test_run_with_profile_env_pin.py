@@ -94,6 +94,15 @@ def test_should_force_checkpoint_on_destructive():
     assert rwp.should_force_checkpoint(None) is False
 
 
+def test_should_force_checkpoint_respects_guard_mode_and_inspection():
+    # A disabled/audit guard or a --guard-json inspection must NOT force a checkpoint,
+    # so a destructive-classified command does not get gated when the user opted out.
+    assert rwp.should_force_checkpoint(_Classification(True), guard_mode="off") is False
+    assert rwp.should_force_checkpoint(_Classification(True), guard_mode="audit") is False
+    assert rwp.should_force_checkpoint(_Classification(True), guard_json=True) is False
+    assert rwp.should_force_checkpoint(_Classification(True), guard_mode="enforce") is True
+
+
 def test_run_checkpoint_forced_on_non_required_profile(monkeypatch):
     # profile does NOT require a checkpoint, but a destructive op forces one
     monkeypatch.setattr(rwp, "load_profiles", lambda: {"p": {"backend": "b", "checkpoint": "never"}})

@@ -257,6 +257,11 @@ def load_adapters(path: Path) -> dict[str, ToolAdapter]:
         if built is None:
             continue
         name, adapter = built
+        if name in adapters:
+            print(
+                f"tool_adapter: duplicate connector name {name!r}; keeping the last definition",
+                file=sys.stderr,
+            )
         adapters[name] = adapter
     return adapters
 
@@ -295,7 +300,10 @@ def invoke_tool(
         return {"ok": False, "error": "unknown_tool", "tool": name, "op": op}
 
     guard_fn = guard if guard is not None else _allow_all
-    decision = guard_fn(name, op, args)
+    try:
+        decision = guard_fn(name, op, args)
+    except Exception as exc:  # noqa: BLE001 - a raising guard must not break the never-raises contract
+        return {"ok": False, "error": "guard_error", "tool": name, "op": op, "detail": str(exc)}
     if isinstance(decision, dict):
         allowed = bool(decision.get("allow", True))
         reason = decision.get("reason")
@@ -310,7 +318,7 @@ def invoke_tool(
         return result
 
     try:
-        return adapter.invoke(op, args)
+        result = adapter.invoke(op, args)
     except Exception as exc:  # noqa: BLE001 - adapters must not be able to crash the caller
         return {
             "ok": False,
@@ -319,3 +327,14 @@ def invoke_tool(
             "op": op,
             "detail": str(exc),
         }
+    if not isinstance(result, dict):
+        # A third-party adapter that returns a non-dict must not leak a value that
+        # violates the documented ``-> dict`` contract to the caller.
+        return {
+            "ok": False,
+            "error": "adapter_bad_return",
+            "tool": name,
+            "op": op,
+            "detail": f"adapter returned {type(result).__name__}, expected dict",
+        }
+    return result

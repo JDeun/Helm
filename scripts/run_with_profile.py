@@ -859,10 +859,18 @@ def validate_skill_profile(skill: str | None, profile: str) -> None:
         )
 
 
-def should_force_checkpoint(classification) -> bool:
-    """Force a pre-op checkpoint when the command is classified destructive,
-    regardless of the profile's static checkpoint flag. A destructive command
-    under a non-``required`` profile would otherwise run with no snapshot."""
+def should_force_checkpoint(classification, *, guard_mode: str = "enforce", guard_json: bool = False) -> bool:
+    """Force a pre-op checkpoint when a command is classified destructive.
+
+    Only forces while the guard is actively enforcing: a user who disabled the
+    guard (``guard_mode != "enforce"``) or an inspection-only ``--guard-json``
+    call is not governance-gated, so no forced checkpoint (and no side effect)
+    is imposed on them. A forced checkpoint (unlike a profile-``required`` one)
+    is non-fatal at the call site, so a benign command misclassified as
+    destructive cannot turn a previously-successful run into a failure.
+    """
+    if guard_mode != "enforce" or guard_json:
+        return False
     return bool(classification is not None and getattr(classification, "destructive_detected", False))
 
 
@@ -1280,28 +1288,43 @@ def cmd_run(args: argparse.Namespace) -> int:
             return _browser_rc
     # --- End browser gate ---
 
+    # Resolve guard mode BEFORE the checkpoint so a governance-forced checkpoint
+    # respects it (a disabled guard or a --guard-json inspection is not gated).
+    guard_mode_source = "cli" if getattr(args, "guard_mode", None) else "env"
+    guard_mode = getattr(args, "guard_mode", None) or os.environ.get("HELM_GUARD_MODE", "enforce")
+
     # A destructive command forces a pre-op checkpoint even under a profile whose
-    # static checkpoint flag is not "required" (classification is argv-derived,
-    # available here before guard evaluation).
+    # static flag is not "required" — but only while the guard is actively enforcing,
+    # and a FORCED (not profile-required) checkpoint failure is non-fatal so it can
+    # never turn a previously-successful run into a failure.
+    profile_requires_checkpoint = profiles[args.profile].get("checkpoint") == "required"
     checkpoint = run_checkpoint(
         args.profile,
         args,
-        force=should_force_checkpoint(_classification_for_governance(command, None)),
+        force=should_force_checkpoint(
+            _classification_for_governance(command, None),
+            guard_mode=guard_mode,
+            guard_json=getattr(args, "guard_json", False),
+        ),
     )
     if checkpoint and checkpoint.get("error"):
-        task["status"] = "failed"
-        task["finished_at"] = utc_now_iso()
-        task["failure_stage"] = "checkpoint"
-        task["failure_reason"] = checkpoint["error"]
-        finalize_task(task)
-        return 1
+        if profile_requires_checkpoint:
+            task["status"] = "failed"
+            task["finished_at"] = utc_now_iso()
+            task["failure_stage"] = "checkpoint"
+            task["failure_reason"] = checkpoint["error"]
+            finalize_task(task)
+            return 1
+        print(
+            f"WARNING: forced pre-op checkpoint failed (non-fatal, profile does not require it): {checkpoint['error']}",
+            file=sys.stderr,
+        )
+        checkpoint = None
     if checkpoint:
         task["checkpoint_id"] = checkpoint.get("checkpoint_id")
         task["checkpoint_label"] = checkpoint.get("label")
 
     # --- Guard evaluation (before any backend check) ---
-    guard_mode_source = "cli" if getattr(args, "guard_mode", None) else "env"
-    guard_mode = getattr(args, "guard_mode", None) or os.environ.get("HELM_GUARD_MODE", "enforce")
     guard_decision = None
 
     if guard_mode == "off" and guard_mode_source == "env":

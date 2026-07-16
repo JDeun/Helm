@@ -95,6 +95,7 @@ def reconcile_workspace_references(
         "drift_skipped": 0,
         "missing_skipped": 0,
         "source_missing": 0,
+        "blocked": 0,
     }
 
     for filename in required_files:
@@ -104,6 +105,11 @@ def reconcile_workspace_references(
 
         if source_bytes is None:
             status, action, bucket = "source_missing", "none", "source_missing"
+        elif target.is_symlink() or (target.exists() and not target.is_file()):
+            # Refuse to write over a non-regular-file reference path: a symlink
+            # could redirect the write outside the workspace, and a directory would
+            # be copied *into* (not replaced). Report it; never touch it.
+            status, action, bucket = "not_a_regular_file", "blocked", "blocked"
         else:
             target_bytes = _read_bytes(target)
             if target_bytes is None:
@@ -129,8 +135,9 @@ def reconcile_workspace_references(
         summary["drift_skipped"] == 0
         and summary["missing_skipped"] == 0
         and summary["source_missing"] == 0
+        and summary["blocked"] == 0
     )
-    ok = summary["source_missing"] == 0
+    ok = summary["source_missing"] == 0 and summary["blocked"] == 0
     return {
         "workspace": str(root),
         "dry_run": not apply,
