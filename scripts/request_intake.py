@@ -39,6 +39,9 @@ def accept_request(
     When ``delivery_id`` is falsy, a stable hash of ``payload`` is used
     as the effective idempotency key instead.
     """
+    # The payload is untrusted (external webhook/queue): guard field access so a
+    # non-dict body still ACKs/dedups instead of crashing the intake seam.
+    fields = payload if isinstance(payload, dict) else {}
     key = delivery_id or _stable_hash(payload)
     seen_deliveries = state.setdefault("seen_deliveries", {})
 
@@ -52,16 +55,16 @@ def accept_request(
         }
 
     task = create_task_run(
-        requester=str(payload.get("requester") or "external"),
-        source_surface=str(payload.get("source_surface") or "webhook"),
-        user_message=str(payload.get("user_message") or ""),
-        normalized_intent=str(payload.get("normalized_intent") or "inbound_request"),
-        risk_class=str(payload.get("risk_class") or "low"),
+        requester=str(fields.get("requester") or "external"),
+        source_surface=str(fields.get("source_surface") or "webhook"),
+        user_message=str(fields.get("user_message") or ""),
+        normalized_intent=str(fields.get("normalized_intent") or "inbound_request"),
+        risk_class=str(fields.get("risk_class") or "low"),
         status="pending",
         metadata={
             "delivery_id": key,
             "received_at_ms": now_ms,
-            "payload": dict(payload),
+            "payload": payload if isinstance(payload, dict) else {"_raw": payload},
         },
     )
     upsert_task_run(state, task)

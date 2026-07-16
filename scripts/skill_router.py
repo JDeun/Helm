@@ -77,15 +77,19 @@ def route_skill(
     scored: list[dict] = []
     for skill, manifest in manifests.items():
         contract = manifest if isinstance(manifest, dict) else {}
-        result = score_skill_relevance(
-            skill=skill,
-            profile=profile,
-            contract=contract,
-            request=request,
-            task_name=task_name,
-            command=command_list,
-        )
-        scored.append({"skill": skill, "score": float(result.get("score", 0))})
+        try:
+            result = score_skill_relevance(
+                skill=skill,
+                profile=profile,
+                contract=contract,
+                request=request,
+                task_name=task_name,
+                command=command_list,
+            )
+            score = float(result.get("score", 0))
+        except Exception:  # noqa: BLE001 - one corrupt on-disk manifest must not disable the whole router
+            continue
+        scored.append({"skill": skill, "score": score})
 
     cleared = [item for item in scored if item["score"] >= min_score]
     # Deterministic ordering even on ties: score desc, then skill name asc.

@@ -56,9 +56,13 @@ def _load_reference_text(skill_dir: Path) -> str:
         return ""
     chunks: list[str] = []
     for path in sorted(references_dir.rglob("*")):
-        if not path.is_file():
+        # Skip symlinks (could point outside skill_dir) and cap size so a huge
+        # file cannot blow up the preamble.
+        if not path.is_file() or path.is_symlink():
             continue
         try:
+            if path.stat().st_size > 1_000_000:
+                continue
             content = path.read_text(encoding="utf-8").strip()
         except (OSError, UnicodeDecodeError):
             continue
@@ -109,19 +113,30 @@ def render_deterministic_template(skill_dir: Path, args: dict) -> str:
         except OSError:
             template = ""
         if template:
-            for key, value in args.items():
-                placeholder = f"__{str(key).upper()}__"
-                template = template.replace(placeholder, str(value))
-            return template
+            # Single-pass substitution: build the placeholder->value map, then
+            # replace in ONE regex pass over the original template. Sequential
+            # str.replace would re-substitute a value that itself contains a
+            # placeholder and make the output depend on dict order; this does not.
+            import re
+
+            mapping = {
+                f"__{str(key).upper()}__": str(value)
+                for key, value in sorted(args.items(), key=lambda kv: str(kv[0]))
+            }
+            return re.sub(r"__[A-Z0-9_]+__", lambda m: mapping.get(m.group(0), m.group(0)), template)
 
     return "\n".join(f"{key}: {value}" for key, value in sorted(args.items(), key=lambda item: str(item[0])))
 
 
-def should_use_deterministic_fallback(tier_mode: str, repair_budget_left: int) -> bool:
+def should_use_deterministic_fallback(tier_mode: str, repair_budget_left: int | None) -> bool:
     """Return True when the caller must fall back to the deterministic template.
 
     True when ``tier_mode`` is ``"deterministic_only"`` (see
     ``scripts.intelligence_tier.IntelligenceTier.mode()``) or when the
     repair budget has been exhausted (``repair_budget_left <= 0``).
     """
-    return tier_mode == "deterministic_only" or repair_budget_left <= 0
+    # None means "no/unlimited budget" — not exhausted (avoids a TypeError on
+    # `None <= 0` when the model tier is not deterministic_only).
+    return tier_mode == "deterministic_only" or (
+        repair_budget_left is not None and repair_budget_left <= 0
+    )
