@@ -14,10 +14,12 @@
 - Source-provenance tiering in the SourceBundle evidence gate: `evaluate_claim_cluster` refuses to promote a claim to `verified` when its only readable corroboration is `model_generated`, ranking sources `primary`/`raw` > `derived` > `model_generated` (untiered evidence keeps prior behavior).
 - Grounding-by-guidance-injection (`scripts/grounding.py`): assembles a skill's guidance/reference sections plus memory context into a model preamble, with a deterministic template fallback and a local-downgrade signal for weak-model grounded output.
 - Fast-ACK request intake (`scripts/request_intake.py`): dedups retried webhook/queue deliveries by `delivery_id` (falling back to a payload hash) into a single pending task_run, collapsing caller retry-storms.
+- Per-task interpreter fingerprint (`run_with_profile.interpreter_fingerprint`/`check_interpreter_match`): the task ledger now records `runtime_env` (python executable + version) so a runtime drift is detectable, and `run_checkpoint` invokes `sys.executable` instead of a hardcoded `python3` — fixing a silent pre-op checkpoint failure under a daemon whose PATH lacks the interpreter's directory.
+- Non-file checkpoint backends (`scripts/checkpoint_backends.py`): capture runtime state (installed-distribution fingerprint via `importlib.metadata`) with `diff_fingerprints`, so a dependency/runtime bump has a concrete before-state; a destructive command now forces a pre-op checkpoint regardless of the profile's static checkpoint flag.
 
 ### Verification
 
-- Full test suite: green (7 new modules/gaps, +62 tests over the 0.12.0 baseline).
+- Full test suite: 1,596 passed (8 gap features, +73 tests over the 0.12.0 baseline of 1,523).
 
 ## [0.12.0] — 2026-07-13
 
