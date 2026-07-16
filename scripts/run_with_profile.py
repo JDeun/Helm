@@ -129,6 +129,35 @@ _WORKSPACE_ENV_KEYS = {
 }
 
 
+def interpreter_fingerprint() -> dict[str, str]:
+    """Record the interpreter that actually ran a task.
+
+    Uses ``sys.executable`` (not a bare ``python3``) so a later env-match check
+    can catch a runtime drift — e.g. a Python upgrade, or a daemon whose PATH
+    resolves a different interpreter than the one the task was verified under.
+    """
+    return {
+        "python_executable": sys.executable,
+        "python_version": ".".join(str(p) for p in sys.version_info[:3]),
+    }
+
+
+def check_interpreter_match(expected: dict, actual: dict | None = None) -> dict:
+    """Compare an expected interpreter fingerprint against the current one.
+
+    Returns ``{"match": bool, "expected": ..., "actual": ...}``. A mismatch is
+    the signal that verified-in-one-environment evidence could diverge from the
+    task's actual runtime interpreter.
+    """
+    if actual is None:
+        actual = interpreter_fingerprint()
+    match = (
+        expected.get("python_executable") == actual.get("python_executable")
+        and expected.get("python_version") == actual.get("python_version")
+    )
+    return {"match": match, "expected": expected, "actual": actual}
+
+
 def _minimal_env(*, extra_keys: set[str] | None = None) -> dict[str, str]:
     """Return a minimal environment dict with only safe, non-secret variables."""
     keep = _MINIMAL_ENV_KEYS | (extra_keys or set())
@@ -776,6 +805,7 @@ def task_stub(profile: str, args: argparse.Namespace, command: list[str]) -> dic
         "checkpoint_paths": args.path if isinstance(args.path, list) else [],
         "checkpoint_id": None,
         "delivery_mode": args.delivery_mode,
+        "runtime_env": interpreter_fingerprint(),
         "meta": meta,
         "verified_execution": {
             "required": getattr(args, "verified_execution", False) is True or getattr(args, "verified_attempt", False) is True,
@@ -829,14 +859,24 @@ def validate_skill_profile(skill: str | None, profile: str) -> None:
         )
 
 
-def run_checkpoint(profile: str, args: argparse.Namespace) -> dict | None:
+def should_force_checkpoint(classification) -> bool:
+    """Force a pre-op checkpoint when the command is classified destructive,
+    regardless of the profile's static checkpoint flag. A destructive command
+    under a non-``required`` profile would otherwise run with no snapshot."""
+    return bool(classification is not None and getattr(classification, "destructive_detected", False))
+
+
+def run_checkpoint(profile: str, args: argparse.Namespace, *, force: bool = False) -> dict | None:
     profiles = load_profiles()
     config = profiles[profile]
-    if config["checkpoint"] != "required":
+    if config["checkpoint"] != "required" and not force:
         return None
     label = args.label or f"{profile}-checkpoint"
     paths = args.path or ["scripts", "skills", "docs", "references", "AGENTS.md", "TOOLS.md"]
-    checkpoint_cmd = ["python3", str(CHECKPOINT_SCRIPT), "create", "--label", label]
+    # Use the current interpreter, not a bare "python3": under a daemon whose
+    # PATH lacks this interpreter's directory, "python3" resolves wrong or not
+    # at all, silently failing the pre-op checkpoint.
+    checkpoint_cmd = [sys.executable, str(CHECKPOINT_SCRIPT), "create", "--label", label]
     for path in paths:
         checkpoint_cmd.extend(["--path", path])
     try:
@@ -1240,7 +1280,14 @@ def cmd_run(args: argparse.Namespace) -> int:
             return _browser_rc
     # --- End browser gate ---
 
-    checkpoint = run_checkpoint(args.profile, args)
+    # A destructive command forces a pre-op checkpoint even under a profile whose
+    # static checkpoint flag is not "required" (classification is argv-derived,
+    # available here before guard evaluation).
+    checkpoint = run_checkpoint(
+        args.profile,
+        args,
+        force=should_force_checkpoint(_classification_for_governance(command, None)),
+    )
     if checkpoint and checkpoint.get("error"):
         task["status"] = "failed"
         task["finished_at"] = utc_now_iso()
