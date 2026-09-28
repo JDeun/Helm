@@ -30,7 +30,7 @@ from scripts.tool_adapter import (
     load_adapters,
 )
 
-_DEFAULT_REGISTRY_PATH = ROOT / "references" / "connectors.json"
+_DEFAULT_REGISTRY_PATH = ROOT / "helm" / "references" / "connectors.json"
 
 
 # ---------------------------------------------------------------------------

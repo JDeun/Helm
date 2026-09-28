@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _SCHEMA_CACHE: dict = {}
 
-_SCHEMA_PATH = Path(__file__).parent.parent / "references" / "respond_tool_schema.json"
+_SCHEMA_PATH = Path(__file__).parent.parent / "helm" / "references" / "respond_tool_schema.json"
 
 _RESPOND_TOOL_NAME = "respond"
 

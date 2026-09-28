@@ -298,7 +298,7 @@ def assess_draft_path(
         return False, [f"Draft file not found: {draft_path}"]
 
     if template_path is None:
-        template_path = _ROOT / "references" / "skill-capture-template.md"
+        template_path = _ROOT / "helm" / "references" / "skill-capture-template.md"
 
     required_sections = _load_template_sections(template_path)
     text = draft_path.read_text(encoding="utf-8")

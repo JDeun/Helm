@@ -39,7 +39,7 @@ def validate_registry(payload: dict) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate Helm workflow unit registry contracts.")
-    parser.add_argument("path", nargs="?", default=str(Path(__file__).resolve().parents[1] / "references" / "workflow_units.yaml"))
+    parser.add_argument("path", nargs="?", default=str(Path(__file__).resolve().parents[1] / "helm" / "references" / "workflow_units.yaml"))
     args = parser.parse_args()
     payload = yaml.safe_load(Path(args.path).read_text(encoding="utf-8"))
     issues = validate_registry(payload)

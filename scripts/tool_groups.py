@@ -43,7 +43,7 @@ import json
 from pathlib import Path
 
 # Resolve the data file relative to this module's location.
-_DATA_FILE = Path(__file__).resolve().parents[1] / "references" / "tool_groups.json"
+_DATA_FILE = Path(__file__).resolve().parents[1] / "helm" / "references" / "tool_groups.json"
 
 _CACHE: dict | None = None
 

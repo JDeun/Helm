@@ -23,7 +23,7 @@ if str(_ROOT) not in sys.path:
 from scripts.action_scope import ActionScopeKind, evaluate as evaluate_scope  # noqa: E402
 from scripts.time_helpers import utc_now_iso  # noqa: E402
 
-REGISTRY_PATH = _ROOT / "references" / "action_governance_registry.json"
+REGISTRY_PATH = _ROOT / "helm" / "references" / "action_governance_registry.json"
 DECISION_RECORD_FIELDS = (
     "timestamp",
     "session_id",

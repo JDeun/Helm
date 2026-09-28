@@ -363,7 +363,7 @@ def _load_policy(policy_path: Path | None) -> tuple[list[dict], list[dict], int]
     candidates: list[Path] = []
     if policy_path is not None:
         candidates.append(policy_path)
-    default = Path(__file__).resolve().parents[1] / "references" / "guard_policy.json"
+    default = Path(__file__).resolve().parents[1] / "helm" / "references" / "guard_policy.json"
     candidates.append(default)
 
     for path in candidates:

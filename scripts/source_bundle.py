@@ -42,7 +42,7 @@ TRACKING_PREFIXES = ("utm_",)
 CLAIM_REF_RE = re.compile(r"\[([A-Za-z0-9_.:-]+)\]")
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{1,127}$")
 DEFAULT_OFFICIAL_UNREAD_WARNING_RATIO = 0.30
-CAPABILITY_CONFIG = Path(__file__).resolve().parents[1] / "references" / "capability_boundaries.json"
+CAPABILITY_CONFIG = Path(__file__).resolve().parents[1] / "helm" / "references" / "capability_boundaries.json"
 NEGATION_RE = re.compile(r"\b(?:not|no|never|without|cannot|can't|doesn't|isn't|aren't)\b|않|아니|없|불가|금지", re.IGNORECASE)
 
 

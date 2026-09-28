@@ -20,7 +20,7 @@ from typing import Any
 # Policy location
 # ---------------------------------------------------------------------------
 
-_POLICY_PATH = Path(__file__).parent.parent / "references" / "edit_policy.json"
+_POLICY_PATH = Path(__file__).parent.parent / "helm" / "references" / "edit_policy.json"
 
 # Module-level cache; None means "not yet loaded".
 _cached_policy: dict[str, Any] | None = None

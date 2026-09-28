@@ -38,7 +38,7 @@ def utc_now_iso() -> str:
 
 
 def default_config_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "references" / "evidence_commands.json"
+    return Path(__file__).resolve().parents[1] / "helm" / "references" / "evidence_commands.json"
 
 
 def load_config(path: Path | None = None) -> dict:

@@ -14,7 +14,7 @@ from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill
 from scripts.state_snapshot import latest_snapshot_path
 
 ROOT = Path(__file__).resolve().parent.parent
-REFERENCES_ROOT = ROOT / "references"
+REFERENCES_ROOT = ROOT / "helm" / "references"
 SCRIPT_ROOT = ROOT / "scripts"
 REQUIRED_REFERENCE_FILES = (
     "execution_profiles.json",

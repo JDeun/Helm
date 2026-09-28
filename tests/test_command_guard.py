@@ -352,7 +352,7 @@ def test_risk_score_destructive_boundary():
 
 def test_policy_json_has_new_category_rules():
     import json
-    policy_path = Path(__file__).resolve().parents[1] / "references" / "guard_policy.json"
+    policy_path = Path(__file__).resolve().parents[1] / "helm" / "references" / "guard_policy.json"
     data = json.loads(policy_path.read_text(encoding="utf-8"))
     all_ids = [r["id"] for r in data["absolute_deny"] + data["require_approval"]]
     assert any("database" in rid for rid in all_ids)

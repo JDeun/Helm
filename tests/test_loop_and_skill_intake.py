@@ -81,7 +81,7 @@ def test_skill_intake_cli_classifies_json() -> None:
 
 
 def test_coding_task_pipeline_manifest_is_checkpointed() -> None:
-    path = REPO_ROOT / "references" / "pipelines" / "coding-task-finalization-pipeline.yaml"
+    path = REPO_ROOT / "helm" / "references" / "pipelines" / "coding-task-finalization-pipeline.yaml"
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert payload["pipeline_id"] == "coding-task-finalization-pipeline"
     assert len(payload["stages"]) >= 3

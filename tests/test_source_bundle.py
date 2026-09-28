@@ -314,7 +314,7 @@ def test_source_write_path_enforces_capability_lane(tmp_path: Path) -> None:
 
 
 def test_capability_lane_reuses_action_scope_and_blocks_escalation() -> None:
-    config = ROOT / "references" / "capability_boundaries.json"
+    config = ROOT / "helm" / "references" / "capability_boundaries.json"
     blocked = evaluate_risk_lane("파일을 확인해줘", "local_write", target="note.md", config_path=config)
     allowed = evaluate_risk_lane("파일을 저장해줘", "local_write", target="note.md", config_path=config)
     disabled = evaluate_risk_lane("보안 장치를 제어해줘", "high_risk_control", target="device", config_path=config, explicit_approval=True)

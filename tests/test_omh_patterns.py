@@ -43,7 +43,7 @@ class RoleCatalogTests(unittest.TestCase):
 
 class EvidenceGathererTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.config = load_config(ROOT / "references" / "evidence_commands.json")
+        self.config = load_config(ROOT / "helm" / "references" / "evidence_commands.json")
 
     def test_allowlist_matches_tokens_not_strings(self) -> None:
         allowed, _, _ = validate_command([sys.executable, "-m", "unittest", "--help"], config=self.config, cwd=ROOT)
@@ -427,7 +427,11 @@ class VerifiedExecutionTests(unittest.TestCase):
             task_id=None, task_name="verified CLI", path=None,
             acceptance=["primary command exits successfully"], evidence_command_json=[command],
         )
-        with patch("scripts.verified_execution.execute_verified_plan", return_value={"ok": True, "status": "completed"}) as execute:
+        # load_profiles is mocked so this test does not depend on the ambient
+        # workspace layout having a references/execution_profiles.json — it
+        # exercises the --verified-execution delegation, not profile loading.
+        with patch("scripts.run_with_profile.load_profiles", return_value={"inspect_local": {}}), \
+             patch("scripts.verified_execution.execute_verified_plan", return_value={"ok": True, "status": "completed"}) as execute:
             self.assertEqual(run_with_profile.cmd_run(args), 0)
         plan = execute.call_args.args[0]
         self.assertEqual(plan["tasks"][0]["command"], command)

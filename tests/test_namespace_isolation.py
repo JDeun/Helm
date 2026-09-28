@@ -1,0 +1,31 @@
+"""The four unprefixed top-level names must not come back.
+
+`scripts` and `commands` are among the most common directory names in Python
+projects; publishing them as top-level packages silently shadows a user's own.
+It already happened to helm's only user (14 pytest collection errors, which abort
+the whole suite and hide every other result).
+"""
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SHADOWING_NAMES = ("scripts", "commands", "references", "memory_tree")
+
+
+def test_references_lives_under_the_helm_package() -> None:
+    assert (ROOT / "helm" / "references" / "role_catalog.json").is_file()
+    assert not (ROOT / "references").exists()
+
+
+def test_pyproject_moved_the_references_package_data_key() -> None:
+    # Scoped to the key this task actually moves. `package-data` also holds
+    # "scripts.compression", which Task 6 moves — asserting "every key is
+    # helm-prefixed" here would fail from this commit until Task 6 lands, leaving
+    # the suite red across three commits and breaking the plan's own invariant
+    # that every task ends green. The strict all-keys assertion is added in Task 6.
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    package_data = data["tool"]["setuptools"]["package-data"]
+    assert "references" not in package_data
+    assert "helm.references" in package_data

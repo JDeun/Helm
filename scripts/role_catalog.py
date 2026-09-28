@@ -11,7 +11,7 @@ MARKER_RE = re.compile(r"\[role:([a-z][a-z0-9-]*)\]")
 
 
 def default_catalog_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "references" / "role_catalog.json"
+    return Path(__file__).resolve().parents[1] / "helm" / "references" / "role_catalog.json"
 
 
 def load_role_catalog(path: Path | None = None) -> dict[str, dict]:

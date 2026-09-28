@@ -241,7 +241,7 @@ def test_status_rejects_non_finite_context_and_malformed_guard(tmp_path: Path) -
 
 
 def test_recovery_policy_keeps_existing_chain_and_adds_omfm_last() -> None:
-    policy = json.loads((Path(__file__).resolve().parents[1] / "references" / "model_recovery_policy.json").read_text(encoding="utf-8"))
+    policy = json.loads((Path(__file__).resolve().parents[1] / "helm" / "references" / "model_recovery_policy.json").read_text(encoding="utf-8"))
     refs = [item["ref"] for item in sorted(policy["models"], key=lambda item: item["priority"])]
 
     assert refs[:3] == ["ollama/llama3.2:latest", "openai/gpt-4.1-mini", "google_gemini/gemini-2.5-flash"]

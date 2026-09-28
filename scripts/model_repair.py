@@ -48,7 +48,7 @@ __all__ = [
     "repair_loop",
 ]
 
-_POLICY_PATH = pathlib.Path(__file__).resolve().parent.parent / "references" / "local_model_proxy_policy.json"
+_POLICY_PATH = pathlib.Path(__file__).resolve().parent.parent / "helm" / "references" / "local_model_proxy_policy.json"
 
 
 # ---------------------------------------------------------------------------

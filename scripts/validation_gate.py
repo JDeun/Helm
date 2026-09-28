@@ -24,7 +24,7 @@ from typing import Any, Callable
 # Policy location
 # ---------------------------------------------------------------------------
 
-_POLICY_PATH = Path(__file__).parent.parent / "references" / "gate_policy.json"
+_POLICY_PATH = Path(__file__).parent.parent / "helm" / "references" / "gate_policy.json"
 
 # Module-level cache.
 _cached_gate_policy: dict[str, list[str]] | None = None

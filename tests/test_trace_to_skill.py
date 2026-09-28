@@ -42,7 +42,7 @@ from scripts.skill_capture_ext import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-_TEMPLATE_PATH = ROOT / "references" / "skill-capture-template.md"
+_TEMPLATE_PATH = ROOT / "helm" / "references" / "skill-capture-template.md"
 
 
 def _write_trace(traces_dir: Path, task_id: str, data: dict) -> Path:
