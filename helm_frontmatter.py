@@ -17,7 +17,7 @@ This module exposes:
   frontmatter field with state forced to ``reviewed``.
 
 This module does **not** read or write any file in Kevin's existing
-``~/Documents/ObsidianVault``.  It only validates payloads and proposes new
+``~/Documents/YourVault``.  It only validates payloads and proposes new
 content.  Filesystem mutation is the responsibility of the caller.
 """
 

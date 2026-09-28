@@ -87,7 +87,7 @@ reporting the same Helm evidence shape:
 
 ```bash
 python3 <workspace>/scripts/obsidian_artifact_validate.py \
-  --path ~/Documents/ObsidianVault/04-Resources/Notes/Maps/project-candidates.canvas \
+  --path ~/Documents/YourVault/Notes/Maps/project-candidates.canvas \
   --json
 ```
 

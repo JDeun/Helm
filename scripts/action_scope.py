@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Action Scope Gate.
 
-Implements design doc §6 (Action Scope Gate) from
-/Users/kevin/Downloads/2026-05-21-helm-architecture-design.md
+Implements §6 (Action Scope Gate) of the Helm architecture design (2026-05-21).
 
 Five-permission lock derived from the verb in the *current user message*:
 
