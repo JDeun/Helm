@@ -245,7 +245,7 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 
 ## v0.13.0 — 운영층 강화
 
-*현재 릴리즈: v0.13.0 — 2026-07-16 릴리즈.* 실제 에이전트 운영에서 검증된 패턴을 도입합니다.
+*현재 릴리즈: v1.0.0 — 2026-09-28 릴리즈.* 실제 에이전트 운영에서 검증된 패턴을 도입합니다.
 
 - `helm reconcile`: 워크스페이스 reference 파일을 패키지 desired 스냅샷과 대조해 재적용 — drift 내성·멱등, 로컬 override를 덮어쓰지 않고 drift를 보고.
 - `helm verify-contract`: 행동 기반 운영 불변식(guard deny/fail-closed, 승인 TTL/consume-once, 원자적 ledger)을 검증 — 구조 검사 `doctor`/`validate` 보완.

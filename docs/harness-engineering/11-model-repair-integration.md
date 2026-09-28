@@ -69,8 +69,8 @@ found.  Never raises.
 ## 3. Typical Runner Integration
 
 ```python
-from scripts.model_repair import repair_loop
-from scripts.respond_tool_wiring import prepare_tools, finalize_response
+from helm.scripts.model_repair import repair_loop
+from helm.scripts.respond_tool_wiring import prepare_tools, finalize_response
 
 def run_with_repair(raw_tools, model_tier, model_id, tool_required):
     tools = prepare_tools(raw_tools, model_tier=model_tier)

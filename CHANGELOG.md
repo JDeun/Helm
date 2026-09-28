@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## [1.0.0] — 2026-09-28
+
+### Changed — BREAKING
+
+- The four unprefixed top-level packages `scripts`, `commands`, `references` and
+  `memory_tree` now live under the `helm` package: `helm.scripts`, `helm.commands`,
+  `helm.references`, `helm.memory_tree`. Installing helm-agent-ops previously claimed
+  `scripts` and `commands` — two of the most common directory names in Python
+  projects — and silently shadowed a user's own package of that name. The installed
+  distribution now declares five top-level names instead of nine.
+- `helm.py` is a package (`helm/cli.py` plus a lazy `helm/__init__.py`). The
+  `helm` console script and `import helm; helm.main([...])` are unchanged;
+  `python -m helm` is now also supported.
+
+**Migration:** replace `from scripts.X import Y` with `from helm.scripts.X import Y`,
+and likewise for `commands`, `references` and `memory_tree`. There is deliberately no
+compatibility alias — aliasing `scripts` to `helm.scripts` would keep the collision
+alive, which is the entire defect being fixed.
+
+### Verification
+
+- Full test suite: 1,615 passed (1,604 baseline + 11 namespace-isolation tests).
+- `pip install` into a clean prefix declares `top_level.txt` = helm, helm_context,
+  helm_frontmatter, helm_state_model, helm_workspace.
+
 ## [0.13.0] — 2026-07-16
 
 ### Added

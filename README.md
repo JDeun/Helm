@@ -247,7 +247,7 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 
 ## v0.13.0 — operations-layer hardening
 
-*Current release: v0.13.0 — released 2026-07-16.* This release imports patterns proven in live agent operation.
+*Current release: v1.0.0 — released 2026-09-28.* This release imports patterns proven in live agent operation.
 
 - `helm reconcile` re-applies workspace reference files against the packaged desired snapshot — drift-tolerant and idempotent, reporting drift instead of clobbering local overrides.
 - `helm verify-contract` asserts behavioral operating invariants (guard deny/fail-closed, approval TTL/consume-once, atomic ledger), complementing structural `doctor`/`validate`.

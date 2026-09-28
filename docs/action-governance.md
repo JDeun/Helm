@@ -60,7 +60,7 @@ Every governed action can be serialized as a standard decision record with:
 - evidence contract
 
 Use `append_decision_record(path, record)` to append the record to JSONL.
-`scripts.trace_recorder` also exposes `record_governance_decision` so a task
+`helm.scripts.trace_recorder` also exposes `record_governance_decision` so a task
 trace can keep the same record beside tool calls and validation gates.
 
 `scripts/run_with_profile.py run ...` evaluates command guard first, then

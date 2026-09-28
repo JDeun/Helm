@@ -73,3 +73,25 @@ def test_package_data_keys_are_all_helm_prefixed() -> None:
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     package_data = data["tool"]["setuptools"]["package-data"]
     assert all(key.startswith("helm.") for key in package_data), package_data
+
+
+def test_the_breaking_change_is_a_major_version() -> None:
+    """443 imports moved with no compat shim — that is 1.0, not 0.13.1."""
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert data["project"]["version"] == "1.0.0"
+
+    import helm
+
+    assert helm.__version__ == "1.0.0"
+
+
+def test_release_version_check_passes() -> None:
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "helm" / "scripts" / "release_version_check.py"),
+         "--root", str(ROOT)],
+        capture_output=True, text=True, cwd=str(ROOT), check=False,
+    )
+    assert result.returncode == 0, result.stderr

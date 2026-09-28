@@ -68,7 +68,7 @@ concerns.
 Owns the on-disk ledger (`skill-promotion-state.json`). Provides the core
 CRUD-like API: `load_state`, `save_state`, `record_notified`, `mark_approved`,
 `mark_rejected`, `pending_approvals`, `is_processed`. All writes go through
-`scripts.io_utils.atomic_write_json` to prevent partial writes on crash. The
+`helm.scripts.io_utils.atomic_write_json` to prevent partial writes on crash. The
 `candidate_id` is a stable 8-hex SHA-256 digest of `(skill, task_name)`, so the
 same candidate produces the same ID across runs.
 

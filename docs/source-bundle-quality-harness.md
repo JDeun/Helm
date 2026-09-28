@@ -16,13 +16,13 @@
 Create or update a bundle from JSON:
 
 ```bash
-python3 -m scripts.source_bundle --registry .helm/source-bundles.json create --input /path/to/bundle.json
+python3 -m helm.scripts.source_bundle --registry .helm/source-bundles.json create --input /path/to/bundle.json
 ```
 
 Generate separate source captures plus aggregate insight, PRD, briefing, script YAML, video manifest, and final content:
 
 ```bash
-python3 -m scripts.source_bundle --registry .helm/source-bundles.json derive --id <bundle-id> --output-dir /path/to/output
+python3 -m helm.scripts.source_bundle --registry .helm/source-bundles.json derive --id <bundle-id> --output-dir /path/to/output
 ```
 
 The video artifact is a renderer-neutral manifest. It deliberately contains only verified claim text; a renderer may consume it without gaining authority to invent claims.
@@ -46,5 +46,5 @@ The detached worktree and isolated environment are containment against accidenta
 ```
 
 ```bash
-python3 -m scripts.parallel_worktree_review --repo /path/to/repo --spec /path/to/candidates.json --output-dir /tmp/review-run
+python3 -m helm.scripts.parallel_worktree_review --repo /path/to/repo --spec /path/to/candidates.json --output-dir /tmp/review-run
 ```
