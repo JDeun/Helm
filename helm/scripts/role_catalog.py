@@ -51,7 +51,11 @@ def expand_role_markers(text: str, *, catalog_path: Path | None = None) -> dict:
     if len(markers) != 1:
         raise ValueError("exactly one role marker is allowed")
     role = resolve_role(markers[0], catalog_path=catalog_path)
-    expanded = MARKER_RE.sub(f"[role:{role['role_id']}]\n{role['prompt']}", text, count=1)
+    # Use a function replacement so backslash sequences in the prompt (e.g.
+    # ``\1`` or ``\g``) are inserted literally instead of being interpreted as
+    # regex group references (which would crash or mangle the expansion).
+    replacement = f"[role:{role['role_id']}]\n{role['prompt']}"
+    expanded = MARKER_RE.sub(lambda _match: replacement, text, count=1)
     return {"role": role, "original": text, "expanded": expanded}
 
 

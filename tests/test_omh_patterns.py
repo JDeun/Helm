@@ -40,6 +40,23 @@ class RoleCatalogTests(unittest.TestCase):
         self.assertIn("Actively search", review["role_prompt"])
         self.assertIn(review["role_prompt"], review["expanded_role_input"])
 
+    def test_role_prompt_with_backslash_sequence_is_inserted_literally(self) -> None:
+        # A prompt containing a backslash sequence (e.g. \1 or \g) must not be
+        # interpreted as a regex group reference by the marker substitution --
+        # that would crash or silently mangle the expansion.
+        catalog = {
+            "roles": {
+                "backslash-role": {
+                    "prompt": r"Handle \1 and \g literally, not as a regex backreference.",
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            catalog_path = Path(tmpdir) / "role_catalog.json"
+            catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+            payload = expand_role_markers("[role:backslash-role] go", catalog_path=catalog_path)
+        self.assertIn(r"Handle \1 and \g literally", payload["expanded"])
+
 
 class EvidenceGathererTests(unittest.TestCase):
     def setUp(self) -> None:
