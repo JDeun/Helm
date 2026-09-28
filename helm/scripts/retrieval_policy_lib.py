@@ -11,6 +11,32 @@ class RetrievalClassification:
     should_stop: bool
 
 
+# Body/error phrases that reliably indicate an authentication wall. Bare "login"
+# and "sign in" are intentionally excluded: they show up in ordinary footer links,
+# documentation, and URLs, and were over-matching legitimate retrieved content as
+# an auth wall (dropping real context). Authentication is otherwise decided by the
+# explicit ``auth_required`` flag and HTTP status codes.
+_AUTH_WALL_PHRASES: tuple[str, ...] = (
+    "paywall",
+    "auth required",
+    "authentication required",
+    "login required",
+    "sign in required",
+    "please log in",
+    "please login",
+    "please sign in",
+    "log in to continue",
+    "login to continue",
+    "login to view",
+    "login to read",
+    "sign in to continue",
+    "sign in to view",
+    "sign in to read",
+    "you must log in",
+    "you must sign in",
+)
+
+
 def classify_retrieval(
     *,
     status_code: int | None = None,
@@ -28,7 +54,7 @@ def classify_retrieval(
         return RetrievalClassification("unsafe", "stop", "Unsafe retrieval conditions detected.", True)
     if human_approval_needed:
         return RetrievalClassification("human_approval_needed", "stop", "Human approval is required before escalation.", True)
-    if auth_required or any(token in blob for token in ("login", "sign in", "paywall", "auth required")):
+    if auth_required or any(token in blob for token in _AUTH_WALL_PHRASES):
         return RetrievalClassification("auth_required", "stop", "Authentication wall detected.", True)
     if network_discovery:
         return RetrievalClassification("api_reusable", "browser_network", "Browser network inspection exposed a reusable endpoint.", False)

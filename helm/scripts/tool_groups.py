@@ -1,4 +1,4 @@
-# Mirror of ~/.openclaw/workspace/.worktrees/harness-eng/scripts/tool_groups.py — keep in sync.
+# Mirror of ~/Helm/.worktrees/harness-eng/scripts/tool_groups.py — keep in sync.
 """tool_groups — tool-group grant declarations per execution profile.
 
 Data layout choice: a dedicated ``references/tool_groups.json`` (keyed by
@@ -42,8 +42,12 @@ import copy
 import json
 from pathlib import Path
 
-# Resolve the data file relative to this module's location.
-_DATA_FILE = Path(__file__).resolve().parents[1] / "references" / "tool_groups.json"
+try:
+    from workspace_paths import DEFAULT_WORKSPACE as _WORKSPACE_ROOT
+    _DATA_FILE = _WORKSPACE_ROOT / "references" / "tool_groups.json"
+except Exception:
+    # Fallback: resolve relative to this file's parent-parent (workspace root).
+    _DATA_FILE = Path(__file__).resolve().parent.parent / "references" / "tool_groups.json"
 
 _CACHE: dict | None = None
 
@@ -95,10 +99,11 @@ def classify_tool(profile: str, tool: str) -> str:
     Raises ValueError on unknown profile.
     """
     groups = load_tool_groups(profile)
-    if tool in groups["allow"]:
-        return "allow"
+    # Deny wins: a tool present in both allow and deny must be denied.
     if tool in groups["deny"]:
         return "deny"
+    if tool in groups["allow"]:
+        return "allow"
     # Both known-ask tools and unknown tools resolve to 'ask' (conservative default).
     return "ask"
 

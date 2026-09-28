@@ -76,17 +76,27 @@ def _looks_like_text(data: bytes) -> bool:
 def _detect_with_magika(path: Path) -> tuple[str | None, float | None]:
     try:
         from magika import Magika  # type: ignore
-    except Exception:
+    except ImportError:
+        # magika is an optional dependency; absence is expected on systems
+        # that did not install it.
         return None, None
 
     try:
         result = Magika().identify_path(path)
-    except Exception:
+    except Exception:  # noqa: BLE001 - magika raises a wide variety of internal errors on unreadable inputs
         return None, None
 
-    candidate = getattr(result, "output", result)
-    mime = getattr(candidate, "mime_type", None) or getattr(candidate, "mimeType", None)
-    score = getattr(candidate, "score", None) or getattr(candidate, "confidence", None)
+    output = getattr(result, "output", result)
+    mime = getattr(output, "mime_type", None) or getattr(output, "mimeType", None)
+    # magika>=1.0 moved `score` to the top-level MagikaResult; accessing `output.score`
+    # RAISES a custom "Unsupported field" error (not AttributeError, so getattr's default
+    # does not catch it). Prefer result.score, guard the legacy path.
+    score = getattr(result, "score", None)
+    if score is None:
+        try:
+            score = getattr(output, "score", None) or getattr(output, "confidence", None)
+        except Exception:  # noqa: BLE001 - magika raises on deprecated field access
+            score = None
     if not isinstance(mime, str) or not mime.strip():
         return None, None
     numeric_score = None
@@ -146,12 +156,19 @@ def probe_file_intake(path: Path) -> dict:
         sample = handle.read(4096)
     magika_mime, magika_score = _detect_with_magika(path)
     detector = "magika" if magika_mime else "magic_bytes"
-    detected_type, route_hint = _detect_magic_mime(sample, suffix=path.suffix.casefold())
-    confidence = 0.75 if detected_type else None
+    magic_mime, route_hint = _detect_magic_mime(sample, suffix=path.suffix.casefold())
+    detected_type = magic_mime
+    confidence = 0.75 if magic_mime else None
 
     if magika_mime:
         detected_type = magika_mime
         confidence = magika_score
+        # OOXML office files (.docx/.xlsx/.pptx) ARE zip containers. magika>=1.0 reports the
+        # generic container ("application/zip") while magic-byte + extension detection resolves
+        # the specific office type — not a conflict, just less precise. Keep the specific one.
+        if magika_mime == "application/zip" and route_hint == "office_document" and magic_mime:
+            detected_type = magic_mime
+            detector = "magic_bytes"
     elif not detected_type:
         detected_type = claimed_type
         detector = "mimetypes"
