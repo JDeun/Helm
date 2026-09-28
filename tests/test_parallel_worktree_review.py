@@ -4,7 +4,6 @@ import inspect
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -111,24 +110,43 @@ def test_dirty_original_worktree_fails_closed_without_creating_review_state(tmp_
 
 def test_two_candidate_commands_execute_concurrently(tmp_path: Path) -> None:
     repo = make_repo(tmp_path)
+    # Concurrency is a claim about interleaving, so measure interleaving directly:
+    # each candidate records its own wall-clock start/end around the sleep, in a
+    # location outside the (isolated, per-candidate) worktree so both are readable
+    # afterward. A wall-clock bound on the whole run is load-sensitive noise, since
+    # it also captures worktree setup/teardown time that has nothing to do with
+    # whether the candidate *commands* actually overlapped.
+    timing_dir = tmp_path / "timing"
+    timing_dir.mkdir()
     candidates = [
         {
             "name": name,
             "command": [
                 sys.executable,
                 "-c",
-                f"import time; from pathlib import Path; time.sleep(0.8); Path({name!r}).write_text('done')",
+                (
+                    "import time; from pathlib import Path; "
+                    f"Path({str(timing_dir / f'{name}.start')!r}).write_text(repr(time.time())); "
+                    "time.sleep(0.8); "
+                    f"Path({str(timing_dir / f'{name}.end')!r}).write_text(repr(time.time())); "
+                    f"Path({name!r}).write_text('done')"
+                ),
             ],
             "test_command": [sys.executable, "-c", f"from pathlib import Path; assert Path({name!r}).read_text() == 'done'"],
         }
         for name in ("candidate-a", "candidate-b")
     ]
-    started = time.monotonic()
     report = run_parallel_review(repo, candidates, tmp_path / "review")
-    elapsed = time.monotonic() - started
     assert report["execution_mode"] == "parallel"
     assert all(row["completion_evidence"]["eligible"] for row in report["candidates"])
-    assert elapsed < 1.45, f"two 0.8s candidates ran sequentially: {elapsed:.3f}s"
+    start_a = float((timing_dir / "candidate-a.start").read_text())
+    end_a = float((timing_dir / "candidate-a.end").read_text())
+    start_b = float((timing_dir / "candidate-b.start").read_text())
+    end_b = float((timing_dir / "candidate-b.end").read_text())
+    assert start_a < end_b and start_b < end_a, (
+        "candidate command windows did not overlap, so they ran sequentially: "
+        f"candidate-a=[{start_a}, {end_a}] candidate-b=[{start_b}, {end_b}]"
+    )
 
 
 def test_missing_executable_and_failed_test_still_produce_ineligible_matrix(tmp_path: Path) -> None:
