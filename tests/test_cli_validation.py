@@ -14,11 +14,12 @@ DEMO_WORKSPACE = REPO_ROOT / "examples" / "demo-workspace"
 
 def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(REPO_ROOT / "helm.py"), *args],
+        [sys.executable, "-m", "helm", *args],
         capture_output=True,
         text=True,
         check=False,
         env=env,
+        cwd=str(REPO_ROOT),
     )
 
 

@@ -1113,7 +1113,7 @@ def evaluate_risk_lane(
 
 def _default_registry() -> Path:
     root = Path.cwd()
-    state = ".helm" if (root / "helm.py").exists() else ".openclaw"
+    state = ".helm" if (root / "helm" / "cli.py").exists() else ".openclaw"
     return root / state / "source-bundles.json"
 
 

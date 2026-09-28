@@ -167,6 +167,7 @@ def render_banner() -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog="helm",
         description=render_banner() + "\nHelm CLI for stability-first agent operations.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

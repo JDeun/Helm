@@ -22,11 +22,12 @@ def run_cli(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
     env["HELM_WORKSPACE"] = str(workspace)
     env["PYTHONPATH"] = str(REPO_ROOT)
     return subprocess.run(
-        [sys.executable, str(REPO_ROOT / "helm.py"), *args],
+        [sys.executable, "-m", "helm", *args],
         capture_output=True,
         text=True,
         check=False,
         env=env,
+        cwd=str(REPO_ROOT),
     )
 
 

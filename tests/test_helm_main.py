@@ -25,7 +25,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import helm as helm_module  # noqa: E402  (ROOT injected above)
+from helm import cli as helm_cli  # noqa: E402  (ROOT injected above)
 from scripts import run_with_profile  # noqa: E402  (ROOT injected above)
+
+# ``helm_module.main`` is a lazy forward onto ``helm.cli.main`` (see
+# helm/__init__.py). Its body resolves ``cmd_*`` names from helm.cli's own
+# module globals, not from the top-level helm package's forwarded/cached
+# attributes, so patches must target ``helm_cli`` (== helm.cli) to actually
+# take effect on the function main() calls.
 
 
 def _ok(_args: argparse.Namespace) -> int:
@@ -41,7 +48,7 @@ def test_main_passthrough_routes_profile() -> None:
         seen["args"] = list(args.args)
         return 0
 
-    with patch.object(helm_module, "cmd_profile", side_effect=capture):
+    with patch.object(helm_cli, "cmd_profile", side_effect=capture):
         rc = helm_module.main(["profile", "run", "skill-x", "--dry-run"])
 
     assert rc == 0
@@ -58,7 +65,7 @@ def test_main_passthrough_extracts_path_before_forwarded() -> None:
         seen["args"] = list(args.args)
         return 0
 
-    with patch.object(helm_module, "cmd_memory", side_effect=capture):
+    with patch.object(helm_cli, "cmd_memory", side_effect=capture):
         rc = helm_module.main(["memory", "--path", "/tmp/ws", "list", "--limit", "5"])
 
     assert rc == 0
@@ -80,7 +87,7 @@ def test_main_passthrough_path_after_forwarded_is_not_consumed() -> None:
         seen["args"] = list(args.args)
         return 0
 
-    with patch.object(helm_module, "cmd_ops", side_effect=capture):
+    with patch.object(helm_cli, "cmd_ops", side_effect=capture):
         rc = helm_module.main(["ops", "report", "--path", "/tmp/ws"])
 
     assert rc == 0
@@ -103,7 +110,7 @@ def test_run_with_profile_help_lists_readme_run_command() -> None:
 
 def test_main_passthrough_missing_path_value_raises() -> None:
     """``--path`` without a following value must SystemExit (argparse-style)."""
-    with patch.object(helm_module, "cmd_skill", side_effect=_ok):
+    with patch.object(helm_cli, "cmd_skill", side_effect=_ok):
         with pytest.raises(SystemExit):
             helm_module.main(["skill", "--path"])
 
@@ -121,7 +128,7 @@ def test_main_non_passthrough_uses_full_parser() -> None:
         captured["path"] = args.path
         return 0
 
-    with patch.object(helm_module, "cmd_detect", side_effect=capture):
+    with patch.object(helm_cli, "cmd_detect", side_effect=capture):
         rc = helm_module.main(["detect", "--path", "/tmp/x", "--json"])
 
     assert rc == 0

@@ -40,7 +40,7 @@ from scripts.skill_promotion_state import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-HELM_PY = ROOT / "helm.py"
+HELM_CMD = [sys.executable, "-m", "helm"]
 
 
 def _run(args: list[str], *, env_extra: dict | None = None) -> subprocess.CompletedProcess:
@@ -50,11 +50,12 @@ def _run(args: list[str], *, env_extra: dict | None = None) -> subprocess.Comple
     if env_extra:
         env.update(env_extra)
     return subprocess.run(
-        [sys.executable, str(HELM_PY), *args],
+        [*HELM_CMD, *args],
         capture_output=True,
         text=True,
         timeout=60,
         env=env,
+        cwd=str(ROOT),
     )
 
 

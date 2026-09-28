@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-HELM_PY = ROOT / "helm.py"
+HELM_CMD = [sys.executable, "-m", "helm"]
 
 
 def _run(
@@ -51,11 +51,12 @@ def _run(
         env.update(env_extra)
 
     return subprocess.run(
-        [sys.executable, str(HELM_PY), "shadow-report", *args],
+        [*HELM_CMD, "shadow-report", *args],
         capture_output=True,
         text=True,
         timeout=60,
         env=env,
+        cwd=str(ROOT),
     )
 
 
