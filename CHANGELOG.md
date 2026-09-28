@@ -23,7 +23,8 @@ alive, which is the entire defect being fixed.
 
 ### Verification
 
-- Full test suite: 1,615 passed (1,604 baseline + 11 namespace-isolation tests).
+- Full test suite: 1,619 passed at HEAD of this branch (1,604 baseline at
+  `fcfbdf1` + 15 namespace-isolation tests added across the branch).
 - `pip install` into a clean prefix declares `top_level.txt` = helm, helm_context,
   helm_frontmatter, helm_state_model, helm_workspace.
 

@@ -245,9 +245,33 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 
 ---
 
+## v1.0.0 — helm.-nested namespace, no compat shim
+
+*Current release: v1.0.0 — released 2026-09-28.*
+
+**Breaking change.** The four unprefixed top-level packages `scripts`, `commands`,
+`references` and `memory_tree` now live under the `helm` package: `helm.scripts`,
+`helm.commands`, `helm.references`, `helm.memory_tree`. Installing helm-agent-ops
+previously claimed `scripts` and `commands` — two of the most common directory names
+in Python projects — and could silently shadow a user's own package of that name;
+that happened to helm's own only user. **There is no compatibility alias** —
+replace `from scripts.X import Y` with `from helm.scripts.X import Y`, and likewise
+for `commands`, `references` and `memory_tree`, before upgrading.
+
+- 443 import sites across 158 files were rewritten. The installed distribution now
+  declares five top-level names (`helm`, `helm_context`, `helm_frontmatter`,
+  `helm_state_model`, `helm_workspace`) instead of nine.
+- `helm.py` is now a package (`helm/cli.py` plus a lazy `helm/__init__.py`). The
+  `helm` console script and `import helm; helm.main([...])` are unchanged;
+  `python -m helm` is now also supported.
+
+See [the full v1.0.0 notes](docs/releases/1.0.0.md).
+
+---
+
 ## v0.13.0 — operations-layer hardening
 
-*Current release: v1.0.0 — released 2026-09-28.* This release imports patterns proven in live agent operation.
+*v0.13.0 — released 2026-07-16.* This release imports patterns proven in live agent operation.
 
 - `helm reconcile` re-applies workspace reference files against the packaged desired snapshot — drift-tolerant and idempotent, reporting drift instead of clobbering local overrides.
 - `helm verify-contract` asserts behavioral operating invariants (guard deny/fail-closed, approval TTL/consume-once, atomic ledger), complementing structural `doctor`/`validate`.
@@ -426,8 +450,8 @@ Issues and pull requests welcome.
 
 ## Release history
 
-- **Latest**: [v0.13.0](docs/releases/0.13.0.md) — reconcile, operating-contract verifier, skill router, tool/MCP adapter, grounding, source-tiering, fast-ACK intake, interpreter pinning
-- **Previous**: [v0.12.0](docs/releases/0.12.0.md), [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
+- **Latest**: [v1.0.0](docs/releases/1.0.0.md) — breaking: `scripts`/`commands`/`references`/`memory_tree` moved under `helm.*`, no compat shim
+- **Previous**: [v0.13.0](docs/releases/0.13.0.md), [v0.12.0](docs/releases/0.12.0.md), [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **Full changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [older release notes](docs/releases/)
 
 ---

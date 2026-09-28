@@ -16,7 +16,7 @@ perspective") by giving each module at least one CLI surface so that:
   code.
 
 Each command keeps the existing per-module CLI entry point (``python3 -m
-scripts.action_scope ...``) functional; this file is purely a wiring
+helm.scripts.action_scope ...``) functional; this file is purely a wiring
 layer.
 """
 
@@ -32,7 +32,7 @@ def cmd_action_scope_evaluate(args: argparse.Namespace) -> int:
     """Evaluate the action-scope gate against a message.
 
     Thin wrapper that produces the same JSON payload as the module-level
-    ``python3 -m scripts.action_scope`` CLI but is reachable via
+    ``python3 -m helm.scripts.action_scope`` CLI but is reachable via
     ``helm action-scope evaluate``.
     """
     from helm.scripts.action_scope import (

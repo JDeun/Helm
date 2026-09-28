@@ -12,6 +12,19 @@ CITATION_VERSION_RE = re.compile(r"^version:\s*[\"']?([^\"'\n]+)[\"']?\s*$", re.
 README_RELEASE_RE = re.compile(r"(?:Current release|현재 릴리즈):\s*v([0-9]+\.[0-9]+\.[0-9]+)")
 CHANGELOG_SECTION_RE = re.compile(r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\]", re.MULTILINE)
 
+# The "Current release: vX.Y.Z" line is the release-history section's own claim
+# about itself, but nothing previously checked that the section carrying that
+# claim was actually the CURRENT one, or that the "latest release" link pointed
+# at it. Both drifted silently in the 1.0.0 release (README still headed the
+# section "## v0.13.0" and linked "Latest -> v0.13.0" while the line inside it
+# said "Current release: v1.0.0"). These two patterns catch that class of drift.
+# They are optional: a README that doesn't use this heading/link convention at
+# all (e.g. the minimal fixtures in tests/test_release_version_check.py) is not
+# penalized for it — only a README that HAS the pattern and disagrees with the
+# expected version fails.
+README_SECTION_HEADING_RE = re.compile(r"^## v([0-9]+\.[0-9]+\.[0-9]+)\b", re.MULTILINE)
+README_LATEST_LINK_RE = re.compile(r"\*\*(?:Latest|최신)\*\*:\s*\[v([0-9]+\.[0-9]+\.[0-9]+)\]")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check Helm release version consistency.")
@@ -68,6 +81,26 @@ def check_release(root: Path, expected_version: str | None = None) -> list[str]:
     changelog = read_text(root / "CHANGELOG.md")
     if expected not in CHANGELOG_SECTION_RE.findall(changelog):
         errors.append(f"CHANGELOG.md: missing [{expected}] release section")
+
+    for readme_name in ("README.md", "README.ko.md"):
+        readme_path = root / readme_name
+        if not readme_path.exists():
+            continue
+        text = read_text(readme_path)
+
+        heading_match = README_SECTION_HEADING_RE.search(text)
+        if heading_match and heading_match.group(1) != expected:
+            errors.append(
+                f"{readme_name}: topmost release section heads '## v{heading_match.group(1)}', "
+                f"expected v{expected} (the 'Current release' line is inside a stale section)"
+            )
+
+        latest_match = README_LATEST_LINK_RE.search(text)
+        if latest_match and latest_match.group(1) != expected:
+            errors.append(
+                f"{readme_name}: 'Latest' release-history link points at v{latest_match.group(1)}, "
+                f"expected v{expected}"
+            )
 
     return errors
 

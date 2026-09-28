@@ -58,6 +58,17 @@ def test_scripts_live_under_the_helm_package() -> None:
 
 def test_no_script_puts_the_package_dir_on_sys_path() -> None:
     """Inserting helm/ onto sys.path would make `import scripts` work again."""
+    # Scoped to helm/scripts/*.py only — deliberately, not an oversight. Several
+    # test modules (test_parallel_worktree_review.py, test_release_version_check.py,
+    # test_source_bundle.py, test_omh_patterns.py) put helm/scripts on sys.path[0]
+    # themselves, for the whole pytest session, so they can import a script under
+    # test by its bare module name. That is structurally identical to how this repo
+    # already behaved pre-migration and does not reintroduce the shadowing defect
+    # this file guards against: the *installed distribution* still declares no
+    # top-level `scripts`/`commands`/`references`/`memory_tree` name, which is what
+    # would break an actual downstream user. It only makes ~90 generic names
+    # importable as top-level within helm's own test session — reviewed during
+    # the namespace-cleanup migration and accepted as-is, not restructured.
     offenders = []
     for path in sorted((ROOT / "helm" / "scripts").rglob("*.py")):
         text = path.read_text(encoding="utf-8")

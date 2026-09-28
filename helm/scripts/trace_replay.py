@@ -12,7 +12,7 @@ Usage
 -----
 ::
 
-    python3 scripts/trace_replay.py --task-id <id> [--traces-dir <path>] [--dry-run]
+    python3 helm/scripts/trace_replay.py --task-id <id> [--traces-dir <path>] [--dry-run]
 
 Options
 -------
@@ -153,9 +153,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python3 scripts/trace_replay.py --task-id abc-123\n"
-            "  python3 scripts/trace_replay.py --task-id abc-123 --traces-dir /tmp/traces\n"
-            "  python3 scripts/trace_replay.py --task-id abc-123 --dry-run\n"
+            "  python3 helm/scripts/trace_replay.py --task-id abc-123\n"
+            "  python3 helm/scripts/trace_replay.py --task-id abc-123 --traces-dir /tmp/traces\n"
+            "  python3 helm/scripts/trace_replay.py --task-id abc-123 --dry-run\n"
         ),
     )
     parser.add_argument(

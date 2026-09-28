@@ -55,6 +55,7 @@ include = ["helm", "helm.*"]
 
 [tool.setuptools.package-data]
 "helm.references" = ["*.json", "*.md", "*.yaml"]
+"helm.references.pipelines" = ["*.yaml"]
 "helm.scripts.compression" = ["*.md"]
 
 [tool.pytest.ini_options]

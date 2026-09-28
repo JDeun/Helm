@@ -243,9 +243,33 @@ python3 scripts/model_health_probe.py probe --model omfm/balanced --json
 
 ---
 
+## v1.0.0 — helm. 네임스페이스 통합, 호환 shim 없음
+
+*현재 릴리즈: v1.0.0 — 2026-09-28 릴리즈.*
+
+**Breaking change.** 최상위에 있던 접두사 없는 네 패키지 `scripts`, `commands`,
+`references`, `memory_tree`가 이제 `helm` 패키지 아래로 들어갑니다: `helm.scripts`,
+`helm.commands`, `helm.references`, `helm.memory_tree`. helm-agent-ops는 그동안
+Python 프로젝트에서 가장 흔한 디렉터리 이름인 `scripts`와 `commands`를 최상위로
+점유해왔고, 이 때문에 사용자 자신의 동일 이름 패키지를 조용히 가릴 수 있었습니다 —
+실제로 helm의 유일한 사용자에게 이 문제가 일어났습니다. **호환용 alias는 제공하지
+않습니다** — 업그레이드 전에 `from scripts.X import Y`를 `from helm.scripts.X import Y`로,
+`commands`·`references`·`memory_tree`도 동일하게 바꿔주세요.
+
+- 158개 파일에서 443곳의 import를 다시 작성했습니다. 설치된 배포판이 선언하는
+  최상위 이름은 이제 아홉 개가 아니라 다섯 개(`helm`, `helm_context`,
+  `helm_frontmatter`, `helm_state_model`, `helm_workspace`)입니다.
+- `helm.py`는 이제 패키지입니다 (`helm/cli.py` + lazy `helm/__init__.py`).
+  `helm` 콘솔 스크립트와 `import helm; helm.main([...])`는 그대로 동작하며,
+  `python -m helm`도 새로 지원합니다.
+
+자세한 내용은 [v1.0.0 릴리즈 노트](docs/releases/1.0.0.md) 참조.
+
+---
+
 ## v0.13.0 — 운영층 강화
 
-*현재 릴리즈: v1.0.0 — 2026-09-28 릴리즈.* 실제 에이전트 운영에서 검증된 패턴을 도입합니다.
+*v0.13.0 — 2026-07-16 릴리즈.* 실제 에이전트 운영에서 검증된 패턴을 도입합니다.
 
 - `helm reconcile`: 워크스페이스 reference 파일을 패키지 desired 스냅샷과 대조해 재적용 — drift 내성·멱등, 로컬 override를 덮어쓰지 않고 drift를 보고.
 - `helm verify-contract`: 행동 기반 운영 불변식(guard deny/fail-closed, 승인 TTL/consume-once, 원자적 ledger)을 검증 — 구조 검사 `doctor`/`validate` 보완.
@@ -424,8 +448,8 @@ Issue와 PR 환영합니다.
 
 ## 릴리즈 이력
 
-- **최신**: [v0.13.0](docs/releases/0.13.0.md) — reconcile, 운영-계약 검증기, skill router, tool/MCP adapter, grounding, source-tiering, fast-ACK intake, 인터프리터 pinning
-- **이전**: [v0.12.0](docs/releases/0.12.0.md), [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
+- **최신**: [v1.0.0](docs/releases/1.0.0.md) — breaking: `scripts`/`commands`/`references`/`memory_tree`가 `helm.*` 아래로 이동, 호환 shim 없음
+- **이전**: [v0.13.0](docs/releases/0.13.0.md), [v0.12.0](docs/releases/0.12.0.md), [v0.10.2](docs/releases/0.10.2.md), [v0.10.1](docs/releases/0.10.1.md), [v0.10.0](docs/releases/0.10.0.md)
 - **전체 changelog**: [`CHANGELOG.md`](CHANGELOG.md) · [이전 릴리즈 노트](docs/releases/)
 
 ---
