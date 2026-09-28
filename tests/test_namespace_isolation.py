@@ -95,3 +95,41 @@ def test_release_version_check_passes() -> None:
         capture_output=True, text=True, cwd=str(ROOT), check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_installed_distribution_claims_only_helm_prefixed_top_level_names() -> None:
+    """The defect lives in the *installed* metadata, not in the repo layout."""
+    import pytest
+    from importlib import metadata
+
+    try:
+        dist = metadata.distribution("helm-agent-ops")
+    except metadata.PackageNotFoundError:  # pragma: no cover - not installed here
+        pytest.skip("helm-agent-ops is not installed in this environment")
+
+    # Refuse to pass off the repo's own build metadata. pytest puts the repo root
+    # first on sys.path, so this call resolves to ~/helm/helm_agent_ops.egg-info
+    # (verified: it reports v0.11.0, stale, nine top-level names) unless that
+    # directory is gone. `python -m build` regenerates it with the NEW names, so
+    # without this guard the one test the whole plan exists to satisfy goes green
+    # even if `pip install` never ran.
+    origin = str(getattr(dist, "_path", ""))
+    assert "egg-info" not in origin, (
+        f"resolved local build metadata, not an installed distribution: {origin}. "
+        "Remove helm_agent_ops.egg-info and verify from a venv with cwd outside the repo."
+    )
+
+    raw = dist.read_text("top_level.txt")
+    if raw is None:  # pragma: no cover - some editable installs omit it
+        pytest.skip("distribution ships no top_level.txt")
+
+    names = sorted(line.strip() for line in raw.splitlines() if line.strip())
+    assert names == [
+        "helm",
+        "helm_context",
+        "helm_frontmatter",
+        "helm_state_model",
+        "helm_workspace",
+    ], names
+    for shadowing in SHADOWING_NAMES:
+        assert shadowing not in names
