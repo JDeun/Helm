@@ -107,16 +107,27 @@ def test_installed_distribution_claims_only_helm_prefixed_top_level_names() -> N
     except metadata.PackageNotFoundError:  # pragma: no cover - not installed here
         pytest.skip("helm-agent-ops is not installed in this environment")
 
-    # Refuse to pass off the repo's own build metadata. pytest puts the repo root
-    # first on sys.path, so this call resolves to ~/helm/helm_agent_ops.egg-info
-    # (verified: it reports v0.11.0, stale, nine top-level names) unless that
-    # directory is gone. `python -m build` regenerates it with the NEW names, so
-    # without this guard the one test the whole plan exists to satisfy goes green
-    # even if `pip install` never ran.
-    origin = str(getattr(dist, "_path", ""))
-    assert "egg-info" not in origin, (
-        f"resolved local build metadata, not an installed distribution: {origin}. "
-        "Remove helm_agent_ops.egg-info and verify from a venv with cwd outside the repo."
+    # Refuse to pass off STALE build metadata as an installed distribution. pytest
+    # puts the repo root first on sys.path, so this call can resolve to a local
+    # `helm_agent_ops.egg-info` directory instead of a real site-packages install —
+    # that is expected and fine for `pip install -e .` (CI's own install shape:
+    # editable installs keep their metadata in an egg-info at the repo root, and it
+    # is regenerated fresh from THIS checkout's pyproject.toml on every install).
+    # What must be rejected is metadata left over from a *previous* build that no
+    # longer describes this checkout (verified hazard: a stale v0.11.0 egg-info,
+    # nine top-level names, sitting unremoved after a version bump). Distinguish by
+    # content, not location: the resolved distribution's version must match the
+    # version this checkout declares. A stale egg-info from a different version
+    # fails here before the top_level.txt check even runs.
+    pyproject_version = tomllib.loads(
+        (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+    assert dist.version == pyproject_version, (
+        f"resolved build metadata for version {dist.version!r}, but pyproject.toml "
+        f"at {ROOT} declares {pyproject_version!r}. This looks like stale metadata "
+        "from a previous build (e.g. a leftover egg-info) that predates the current "
+        "checkout, not a description of it. Remove the stale metadata directory and "
+        "reinstall."
     )
 
     raw = dist.read_text("top_level.txt")
