@@ -395,7 +395,7 @@ def test_memory_tree_append_ledger_is_concurrent_safe(tmp_path: Path) -> None:
     from concurrent.futures import ThreadPoolExecutor
 
     sys.path.insert(0, str(REPO_ROOT))
-    from memory_tree.tree import MemoryTree, RefreshResult, RefreshTrigger
+    from helm.memory_tree.tree import MemoryTree, RefreshResult, RefreshTrigger
 
     root = tmp_path / "memtree-root"
     root.mkdir()

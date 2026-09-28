@@ -226,7 +226,7 @@ def cmd_memory_tree_status(args: argparse.Namespace) -> int:
     ``~/.helm/memory/`` (or the path passed via ``--root``) and whether
     the global summary file is present. Does NOT trigger a refresh.
     """
-    from memory_tree.tree import MemoryTree
+    from helm.memory_tree.tree import MemoryTree
 
     tree = MemoryTree(root=Path(args.root).expanduser() if args.root else None)
     paths = tree.paths

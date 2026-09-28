@@ -13,7 +13,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
-from memory_tree import (  # noqa: E402  (path adjusted above)
+from helm.memory_tree import (  # noqa: E402  (path adjusted above)
     GlobalSummary,
     MemoryTree,
     MemoryTreePaths,
@@ -22,7 +22,7 @@ from memory_tree import (  # noqa: E402  (path adjusted above)
     TopicSummary,
     compute_hash,
 )
-from memory_tree.tree import (  # noqa: E402
+from helm.memory_tree.tree import (  # noqa: E402
     LEDGER_KIND,
     _parse_frontmatter,
     _render_frontmatter,

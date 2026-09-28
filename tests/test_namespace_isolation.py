@@ -29,3 +29,11 @@ def test_pyproject_moved_the_references_package_data_key() -> None:
     package_data = data["tool"]["setuptools"]["package-data"]
     assert "references" not in package_data
     assert "helm.references" in package_data
+
+
+def test_memory_tree_lives_under_the_helm_package() -> None:
+    from helm.memory_tree import MemoryTree
+    from helm.memory_tree.tree import MemoryTree as SameClass
+
+    assert MemoryTree is SameClass
+    assert not (ROOT / "memory_tree").exists()
