@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.profile_pause_resume import (
+from helm.scripts.profile_pause_resume import (
     _default_path,
     check_can_start,
     is_paused,
@@ -41,7 +41,7 @@ from scripts.profile_pause_resume import (
     pause_profile,
     resume_profile,
 )
-from scripts.time_helpers import utc_now_iso
+from helm.scripts.time_helpers import utc_now_iso
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ def test_atomic_write_on_replace_failure(tmp_path: Path) -> None:
     original_content = state_file.read_text(encoding="utf-8")
 
     # Patch os.replace inside the module to simulate a rename failure.
-    with patch("scripts.profile_pause_resume.os.replace", side_effect=OSError("disk full")):
+    with patch("helm.scripts.profile_pause_resume.os.replace", side_effect=OSError("disk full")):
         with pytest.raises(OSError, match="disk full"):
             pause_profile("new-profile", "should not persist", state_file)
 

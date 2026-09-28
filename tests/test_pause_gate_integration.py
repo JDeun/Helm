@@ -95,19 +95,19 @@ def test_gate_disabled_by_default_does_not_call_check_can_start(
 
     import subprocess as _sp
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.profile_pause_resume.check_can_start") as mock_check:
+         patch("helm.scripts.profile_pause_resume.check_can_start") as mock_check:
 
-        from scripts.command_guard import GuardDecision, CommandClassification
+        from helm.scripts.command_guard import GuardDecision, CommandClassification
         mock_guard.return_value = GuardDecision(
             action="allow",
             risk_score=0.0,
@@ -133,7 +133,7 @@ def test_gate_disabled_by_default_does_not_call_check_can_start(
             approval_hint=None,
         )
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(_make_args())
 
     assert mock_check.call_count == 0, (
@@ -163,16 +163,16 @@ def test_gate_enabled_blocks_paused_profile(
     def capture_ledger(entry: dict) -> None:
         ledger_calls.append(dict(entry))
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger", side_effect=capture_ledger), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger", side_effect=capture_ledger), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         mock_subprocess.return_value.returncode = 0
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(_make_args())
 
     assert rc != 0, f"Expected non-zero exit code when profile is paused; got {rc}"
@@ -212,18 +212,18 @@ def test_gate_enabled_allows_unpaused_profile(
 
     import subprocess as _sp
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)) as mock_subprocess:
 
-        from scripts.command_guard import GuardDecision, CommandClassification
+        from helm.scripts.command_guard import GuardDecision, CommandClassification
         mock_guard.return_value = GuardDecision(
             action="allow",
             risk_score=0.0,
@@ -249,7 +249,7 @@ def test_gate_enabled_allows_unpaused_profile(
             approval_hint=None,
         )
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(_make_args())
 
     assert rc == 0, f"Expected exit code 0 when profile is not paused; got {rc}"
@@ -280,7 +280,7 @@ def test_pause_gate_enabled_detection(
     monkeypatch.setenv("OPENCLAW_PAUSE_GATE", env_value)
 
     # Re-import to pick up current env
-    from scripts.run_with_profile import _pause_gate_enabled
+    from helm.scripts.run_with_profile import _pause_gate_enabled
     result = _pause_gate_enabled()
     assert result == expected_enabled, (
         f"For OPENCLAW_PAUSE_GATE={env_value!r}: expected {expected_enabled}, got {result}"
@@ -291,7 +291,7 @@ def test_pause_gate_disabled_when_env_unset(monkeypatch: pytest.MonkeyPatch) -> 
     """_pause_gate_enabled must return False when env var is not set at all."""
     monkeypatch.delenv("OPENCLAW_PAUSE_GATE", raising=False)
 
-    from scripts.run_with_profile import _pause_gate_enabled
+    from helm.scripts.run_with_profile import _pause_gate_enabled
     assert _pause_gate_enabled() is False, "Expected False when OPENCLAW_PAUSE_GATE is unset"
 
 
@@ -317,18 +317,18 @@ def test_ledger_not_polluted_when_gate_disabled(
     def capture_ledger(entry: dict) -> None:
         ledger_calls.append(dict(entry))
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger", side_effect=capture_ledger), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
-         patch("scripts.run_with_profile.finalize_task", side_effect=capture_ledger), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger", side_effect=capture_ledger), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("helm.scripts.run_with_profile.finalize_task", side_effect=capture_ledger), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)):
 
-        from scripts.command_guard import GuardDecision, CommandClassification
+        from helm.scripts.command_guard import GuardDecision, CommandClassification
         mock_guard.return_value = GuardDecision(
             action="allow",
             risk_score=0.0,
@@ -354,7 +354,7 @@ def test_ledger_not_polluted_when_gate_disabled(
             approval_hint=None,
         )
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(_make_args())
 
     blocked = [e for e in ledger_calls if e.get("status") == "blocked_by_pause"]

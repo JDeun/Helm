@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.command_guard import evaluate_command_guard
+from helm.scripts.command_guard import evaluate_command_guard
 
 
 def test_guard_blocks_before_subprocess() -> None:
@@ -150,22 +150,22 @@ def test_manual_remote_guard_decision_is_recorded(monkeypatch, tmp_path):
         call_count += 1
         return evaluate_command_guard(*args, **kwargs)
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", side_effect=tracking_evaluate), \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", side_effect=tracking_evaluate), \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None):
 
         mock_subprocess.return_value.returncode = 0
 
         args = _make_args()
 
         try:
-            from scripts.run_with_profile import cmd_run
+            from helm.scripts.run_with_profile import cmd_run
             cmd_run(args)
         except (SystemExit, Exception):
             pass
@@ -176,7 +176,7 @@ def test_manual_remote_guard_decision_is_recorded(monkeypatch, tmp_path):
 def test_guard_decision_recorded_in_task(monkeypatch, tmp_path):
     """Guard decision should be recorded in the task dict."""
     from unittest.mock import patch, MagicMock
-    from scripts.command_guard import GuardDecision, CommandClassification
+    from helm.scripts.command_guard import GuardDecision, CommandClassification
 
     fake_decision = GuardDecision(
         action="allow",
@@ -208,20 +208,20 @@ def test_guard_decision_recorded_in_task(monkeypatch, tmp_path):
     def capture_finalize(task):
         captured_tasks.append(dict(task))
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=fake_decision), \
-         patch("scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
-         patch("scripts.run_with_profile.append_jsonl_atomic"), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=fake_decision), \
+         patch("helm.scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
+         patch("helm.scripts.run_with_profile.append_jsonl_atomic"), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None):
 
         mock_subprocess.return_value.returncode = 0
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         args = _make_args()
 
         try:
@@ -240,15 +240,15 @@ def test_helm_guard_mode_off_via_env_warns(monkeypatch, capsys, tmp_path):
 
     monkeypatch.setenv("HELM_GUARD_MODE", "off")
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.append_jsonl_atomic"), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.append_jsonl_atomic"), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None):
 
         mock_subprocess.return_value.returncode = 0
 
@@ -256,7 +256,7 @@ def test_helm_guard_mode_off_via_env_warns(monkeypatch, capsys, tmp_path):
         args.guard_mode = None  # not via CLI, so env is used
 
         try:
-            from scripts.run_with_profile import cmd_run
+            from helm.scripts.run_with_profile import cmd_run
             cmd_run(args)
         except (SystemExit, Exception):
             pass
@@ -296,7 +296,7 @@ def _make_args_with_timeout(timeout: int = 1800, profile: str = "inspect_local")
 
 
 def _make_allow_decision(profile: str = "inspect_local"):
-    from scripts.command_guard import GuardDecision, CommandClassification
+    from helm.scripts.command_guard import GuardDecision, CommandClassification
     return GuardDecision(
         action="allow",
         risk_score=0.0,
@@ -324,7 +324,7 @@ def _make_allow_decision(profile: str = "inspect_local"):
 
 
 def _make_write_allow_decision(profile: str = "workspace_edit"):
-    from scripts.command_guard import GuardDecision, CommandClassification
+    from helm.scripts.command_guard import GuardDecision, CommandClassification
     return GuardDecision(
         action="allow",
         risk_score=0.1,
@@ -353,7 +353,7 @@ def _make_write_allow_decision(profile: str = "workspace_edit"):
 
 
 def _make_push_allow_decision(profile: str = "service_ops"):
-    from scripts.command_guard import GuardDecision, CommandClassification
+    from helm.scripts.command_guard import GuardDecision, CommandClassification
     return GuardDecision(
         action="allow",
         risk_score=0.2,
@@ -381,7 +381,7 @@ def _make_push_allow_decision(profile: str = "service_ops"):
 
 
 def _make_destructive_git_allow_decision(profile: str = "service_ops"):
-    from scripts.command_guard import GuardDecision, CommandClassification
+    from helm.scripts.command_guard import GuardDecision, CommandClassification
     return GuardDecision(
         action="allow",
         risk_score=0.9,
@@ -415,16 +415,16 @@ def _make_destructive_git_allow_decision(profile: str = "service_ops"):
 
 def test_governance_blocks_inspect_intent_before_write_subprocess():
     from unittest.mock import patch
-    from scripts.run_with_profile import EXIT_GUARD_DENY, cmd_run
+    from helm.scripts.run_with_profile import EXIT_GUARD_DENY, cmd_run
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_write_allow_decision()), \
-         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=_make_write_allow_decision()), \
+         patch("helm.scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         args = _make_args()
         args.profile = "workspace_edit"
@@ -444,23 +444,23 @@ def test_governance_blocks_inspect_intent_before_write_subprocess():
 def test_governance_records_allow_before_execution():
     import subprocess as _sp
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
 
     captured_tasks = []
 
     def capture_finalize(task):
         captured_tasks.append(dict(task))
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_write_allow_decision()), \
-         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
-         patch("scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=_make_write_allow_decision()), \
+         patch("helm.scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("helm.scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         mock_subprocess.return_value = _sp.CompletedProcess(args=["touch", "out.txt"], returncode=0)
         args = _make_args()
@@ -483,18 +483,18 @@ def test_governance_records_allow_before_execution():
 def test_governance_uses_task_goal_when_task_name_is_generic():
     import subprocess as _sp
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_write_allow_decision()), \
-         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=_make_write_allow_decision()), \
+         patch("helm.scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         mock_subprocess.return_value = _sp.CompletedProcess(args=["touch", "out.txt"], returncode=0)
         args = _make_args()
@@ -515,18 +515,18 @@ def test_governance_uses_task_goal_when_task_name_is_generic():
 def test_governance_classifies_file_write_when_guard_mode_off():
     import subprocess as _sp
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as evaluate_guard, \
-         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as evaluate_guard, \
+         patch("helm.scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         mock_subprocess.return_value = _sp.CompletedProcess(args=["touch", "out.txt"], returncode=0)
         args = _make_args()
@@ -547,16 +547,16 @@ def test_governance_classifies_file_write_when_guard_mode_off():
 
 def test_governance_requires_live_source_for_git_push_even_with_approval():
     from unittest.mock import patch
-    from scripts.run_with_profile import EXIT_GUARD_DENY, cmd_run
+    from helm.scripts.run_with_profile import EXIT_GUARD_DENY, cmd_run
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_push_allow_decision()), \
-         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=_make_push_allow_decision()), \
+         patch("helm.scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         args = _make_args()
         args.profile = "service_ops"
@@ -578,18 +578,18 @@ def test_governance_requires_live_source_for_git_push_even_with_approval():
 def test_governance_live_source_and_approval_allow_git_push():
     import subprocess as _sp
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_push_allow_decision()), \
-         patch("scripts.action_governance.append_decision_record") as append_decision_record, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=_make_push_allow_decision()), \
+         patch("helm.scripts.action_governance.append_decision_record") as append_decision_record, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         mock_subprocess.return_value = _sp.CompletedProcess(args=["git", "push"], returncode=0)
         args = _make_args()
@@ -610,16 +610,16 @@ def test_governance_live_source_and_approval_allow_git_push():
 
 def test_tool_grant_denied_tool_blocks_before_governance_and_subprocess():
     from unittest.mock import patch
-    from scripts.run_with_profile import EXIT_GUARD_DENY, cmd_run
+    from helm.scripts.run_with_profile import EXIT_GUARD_DENY, cmd_run
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger") as append_ledger, \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=_make_destructive_git_allow_decision()), \
-         patch("scripts.run_with_profile.evaluate_governance_for_run") as evaluate_governance, \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger") as append_ledger, \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=_make_destructive_git_allow_decision()), \
+         patch("helm.scripts.run_with_profile.evaluate_governance_for_run") as evaluate_governance, \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         args = _make_args()
         args.profile = "service_ops"
@@ -643,22 +643,22 @@ def test_tool_grant_denied_tool_blocks_before_governance_and_subprocess():
 def test_timeout_expired_records_timeout_status(capsys):
     """When subprocess.TimeoutExpired is raised, task status must be 'timeout' and exit code 1."""
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
 
     captured_tasks = []
 
     def capture_finalize(task):
         captured_tasks.append(dict(task))
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
-         patch("scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("helm.scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                side_effect=__import__("subprocess").TimeoutExpired(cmd=["sleep", "999"], timeout=5)):
 
         mock_guard.return_value = _make_allow_decision()
@@ -680,7 +680,7 @@ def test_timeout_expired_records_timeout_status(capsys):
 def test_timeout_zero_disables_limit():
     """timeout=0 should translate to no limit (None passed to subprocess.run)."""
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
     import subprocess as _sp
 
     captured_calls = []
@@ -689,15 +689,15 @@ def test_timeout_zero_disables_limit():
         captured_calls.append(kw)
         return _sp.CompletedProcess(args=a[0] if a else [], returncode=0)
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
 
         mock_guard.return_value = _make_allow_decision()
 
@@ -714,7 +714,7 @@ def test_checkpoint_timeout_returns_error_dict():
     """run_checkpoint must return an error dict when the checkpoint process times out."""
     import subprocess as _sp
     from unittest.mock import patch, MagicMock
-    from scripts.run_with_profile import run_checkpoint
+    from helm.scripts.run_with_profile import run_checkpoint
 
     profiles = {
         "risky_edit": {
@@ -727,8 +727,8 @@ def test_checkpoint_timeout_returns_error_dict():
     args.label = "test-label"
     args.path = None
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=profiles), \
-         patch("scripts.run_with_profile.subprocess.run",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=profiles), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                side_effect=_sp.TimeoutExpired(cmd=["python3"], timeout=60)):
         result = run_checkpoint("risky_edit", args)
 
@@ -738,7 +738,7 @@ def test_checkpoint_timeout_returns_error_dict():
 
 
 def test_checkpoint_script_uses_package_copy_not_workspace_copy():
-    from scripts.run_with_profile import CHECKPOINT_SCRIPT
+    from helm.scripts.run_with_profile import CHECKPOINT_SCRIPT
 
     assert CHECKPOINT_SCRIPT.exists()
     assert CHECKPOINT_SCRIPT.name == "workspace_checkpoint.py"
@@ -755,7 +755,7 @@ def test_minimal_env_excludes_secrets(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("PATH", "/usr/bin")
 
-    from scripts.run_with_profile import _minimal_env
+    from helm.scripts.run_with_profile import _minimal_env
     env = _minimal_env()
 
     assert "AWS_SECRET_ACCESS_KEY" not in env, "AWS_SECRET_ACCESS_KEY must not appear in minimal env"
@@ -768,7 +768,7 @@ def test_minimal_env_includes_helm_vars(monkeypatch):
     monkeypatch.setenv("HELM_MY_CUSTOM_VAR", "value1")
     monkeypatch.setenv("OPENCLAW_MY_VAR", "value2")
 
-    from scripts.run_with_profile import _minimal_env
+    from helm.scripts.run_with_profile import _minimal_env
     env = _minimal_env()
 
     assert env.get("HELM_MY_CUSTOM_VAR") == "value1"
@@ -779,7 +779,7 @@ def test_inspect_local_uses_minimal_env(monkeypatch, capsys):
     """inspect_local (writes=False, network=False) must use _minimal_env, not full os.environ."""
     from unittest.mock import patch
     import subprocess as _sp
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
 
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "supersecret")
 
@@ -789,15 +789,15 @@ def test_inspect_local_uses_minimal_env(monkeypatch, capsys):
         captured_envs.append(kw.get("env", {}))
         return _sp.CompletedProcess(args=[], returncode=0)
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
 
         mock_guard.return_value = _make_allow_decision()
 
@@ -816,7 +816,7 @@ def test_network_allowed_profile_uses_full_env(monkeypatch):
     """A profile with network_allowed=True should receive the full environment."""
     import subprocess as _sp
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
 
     monkeypatch.setenv("MY_CUSTOM_VAR", "myvalue")
 
@@ -840,15 +840,15 @@ def test_network_allowed_profile_uses_full_env(monkeypatch):
         captured_envs.append(kw.get("env", {}))
         return _sp.CompletedProcess(args=[], returncode=0)
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=network_profile), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=network_profile), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
 
         mock_guard.return_value = _make_allow_decision(profile="service_ops")
 
@@ -869,14 +869,14 @@ def test_network_allowed_profile_uses_full_env(monkeypatch):
 def test_cmd_run_unknown_profile_returns_2(capsys):
     """cmd_run with an unrecognised profile name must return exit code 2 with a clear message."""
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
     from unittest.mock import MagicMock
 
     args = MagicMock()
     args.profile = "nonexistent_profile"
     args.command = ["echo", "hello"]
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES):
         rc = cmd_run(args)
 
     assert rc == 2, f"expected return code 2, got {rc}"
@@ -888,12 +888,12 @@ def test_cmd_run_unknown_profile_returns_2(capsys):
 def test_cmd_show_unknown_profile_returns_2(capsys):
     """cmd_show with an unrecognised profile name must return exit code 2 with a clear message."""
     from unittest.mock import patch, MagicMock
-    from scripts.run_with_profile import cmd_show
+    from helm.scripts.run_with_profile import cmd_show
 
     args = MagicMock()
     args.profile = "does_not_exist"
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES):
         rc = cmd_show(args)
 
     assert rc == 2, f"expected return code 2, got {rc}"
@@ -905,10 +905,10 @@ def test_cmd_show_unknown_profile_returns_2(capsys):
 def test_build_parser_survives_missing_profiles_file(monkeypatch, tmp_path):
     """build_parser must not crash even if the profiles file is absent (lazy loading)."""
     monkeypatch.setattr(
-        "scripts.run_with_profile.PROFILE_FILE",
+        "helm.scripts.run_with_profile.PROFILE_FILE",
         tmp_path / "nonexistent_profiles.json",
     )
-    from scripts.run_with_profile import build_parser
+    from helm.scripts.run_with_profile import build_parser
     # Should not raise even though the profile file does not exist
     parser = build_parser()
     assert parser is not None
@@ -921,7 +921,7 @@ def test_build_parser_survives_missing_profiles_file(monkeypatch, tmp_path):
 def test_guard_exception_fallback_uses_tuples_and_require_approval(capsys):
     """When evaluate_command_guard raises, the fallback decision must use tuples and require_approval."""
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
 
     captured_tasks = []
 
@@ -931,15 +931,15 @@ def test_guard_exception_fallback_uses_tuples_and_require_approval(capsys):
     def raise_guard(*args, **kwargs):
         raise RuntimeError("simulated guard failure")
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", side_effect=raise_guard), \
-         patch("scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", side_effect=raise_guard), \
+         patch("helm.scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         mock_subprocess.return_value.returncode = 0
 
@@ -960,7 +960,7 @@ def test_guard_exception_fallback_uses_tuples_and_require_approval(capsys):
 
     # Verify the fallback dataclass was constructed with tuples
     # We re-trigger the fallback path directly to inspect field types
-    from scripts.command_guard import GuardDecision, CommandClassification
+    from helm.scripts.command_guard import GuardDecision, CommandClassification
     try:
         raise RuntimeError("simulated")
     except RuntimeError as exc:
@@ -998,7 +998,7 @@ def test_guard_exception_fallback_uses_tuples_and_require_approval(capsys):
 def test_negative_timeout_treated_as_zero():
     """A negative --timeout value should be clamped to 0 (no limit)."""
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
     import subprocess as _sp
 
     captured_calls = []
@@ -1007,15 +1007,15 @@ def test_negative_timeout_treated_as_zero():
         captured_calls.append(kw)
         return _sp.CompletedProcess(args=a[0] if a else [], returncode=0)
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run", side_effect=fake_subprocess_run):
 
         mock_guard.return_value = _make_allow_decision()
 
@@ -1031,7 +1031,7 @@ def test_negative_timeout_treated_as_zero():
 def test_known_profiles_listed_in_error_message(capsys):
     """The error message for an unknown profile must list the known profiles."""
     from unittest.mock import patch, MagicMock
-    from scripts.run_with_profile import cmd_show
+    from helm.scripts.run_with_profile import cmd_show
 
     profiles = {
         "inspect_local": {"description": "...", "backend": "local", "checkpoint": "never",
@@ -1043,7 +1043,7 @@ def test_known_profiles_listed_in_error_message(capsys):
     args = MagicMock()
     args.profile = "bogus_profile"
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=profiles):
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=profiles):
         rc = cmd_show(args)
 
     assert rc == 2
@@ -1059,7 +1059,7 @@ def test_known_profiles_listed_in_error_message(capsys):
 def test_attach_advisory_action_scope_populates_when_task_name_has_verb():
     """R2 I1: advisory wiring attaches an action-scope decision to the task dict."""
     from argparse import Namespace
-    from scripts.run_with_profile import _attach_advisory_action_scope
+    from helm.scripts.run_with_profile import _attach_advisory_action_scope
 
     task: dict = {}
     args = Namespace(task_name="회의록 수정합니다", task_goal=None)
@@ -1071,7 +1071,7 @@ def test_attach_advisory_action_scope_populates_when_task_name_has_verb():
 
 def test_attach_advisory_action_scope_silent_when_no_task_strings():
     from argparse import Namespace
-    from scripts.run_with_profile import _attach_advisory_action_scope
+    from helm.scripts.run_with_profile import _attach_advisory_action_scope
 
     task: dict = {}
     args = Namespace(task_name=None, task_goal=None)
@@ -1081,8 +1081,8 @@ def test_attach_advisory_action_scope_silent_when_no_task_strings():
 
 def test_attach_advisory_action_scope_swallows_exceptions(monkeypatch):
     from argparse import Namespace
-    import scripts.action_scope as scope
-    from scripts.run_with_profile import _attach_advisory_action_scope
+    import helm.scripts.action_scope as scope
+    from helm.scripts.run_with_profile import _attach_advisory_action_scope
 
     def explode(*_a, **_k):
         raise RuntimeError("synthetic")
@@ -1098,9 +1098,9 @@ def test_attach_advisory_action_scope_swallows_exceptions(monkeypatch):
 def test_attach_advisory_action_scope_records_counter_on_failure(monkeypatch):
     """R5 M2: silently-swallowed advisory failure increments the counter."""
     from argparse import Namespace
-    import scripts.action_scope as scope
-    from scripts.run_with_profile import _attach_advisory_action_scope
-    from scripts.advisory_log import (
+    import helm.scripts.action_scope as scope
+    from helm.scripts.run_with_profile import _attach_advisory_action_scope
+    from helm.scripts.advisory_log import (
         reset_advisory_failures,
         snapshot_advisory_failures,
     )
@@ -1125,17 +1125,17 @@ def test_guard_json_prints_decision_and_exits(capsys):
     """--guard-json should print guard decision as JSON and return 0 without executing."""
     import json as _json
     from unittest.mock import patch
-    from scripts.run_with_profile import cmd_run
+    from helm.scripts.run_with_profile import cmd_run
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger") as append_ledger, \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess:
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger") as append_ledger, \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard") as mock_guard, \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess:
 
         mock_guard.return_value = _make_allow_decision()
 
@@ -1186,7 +1186,7 @@ def test_count_active_browser_sessions_documented_throughput_assumption(tmp_path
     = 2000, only the last 2000 lines are examined — some earlier open sessions
     may be missed, which is the documented limitation.
     """
-    from scripts import run_with_profile as rwp
+    from helm.scripts import run_with_profile as rwp
 
     ledger = tmp_path / "task-ledger.jsonl"
     now_iso = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
@@ -1214,7 +1214,7 @@ def test_count_active_browser_sessions_documented_throughput_assumption(tmp_path
 
 def test_count_active_browser_sessions_uses_constant_not_literal(tmp_path):
     """H-1: _BROWSER_SESSION_TAIL_LINES is the live constant (not a copy)."""
-    from scripts import run_with_profile as rwp
+    from helm.scripts import run_with_profile as rwp
     assert hasattr(rwp, "_BROWSER_SESSION_TAIL_LINES")
     assert isinstance(rwp._BROWSER_SESSION_TAIL_LINES, int)
     assert rwp._BROWSER_SESSION_TAIL_LINES == 2000
@@ -1228,7 +1228,7 @@ def test_require_cleanup_evidence_from_entry_variants():
     """H-2: All non-canonical browser_recon values resolve to False;
     only dict with require_cleanup_evidence=True returns True.
     """
-    from scripts.run_with_profile import _require_cleanup_evidence_from_entry
+    from helm.scripts.run_with_profile import _require_cleanup_evidence_from_entry
 
     # Non-dict values → False
     assert _require_cleanup_evidence_from_entry({"browser_recon": True}) is False

@@ -16,8 +16,8 @@ from helm.commands import (
     detect_layout,
 )
 from helm.commands.context import build_onboarding_payload, format_onboarding_text
-from scripts.discovery import discover_environment, snapshot_to_json
-from scripts.model_health_lib import load_policy as load_model_health_policy, load_state as load_model_health_state, select_model as select_healthy_model, state_path as model_health_state_path
+from helm.scripts.discovery import discover_environment, snapshot_to_json
+from helm.scripts.model_health_lib import load_policy as load_model_health_policy, load_state as load_model_health_state, select_model as select_healthy_model, state_path as model_health_state_path
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:

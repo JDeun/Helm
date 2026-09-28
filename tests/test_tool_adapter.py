@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.tool_adapter import (
+from helm.scripts.tool_adapter import (
     EchoAdapter,
     McpAdapterStub,
     invoke_tool,

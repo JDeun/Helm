@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.shadow_mode_report import generate_report, to_markdown
+from helm.scripts.shadow_mode_report import generate_report, to_markdown
 
 
 # ---------------------------------------------------------------------------
@@ -669,7 +669,7 @@ class TestParseTimestampIterationOrder:
 
     def test_updated_at_wins_over_started_at(self):
         """updated_at is returned even when started_at is also present."""
-        from scripts.shadow_mode_report import _parse_ts
+        from helm.scripts.shadow_mode_report import _parse_ts
         old_ts = "2026-01-01T00:00:00+00:00"
         new_ts = "2026-05-01T00:00:00+00:00"
         entry = {"updated_at": new_ts, "started_at": old_ts}
@@ -682,7 +682,7 @@ class TestParseTimestampIterationOrder:
 
     def test_started_at_used_when_no_updated_at(self):
         """Falls back to started_at when updated_at is absent."""
-        from scripts.shadow_mode_report import _parse_ts
+        from helm.scripts.shadow_mode_report import _parse_ts
         ts = "2026-03-15T12:00:00+00:00"
         entry = {"started_at": ts}
         result = _parse_ts(entry)
@@ -691,7 +691,7 @@ class TestParseTimestampIterationOrder:
 
     def test_ts_fields_order_matches_module_constant(self):
         """_TS_FIELDS starts with 'updated_at' (first-wins semantics)."""
-        import scripts.shadow_mode_report as smr
+        import helm.scripts.shadow_mode_report as smr
         assert hasattr(smr, "_TS_FIELDS"), "_TS_FIELDS must be a module-level constant"
         assert smr._TS_FIELDS[0] == "updated_at", (
             f"First field should be 'updated_at' for last-update-time semantics; "
@@ -700,7 +700,7 @@ class TestParseTimestampIterationOrder:
 
     def test_none_returned_when_no_timestamp_fields(self):
         """Returns None when no recognised timestamp field is present."""
-        from scripts.shadow_mode_report import _parse_ts
+        from helm.scripts.shadow_mode_report import _parse_ts
         assert _parse_ts({}) is None
         assert _parse_ts({"other_field": "value"}) is None
 

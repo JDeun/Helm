@@ -1,0 +1,789 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT.parent) not in sys.path:
+    sys.path.insert(0, str(ROOT.parent))
+
+from helm_context import ContextSource, configured_context_sources
+from helm_workspace import get_workspace_layout
+from helm.scripts.jsonl_io import iter_jsonl as _shared_iter_jsonl
+
+
+WORKSPACE = get_workspace_layout().root
+SOURCE_CHOICES = ("notes", "memory", "ontology", "tasks", "commands", "checkpoints")
+MODE_PRESETS = {
+    "travel": {
+        "query": "travel",
+        "include": ["notes", "memory", "ontology", "tasks"],
+        "description": "Travel, itinerary, reminder, and trip state.",
+    },
+    "wealth": {
+        "query": "ledger",
+        "include": ["notes", "memory", "ontology", "tasks", "commands"],
+        "description": "Ledger, obligations, market checks, and wealth operations.",
+    },
+    "local": {
+        "query": "cafe",
+        "include": ["notes", "memory", "ontology", "tasks", "commands"],
+        "description": "Nearby discovery preferences, trip-adjacent venue context, and provider failures.",
+    },
+    "kservice": {
+        "query": "subway",
+        "include": ["notes", "memory", "ontology", "tasks", "commands"],
+        "description": "Korean daily-service directives, utilities, and provider failures.",
+    },
+    "failures": {
+        "query": None,
+        "include": ["tasks", "commands"],
+        "description": "Recent failed operational traces.",
+    },
+    "rollback": {
+        "query": None,
+        "include": ["tasks", "checkpoints"],
+        "description": "Risky tasks and nearby checkpoints for recovery planning.",
+    },
+    "decisions": {
+        "query": "decision",
+        "include": ["notes", "memory", "tasks"],
+        "description": "Technical decisions, trade-offs, and durable implementation choices.",
+    },
+    "timeline": {
+        "query": None,
+        "include": ["notes", "memory", "tasks", "commands", "checkpoints"],
+        "description": "Chronological context across notes, memory, tasks, commands, and checkpoints.",
+    },
+    "entity": {
+        "query": None,
+        "include": ["ontology", "memory", "tasks"],
+        "description": "Entity-centered context from ontology plus nearby memory and task records.",
+    },
+    "reflect-candidates": {
+        "query": None,
+        "include": ["tasks", "commands", "memory"],
+        "description": "Evidence candidates for later reflection: failures, repeated work, and durable memory pressure.",
+    },
+}
+
+
+@dataclass
+class SearchResult:
+    adapter: str
+    adapter_kind: str
+    source: str
+    kind: str
+    timestamp: str | None
+    title: str
+    excerpt: str
+    metadata: dict
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    """List-materializing wrapper around :func:`iter_jsonl`."""
+    return list(iter_jsonl(path))
+
+
+def iter_jsonl(path: Path) -> Iterable[dict]:
+    """Stream dicts from a JSONL state file.
+
+    Delegates to :func:`scripts.jsonl_io.iter_jsonl` so the
+    malformed-line warning policy is consistent with
+    ``commands.read_jsonl``, ``memory_ops._read_jsonl``, and
+    ``skill_capture.read_jsonl``.
+    """
+    yield from _shared_iter_jsonl(path)
+
+
+def read_json_array(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def apply_mode_defaults(args: argparse.Namespace) -> None:
+    if not args.mode:
+        return
+    preset = MODE_PRESETS[args.mode]
+    if args.query is None and preset.get("query") is not None:
+        args.query = preset["query"]
+    if not args.include:
+        args.include = list(preset["include"])
+    if args.mode == "failures":
+        args.failed_only = True
+    if args.mode == "reflect-candidates":
+        args.latest_tasks = True
+
+
+def matches_query(blob: str, query: str | None) -> bool:
+    if not query:
+        return True
+    return query.casefold() in blob.casefold()
+
+
+def matches_skill(metadata: dict, skill: str | None) -> bool:
+    if not skill:
+        return True
+    return metadata.get("skill") == skill or metadata.get("task_skill") == skill
+
+
+def matches_task_id(metadata: dict, task_id: str | None) -> bool:
+    if not task_id:
+        return True
+    return metadata.get("task_id") == task_id
+
+
+def matches_entity(metadata: dict, entity: str | None) -> bool:
+    if not entity:
+        return True
+    return entity in {
+        metadata.get("entity_id"),
+        metadata.get("from"),
+        metadata.get("to"),
+    }
+
+
+def matches_since(timestamp: str | None, since: str | None) -> bool:
+    if not since or not timestamp:
+        return True
+    return timestamp >= since
+
+
+def _queryless_window(args: argparse.Namespace) -> int:
+    return max(args.limit * 20, 200)
+
+
+def iter_text_lines(path: Path) -> Iterable[tuple[int, str]]:
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        for lineno, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if stripped:
+                yield lineno, stripped
+
+
+def _safe_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def direct_inspection_hint(source: ContextSource, area: str, metadata: dict) -> str | None:
+    if area in {"notes", "memory"} and metadata.get("path"):
+        path = source.root / str(metadata["path"])
+        line = metadata.get("line")
+        if line:
+            return f"open {path}:{line} or inspect with sed around that line"
+        return f"open {path}"
+    if area == "tasks" and metadata.get("task_id"):
+        return f"helm task show {metadata['task_id']} --path {source.root}"
+    if area == "commands" and metadata.get("task_id"):
+        return f"helm dci --path {source.root} --include commands --task-id {metadata['task_id']}"
+    if area == "checkpoints" and metadata.get("checkpoint_id"):
+        return f"helm checkpoint show {metadata['checkpoint_id']} --path {source.root}"
+    return None
+
+
+def result_for(source: ContextSource, area: str, kind: str, timestamp: str | None, title: str, excerpt: str, metadata: dict) -> SearchResult:
+    enriched = dict(metadata)
+    enriched.setdefault("workspace", str(source.root))
+    hint = direct_inspection_hint(source, area, enriched)
+    if hint:
+        enriched.setdefault("direct_inspection_hint", hint)
+    return SearchResult(
+        adapter=source.name,
+        adapter_kind=source.kind,
+        source=area,
+        kind=kind,
+        timestamp=timestamp,
+        title=title,
+        excerpt=excerpt,
+        metadata=enriched,
+    )
+
+
+def latest_tasks(entries: list[dict]) -> list[dict]:
+    by_task: dict[str, dict] = {}
+    for entry in entries:
+        task_id = entry.get("task_id")
+        if task_id:
+            by_task[task_id] = entry
+    return list(by_task.values())
+
+
+def parse_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    raw = value
+    if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+        raw = f"{raw}T00:00:00+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def dedupe_results(results: list[SearchResult]) -> list[SearchResult]:
+    deduped: list[SearchResult] = []
+    seen: set[tuple] = set()
+    for item in results:
+        key = (
+            item.adapter,
+            item.source,
+            item.kind,
+            item.timestamp,
+            item.title,
+            item.excerpt,
+            item.metadata.get("path"),
+            item.metadata.get("line"),
+            item.metadata.get("task_id"),
+            item.metadata.get("entity_id"),
+            item.metadata.get("from"),
+            item.metadata.get("to"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+# Memory tree walks (notes / memory) only ever consume these extensions.
+# Hoisting the tuple makes it visible to ``load_memory_results`` for an
+# early extension filter, replacing the prior ``rglob("*")`` (which
+# materialised every file in an Obsidian vault before filtering).
+_MEMORY_TEXT_EXTENSIONS: tuple[str, ...] = (".md", ".txt", ".json", ".jsonl")
+
+
+def text_files_under(root: Path) -> list[Path]:
+    if not root.exists():
+        return []
+    files: list[Path] = []
+    for ext in _MEMORY_TEXT_EXTENSIONS:
+        files.extend(sorted(root.rglob(f"*{ext}")))
+    return sorted(dict.fromkeys(files))
+
+
+def iter_memory_text_files(root: Path) -> Iterable[Path]:
+    """Yield candidate text/structured files under ``root`` lazily.
+
+    Unlike ``text_files_under`` this does not materialise the full list
+    before returning. Callers that need a single sorted ordering should
+    still use ``text_files_under``; callers that filter+limit (e.g.
+    ``load_memory_results``) should prefer this iterator so very large
+    Obsidian vaults do not pay the full walk cost up front.
+    """
+    if not root.exists():
+        return
+    for ext in _MEMORY_TEXT_EXTENSIONS:
+        yield from root.rglob(f"*{ext}")
+
+
+def load_note_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
+    files: list[Path] = []
+    files.extend(source.curated_memory_files)
+    for root in source.notes_roots:
+        files.extend(text_files_under(root))
+    queryless = args.query is None
+    emitted = 0
+    unique_files = list(dict.fromkeys(files))
+    ordered_files = sorted(unique_files, key=_safe_mtime, reverse=True) if queryless else sorted(unique_files)
+    for path in ordered_files:
+        if not path.exists() or not path.is_file():
+            continue
+        if source.ontology_root in path.parents:
+            continue
+        relpath = path.relative_to(source.root)
+        if queryless and any(part.startswith(".") for part in relpath.parts):
+            continue
+        for lineno, stripped in iter_text_lines(path):
+            if not matches_query(stripped, args.query):
+                continue
+            timestamp = None
+            if path.parent.name == "memory" and path.stem[:4].isdigit():
+                timestamp = path.stem
+            result = result_for(
+                source,
+                "notes",
+                "note-line",
+                timestamp,
+                str(relpath),
+                stripped,
+                {"path": str(relpath), "line": lineno},
+            )
+            if queryless:
+                yield result
+                emitted += 1
+                if emitted >= _queryless_window(args):
+                    return
+            else:
+                yield result
+
+
+def load_memory_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
+    memory_root = source.memory_root
+    if not memory_root.exists():
+        return
+    queryless = args.query is None
+    emitted = 0
+    # Prefilter by extension via iter_memory_text_files so we never
+    # materialise the entire subtree (Obsidian vaults can hold tens of
+    # thousands of files; the previous code did rglob("*") then filtered).
+    # Deduplicate via dict.fromkeys because an .md path can only appear
+    # once across extension globs, but the iterator may yield ordering
+    # variations on case-insensitive filesystems.
+    paths = list(dict.fromkeys(iter_memory_text_files(memory_root)))
+    ordered_paths = sorted(paths, key=_safe_mtime, reverse=True) if queryless else sorted(paths)
+    for path in ordered_paths:
+        if not path.is_file():
+            continue
+        if source.ontology_root in path.parents:
+            continue
+        relpath = path.relative_to(source.root)
+        if queryless and any(part.startswith(".") for part in relpath.parts):
+            continue
+        if path.suffix in {".json", ".jsonl"}:
+            blob = path.read_text(encoding="utf-8", errors="ignore")
+            if not matches_query(blob, args.query):
+                continue
+            result = result_for(source, "memory", "structured-file", None, str(relpath), blob[:240], {"path": str(relpath)})
+            if queryless:
+                yield result
+                emitted += 1
+                if emitted >= _queryless_window(args):
+                    return
+            else:
+                yield result
+            continue
+        if path.suffix not in {".md", ".txt"}:
+            continue
+        for lineno, stripped in iter_text_lines(path):
+            if not matches_query(stripped, args.query):
+                continue
+            result = result_for(
+                source,
+                "memory",
+                "memory-line",
+                None,
+                str(relpath),
+                stripped,
+                {"path": str(relpath), "line": lineno},
+            )
+            if queryless:
+                yield result
+                emitted += 1
+                if emitted >= _queryless_window(args):
+                    return
+            else:
+                yield result
+
+
+def load_ontology_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
+    for entity in iter_jsonl(source.ontology_root / "entities.jsonl"):
+        properties = entity.get("properties", {})
+        blob = json.dumps(entity, ensure_ascii=False)
+        if not matches_query(blob, args.query):
+            continue
+        metadata = {
+            "entity_id": entity.get("id"),
+            "entity_type": entity.get("type"),
+            "name": properties.get("name"),
+            "status": properties.get("status"),
+        }
+        if not matches_entity(metadata, args.entity):
+            continue
+        excerpt = properties.get("notes") or properties.get("description") or blob
+        yield result_for(
+            source,
+            "ontology",
+            "entity",
+            properties.get("captured_at") or properties.get("acquired_date"),
+            f"{entity.get('id')} ({entity.get('type')})",
+            excerpt,
+            metadata,
+        )
+
+    for relation in iter_jsonl(source.ontology_root / "relations.jsonl"):
+        blob = json.dumps(relation, ensure_ascii=False)
+        if not matches_query(blob, args.query):
+            continue
+        metadata = {
+            "from": relation.get("from"),
+            "to": relation.get("to"),
+            "relation_type": relation.get("relation_type"),
+        }
+        if not matches_entity(metadata, args.entity):
+            continue
+        yield result_for(
+            source,
+            "ontology",
+            "relation",
+            None,
+            f"{relation.get('from')} {relation.get('relation_type')} {relation.get('to')}",
+            json.dumps(relation.get("properties", {}), ensure_ascii=False),
+            metadata,
+        )
+
+
+def load_ontology_graph_neighbors(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
+    if not args.entity:
+        return
+    entities = {
+        str(entity.get("id")): entity
+        for entity in iter_jsonl(source.ontology_root / "entities.jsonl")
+        if entity.get("id")
+    }
+    yielded_entities: set[str] = set()
+    for relation in iter_jsonl(source.ontology_root / "relations.jsonl"):
+        relation_from = str(relation.get("from") or "")
+        relation_to = str(relation.get("to") or "")
+        if args.entity not in {relation_from, relation_to}:
+            continue
+        metadata = {
+            "from": relation.get("from"),
+            "to": relation.get("to"),
+            "relation_type": relation.get("relation_type"),
+            "graph_expansion": True,
+            "graph_seed": args.entity,
+        }
+        yield result_for(
+            source,
+            "ontology",
+            "graph-relation",
+            None,
+            f"{relation.get('from')} {relation.get('relation_type')} {relation.get('to')}",
+            json.dumps(relation.get("properties", {}), ensure_ascii=False),
+            metadata,
+        )
+        for neighbor_id in (relation_from, relation_to):
+            if neighbor_id == args.entity or neighbor_id in yielded_entities:
+                continue
+            entity = entities.get(neighbor_id)
+            if not entity:
+                continue
+            yielded_entities.add(neighbor_id)
+            properties = entity.get("properties", {})
+            yield result_for(
+                source,
+                "ontology",
+                "graph-neighbor",
+                properties.get("captured_at") or properties.get("acquired_date"),
+                f"{entity.get('id')} ({entity.get('type')})",
+                properties.get("notes") or properties.get("description") or json.dumps(entity, ensure_ascii=False),
+                {
+                    "entity_id": entity.get("id"),
+                    "entity_type": entity.get("type"),
+                    "name": properties.get("name"),
+                    "status": properties.get("status"),
+                    "graph_expansion": True,
+                    "graph_seed": args.entity,
+                },
+            )
+
+
+def load_task_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
+    if args.latest_tasks:
+        entries: Iterable[dict] = latest_tasks(read_jsonl(source.state_root / "task-ledger.jsonl"))
+    else:
+        entries = iter_jsonl(source.state_root / "task-ledger.jsonl")
+    for entry in entries:
+        blob = json.dumps(entry, ensure_ascii=False)
+        if not matches_query(blob, args.query):
+            continue
+        if not matches_skill(entry, args.skill):
+            continue
+        if not matches_task_id(entry, args.task_id):
+            continue
+        if args.failed_only and entry.get("status") != "failed":
+            continue
+        timestamp = entry.get("finished_at") or entry.get("started_execution_at") or entry.get("started_at")
+        if not matches_since(timestamp, args.since):
+            continue
+        yield result_for(
+            source,
+            "tasks",
+            "task",
+            timestamp,
+            entry.get("task_name", "-"),
+            (
+                f"skill={entry.get('skill') or '-'} "
+                f"profile={entry.get('profile') or '-'} "
+                f"status={entry.get('status') or '-'} "
+                f"runtime={entry.get('runtime_backend') or entry.get('backend') or '-'} "
+                f"command={entry.get('command_preview') or entry.get('command')}"
+            ),
+            {
+                "task_id": entry.get("task_id"),
+                "skill": entry.get("skill"),
+                "profile": entry.get("profile"),
+                "status": entry.get("status"),
+                "delivery_mode": entry.get("delivery_mode"),
+                "exit_code": entry.get("exit_code"),
+                "runtime_backend": entry.get("runtime_backend") or entry.get("backend"),
+                "runtime_target": entry.get("runtime_target"),
+                "checkpoint_id": entry.get("checkpoint_id"),
+            },
+        )
+
+
+def load_command_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
+    for entry in iter_jsonl(source.state_root / "command-log.jsonl"):
+        blob = json.dumps(entry, ensure_ascii=False)
+        if not matches_query(blob, args.query):
+            continue
+        if not matches_skill(entry, args.skill):
+            continue
+        if not matches_task_id(entry, args.task_id):
+            continue
+        if args.failed_only and entry.get("exit_code") in (0, None):
+            continue
+        timestamp = entry.get("finished_at") or entry.get("started_at")
+        if not matches_since(timestamp, args.since):
+            continue
+        yield result_for(
+            source,
+            "commands",
+            "command",
+            timestamp,
+            entry.get("label") or "command",
+            " ".join(entry.get("command", [])),
+            {
+                "task_id": entry.get("task_id"),
+                "task_skill": entry.get("task_skill") or entry.get("skill"),
+                "task_profile": entry.get("task_profile") or entry.get("profile"),
+                "component": entry.get("component"),
+                "exit_code": entry.get("exit_code"),
+            },
+        )
+
+
+def load_checkpoint_results(source: ContextSource, args: argparse.Namespace) -> Iterable[SearchResult]:
+    index_path = source.state_root / "checkpoints" / "index.json"
+    records = read_json_array(index_path)
+    for record in records:
+        blob = json.dumps(record, ensure_ascii=False)
+        if not matches_query(blob, args.query):
+            continue
+        timestamp = record.get("created_at")
+        if not matches_since(timestamp, args.since):
+            continue
+        yield result_for(
+            source,
+            "checkpoints",
+            "checkpoint",
+            timestamp,
+            record.get("checkpoint_id", "checkpoint"),
+            f"label={record.get('label')} paths={', '.join(record.get('paths', []))}",
+            {
+                "checkpoint_id": record.get("checkpoint_id"),
+                "label": record.get("label"),
+                "paths": record.get("paths", []),
+                "archive": record.get("archive"),
+            },
+        )
+
+
+def collect_results(args: argparse.Namespace) -> list[SearchResult]:
+    selected = set(args.include)
+    results: list[SearchResult] = []
+    sources = configured_context_sources(WORKSPACE)
+    if args.adapter:
+        sources = [source for source in sources if source.name == args.adapter]
+    loaders = {
+        "notes": load_note_results,
+        "memory": load_memory_results,
+        "ontology": load_ontology_results,
+        "tasks": load_task_results,
+        "commands": load_command_results,
+        "checkpoints": load_checkpoint_results,
+    }
+    for source in sources:
+        for area in SOURCE_CHOICES:
+            if area not in selected:
+                continue
+            results.extend(loaders[area](source, args))
+        if "ontology" in selected and args.entity:
+            results.extend(load_ontology_graph_neighbors(source, args))
+
+    results = dedupe_results(results)
+    query_blob = args.query.casefold() if args.query else None
+    query_terms = [term for term in (query_blob or "").split() if len(term) >= 2]
+
+    def count_hits(blob: str, *, exact_weight: int, token_weight: int) -> int:
+        if not query_blob:
+            return 0
+        exact_hits = blob.count(query_blob)
+        token_hits = sum(blob.count(token) for token in query_terms)
+        return exact_hits * exact_weight + token_hits * token_weight
+
+    def field_scores(item: SearchResult) -> dict:
+        title = item.title.casefold()
+        excerpt = item.excerpt.casefold()
+        metadata = json.dumps(item.metadata, ensure_ascii=False).casefold()
+        return {
+            "title": count_hits(title, exact_weight=24, token_weight=4),
+            "excerpt": count_hits(excerpt, exact_weight=12, token_weight=2),
+            "metadata": count_hits(metadata, exact_weight=6, token_weight=1),
+        }
+
+    def query_score(item: SearchResult) -> int:
+        scores = field_scores(item)
+        return scores["title"] + scores["excerpt"] + scores["metadata"]
+
+    def temporal_boost(item: SearchResult) -> int:
+        timestamp = parse_timestamp(item.timestamp)
+        if timestamp is None:
+            return 0
+        days_old = max(0, (datetime.now(timezone.utc) - timestamp).days)
+        if days_old <= 7:
+            return 10
+        if days_old <= 30:
+            return 6
+        if days_old <= 90:
+            return 3
+        return 1
+
+    def graph_boost(item: SearchResult) -> int:
+        if item.metadata.get("graph_expansion"):
+            return 8
+        if args.entity and item.source == "ontology":
+            return 6
+        return 0
+
+    def source_priority(item: SearchResult) -> int:
+        return {
+            "notes": 60,
+            "memory": 50,
+            "ontology": 40,
+            "tasks": 30,
+            "commands": 20,
+            "checkpoints": 10,
+        }.get(item.source, 0)
+
+    def adapter_priority(item: SearchResult) -> int:
+        if item.adapter == "helm-local":
+            return 20
+        if item.adapter_kind in {"openclaw", "hermes"}:
+            return 10
+        return 0
+
+    def ranking_breakdown(item: SearchResult) -> dict:
+        fields = field_scores(item)
+        query_total = fields["title"] + fields["excerpt"] + fields["metadata"]
+        return {
+            "query_score": query_total,
+            "field_scores": fields,
+            "temporal_boost": temporal_boost(item),
+            "graph_boost": graph_boost(item),
+            "adapter_priority": adapter_priority(item),
+            "source_priority": source_priority(item),
+            "total_score": query_total + temporal_boost(item) + graph_boost(item) + adapter_priority(item) + source_priority(item),
+            "timestamp": item.timestamp,
+        }
+
+    for item in results:
+        item.metadata["ranking"] = ranking_breakdown(item)
+
+    results.sort(
+        key=lambda item: (
+            item.metadata["ranking"]["total_score"],
+            item.metadata["ranking"]["query_score"],
+            item.metadata["ranking"]["temporal_boost"],
+            item.metadata["ranking"]["graph_boost"],
+            item.timestamp or "",
+            item.title,
+        ),
+        reverse=not args.ascending,
+    )
+    limited = results[: args.limit]
+    if not args.explain_ranking:
+        for item in limited:
+            item.metadata.pop("ranking", None)
+    return limited
+
+
+def summarize_results(results: list[SearchResult]) -> dict:
+    summary = {
+        "total": len(results),
+        "by_adapter": {},
+        "by_source": {},
+        "by_kind": {},
+    }
+    for item in results:
+        summary["by_adapter"][item.adapter] = summary["by_adapter"].get(item.adapter, 0) + 1
+        summary["by_source"][item.source] = summary["by_source"].get(item.source, 0) + 1
+        summary["by_kind"][item.kind] = summary["by_kind"].get(item.kind, 0) + 1
+    return summary
+
+
+def print_results(results: list[SearchResult], json_output: bool) -> None:
+    if json_output:
+        print(json.dumps([asdict(item) for item in results], indent=2, ensure_ascii=False))
+        return
+    for item in results:
+        print(f"[{item.adapter}:{item.source}:{item.kind}] {item.timestamp or '-'} {item.title}")
+        print(f"  {item.excerpt}")
+        if item.metadata:
+            print(f"  meta={json.dumps(item.metadata, ensure_ascii=False, sort_keys=True)}")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Query Helm and adopted external context sources through one file-native interface."
+    )
+    parser.add_argument("query", nargs="?", help="Free-text query. If omitted, returns recent items from selected sources.")
+    parser.add_argument("--mode", choices=sorted(MODE_PRESETS.keys()), help="Apply a router-friendly preset.")
+    parser.add_argument("--describe-modes", action="store_true", help="List built-in mode presets and exit.")
+    parser.add_argument("--include", nargs="+", choices=SOURCE_CHOICES, default=None)
+    parser.add_argument("--adapter", help="Restrict search to one registered context source name.")
+    parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--skill", help="Filter task or command results by skill name.")
+    parser.add_argument("--task-id", help="Filter task or command results by task_id.")
+    parser.add_argument("--entity", help="Filter ontology relations/entities by entity id.")
+    parser.add_argument("--since", help="Lower bound for timestamps, e.g. 2026-04-12 or 2026-04-12T09:00.")
+    parser.add_argument("--failed-only", action="store_true")
+    parser.add_argument("--latest-tasks", action="store_true", help="Collapse task ledger entries to latest state per task_id.")
+    parser.add_argument("--ascending", action="store_true", help="Sort oldest first instead of newest first.")
+    parser.add_argument("--explain-ranking", action="store_true", help="Attach ranking score components to each result's metadata.")
+    parser.add_argument("--summary", action="store_true", help="Print adapter/source summary before detailed results.")
+    parser.add_argument("--json", action="store_true")
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.describe_modes:
+        print(json.dumps(MODE_PRESETS, indent=2, ensure_ascii=False))
+        return 0
+    apply_mode_defaults(args)
+    if args.include is None:
+        args.include = list(SOURCE_CHOICES)
+    results = collect_results(args)
+    if not results:
+        print("No results matched the query.")
+        return 0
+    if args.summary and not args.json:
+        print(json.dumps(summarize_results(results), ensure_ascii=False, sort_keys=True))
+    print_results(results, args.json)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

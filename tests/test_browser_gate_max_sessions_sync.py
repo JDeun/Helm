@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.browser_gate import _BROWSER_MAX_SESSIONS
-from scripts.browser_work_verifier import _PROFILE_POLICIES
+from helm.scripts.browser_gate import _BROWSER_MAX_SESSIONS
+from helm.scripts.browser_work_verifier import _PROFILE_POLICIES
 
 
 def test_max_sessions_derived_from_profile_policies():

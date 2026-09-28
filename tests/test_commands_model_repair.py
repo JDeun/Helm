@@ -37,7 +37,7 @@ def _run_cmd(monkeypatch, env_repair=None, env_respond=None):
     # Reload to pick up env changes
     import importlib
     for mod_name in list(sys.modules.keys()):
-        if mod_name in ("scripts.model_repair", "scripts.respond_tool_wiring",
+        if mod_name in ("helm.scripts.model_repair", "helm.scripts.respond_tool_wiring",
                         "helm.commands.model_repair"):
             del sys.modules[mod_name]
 

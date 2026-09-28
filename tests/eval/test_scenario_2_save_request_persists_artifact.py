@@ -29,8 +29,8 @@ from helm_state_model import (
     mark_step_completed,
     new_task_state,
 )
-from scripts.command_guard import evaluate_command_guard
-from scripts.state_io import append_jsonl_atomic, build_ledger_entry
+from helm.scripts.command_guard import evaluate_command_guard
+from helm.scripts.state_io import append_jsonl_atomic, build_ledger_entry
 
 
 _PROFILES = {

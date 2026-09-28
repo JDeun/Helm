@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "scripts"
+SCRIPTS = ROOT / "helm" / "scripts"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 if str(SCRIPTS) not in sys.path:
@@ -352,7 +352,7 @@ class VerifiedExecutionTests(unittest.TestCase):
         runner_command = spawn.call_args.args[0]
         self.assertIn("--verified-attempt", runner_command)
         self.assertNotIn("--verified-execution", runner_command)
-        import scripts.run_with_profile as run_with_profile
+        import helm.scripts.run_with_profile as run_with_profile
         parsed = run_with_profile.parse_run_args(["inspect_local", "--verified-attempt", "--", "echo", "ok"])
         self.assertTrue(parsed.verified_attempt)
         self.assertFalse(parsed.verified_execution)
@@ -420,7 +420,7 @@ class VerifiedExecutionTests(unittest.TestCase):
         self.assertFalse(result["ok"])
 
     def test_run_with_profile_verified_flag_delegates_to_verified_plan_loop(self) -> None:
-        import scripts.run_with_profile as run_with_profile
+        import helm.scripts.run_with_profile as run_with_profile
         command = [sys.executable, "-m", "unittest", "--help"]
         args = argparse.Namespace(
             profile="inspect_local", command=command, verified_execution=True,
@@ -430,8 +430,8 @@ class VerifiedExecutionTests(unittest.TestCase):
         # load_profiles is mocked so this test does not depend on the ambient
         # workspace layout having a references/execution_profiles.json — it
         # exercises the --verified-execution delegation, not profile loading.
-        with patch("scripts.run_with_profile.load_profiles", return_value={"inspect_local": {}}), \
-             patch("scripts.verified_execution.execute_verified_plan", return_value={"ok": True, "status": "completed"}) as execute:
+        with patch("helm.scripts.run_with_profile.load_profiles", return_value={"inspect_local": {}}), \
+             patch("helm.scripts.verified_execution.execute_verified_plan", return_value={"ok": True, "status": "completed"}) as execute:
             self.assertEqual(run_with_profile.cmd_run(args), 0)
         plan = execute.call_args.args[0]
         self.assertEqual(plan["tasks"][0]["command"], command)
@@ -440,7 +440,7 @@ class VerifiedExecutionTests(unittest.TestCase):
 
 class TouchedPathTests(unittest.TestCase):
     def test_tests_tree_and_newly_deleted_tracked_file_are_reported(self) -> None:
-        from scripts.run_with_profile import _collect_deleted_paths, _collect_recent_paths
+        from helm.scripts.run_with_profile import _collect_deleted_paths, _collect_recent_paths
         with tempfile.TemporaryDirectory() as tmpdir:
             workspace = Path(tmpdir)
             (workspace / "tests").mkdir()
@@ -459,7 +459,7 @@ class TouchedPathTests(unittest.TestCase):
 
 class RuntimeRoleInjectionTests(unittest.TestCase):
     def _register(self, role: str) -> dict:
-        from scripts.long_running_runtime import empty_runtime_state, register_agent
+        from helm.scripts.long_running_runtime import empty_runtime_state, register_agent
         return register_agent(
             empty_runtime_state(),
             agent_id="agent-1",

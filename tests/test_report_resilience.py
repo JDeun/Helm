@@ -7,8 +7,8 @@ from unittest.mock import patch
 import pytest
 
 import helm
-from scripts import command_log_report, ops_daily_report, task_ledger_report
-from scripts import run_with_profile
+from helm.scripts import command_log_report, ops_daily_report, task_ledger_report
+from helm.scripts import run_with_profile
 
 
 def test_command_log_report_skips_malformed_lines() -> None:

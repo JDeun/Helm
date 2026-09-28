@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from scripts.skill_manifest_lib import audit_skill_markdown_contracts, manifest_quality_audit
+from helm.scripts.skill_manifest_lib import audit_skill_markdown_contracts, manifest_quality_audit
 
 
 def test_manifest_quality_audit_tolerates_invalid_profile_json() -> None:

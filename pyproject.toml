@@ -51,11 +51,11 @@ py-modules = ["helm_workspace", "helm_context", "helm_state_model", "helm_frontm
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["helm", "helm.*", "scripts", "scripts.*"]
+include = ["helm", "helm.*"]
 
 [tool.setuptools.package-data]
 "helm.references" = ["*.json", "*.md", "*.yaml"]
-"scripts.compression" = ["*.md"]
+"helm.scripts.compression" = ["*.md"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

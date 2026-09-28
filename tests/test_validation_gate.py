@@ -26,7 +26,7 @@ import pytest
 
 def _get_module():
     """Return a freshly loaded scripts.validation_gate module."""
-    mod_name = "scripts.validation_gate"
+    mod_name = "helm.scripts.validation_gate"
     if mod_name in sys.modules:
         del sys.modules[mod_name]
     return importlib.import_module(mod_name)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from scripts.adaptive_harness_lib import postflight_payload_for_entry
-from scripts.reply_gate import evaluate_claims
+from helm.scripts.adaptive_harness_lib import postflight_payload_for_entry
+from helm.scripts.reply_gate import evaluate_claims
 
 
 def test_scenario_7_completion_claim_evidence_chain() -> None:

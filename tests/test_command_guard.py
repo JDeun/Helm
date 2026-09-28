@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.command_guard import evaluate_command_guard, decision_to_json
+from helm.scripts.command_guard import evaluate_command_guard, decision_to_json
 
 PROFILES = {
     "inspect_local": {"writes_allowed": False, "network_allowed": False, "checkpoint": "never"},
@@ -626,7 +626,7 @@ class TestAdvisoryActionScopeWiring:
 
     def test_advisory_failure_does_not_break_guard(self, monkeypatch):
         """If action_scope.evaluate raises, the guard still returns a decision."""
-        import scripts.action_scope as scope
+        import helm.scripts.action_scope as scope
 
         def explode(*_args, **_kwargs):
             raise RuntimeError("synthetic failure")
@@ -652,11 +652,11 @@ class TestAdvisoryActionScopeWiring:
         increment so the failure is no longer indistinguishable from
         "no task strings supplied".
         """
-        from scripts.advisory_log import (
+        from helm.scripts.advisory_log import (
             reset_advisory_failures,
             snapshot_advisory_failures,
         )
-        import scripts.action_scope as scope
+        import helm.scripts.action_scope as scope
 
         reset_advisory_failures()
 

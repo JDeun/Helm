@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.discovery import discover_environment, snapshot_to_json, _detect_gpu, GpuInfo
+from helm.scripts.discovery import discover_environment, snapshot_to_json, _detect_gpu, GpuInfo
 
 import pytest as _pytest
 
@@ -176,8 +176,8 @@ def test_low_ram_strategy_disables_local_model_calls(
     monkeypatch.setattr(urllib.request, "urlopen", _fail_urlopen)
 
     # Patch hardware detection to return low-RAM profile
-    from scripts import discovery as disc_mod
-    from scripts.discovery import HardwareProfile
+    from helm.scripts import discovery as disc_mod
+    from helm.scripts.discovery import HardwareProfile
     fake_hw = HardwareProfile(
         os_name="Linux",
         machine="x86_64",

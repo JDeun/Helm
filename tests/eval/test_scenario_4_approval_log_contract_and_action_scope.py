@@ -44,7 +44,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_state_model import new_task_state, record_approval
-from scripts.action_scope import (
+from helm.scripts.action_scope import (
     ActionScopeKind,
     attempted_action_allowed,
     evaluate as scope_evaluate,

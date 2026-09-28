@@ -7,8 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.long_running_runtime import _stable_hash, empty_runtime_state
-from scripts.request_intake import accept_request
+from helm.scripts.long_running_runtime import _stable_hash, empty_runtime_state
+from helm.scripts.request_intake import accept_request
 
 
 def test_unseen_delivery_is_accepted_and_creates_task_run() -> None:

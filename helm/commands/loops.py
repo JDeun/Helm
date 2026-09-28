@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from helm.commands import target_root
-from scripts.loop_lib import find_loop, load_loop_file, validate_loop
+from helm.scripts.loop_lib import find_loop, load_loop_file, validate_loop
 
 
 def cmd_loops(args: argparse.Namespace) -> int:

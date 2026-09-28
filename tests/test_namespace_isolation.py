@@ -46,3 +46,30 @@ def test_commands_live_under_the_helm_package() -> None:
     assert REFERENCES_ROOT == ROOT / "helm" / "references"
     assert (SCRIPT_ROOT / "skill_capture.py").is_file()
     assert not (ROOT / "commands").exists()
+
+
+def test_scripts_live_under_the_helm_package() -> None:
+    from helm.commands import SCRIPT_ROOT
+    from helm.scripts import command_guard, jsonl_io, run_with_profile  # noqa: F401
+
+    assert SCRIPT_ROOT == ROOT / "helm" / "scripts"
+    assert not (ROOT / "scripts").exists()
+
+
+def test_no_script_puts_the_package_dir_on_sys_path() -> None:
+    """Inserting helm/ onto sys.path would make `import scripts` work again."""
+    offenders = []
+    for path in sorted((ROOT / "helm" / "scripts").rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if "sys.path.insert(0, str(ROOT))" in text or "sys.path.insert(0, str(_ROOT))" in text:
+            offenders.append(str(path.relative_to(ROOT)))
+    assert offenders == [], (
+        "these files would re-expose helm/ as a sys.path root, making the shadowing "
+        f"names importable again: {offenders}"
+    )
+
+
+def test_package_data_keys_are_all_helm_prefixed() -> None:
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    package_data = data["tool"]["setuptools"]["package-data"]
+    assert all(key.startswith("helm.") for key in package_data), package_data

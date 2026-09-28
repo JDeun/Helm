@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from scripts.browser_work_verifier import DECISION_KEYS, verify, _resolve_site_note_path
+from helm.scripts.browser_work_verifier import DECISION_KEYS, verify, _resolve_site_note_path
 
 
 def _req(**overrides):
@@ -505,7 +505,7 @@ class TestResolveSiteNotePathCache:
 
     def test_cache_deduplicates_filesystem_hits(self, tmp_path):
         """Two calls with identical arguments should hit Path.exists exactly once."""
-        import scripts.browser_work_verifier as bwv
+        import helm.scripts.browser_work_verifier as bwv
 
         # Clear the cache so prior test state doesn't interfere.
         bwv._resolve_site_note_path.cache_clear()
@@ -532,7 +532,7 @@ class TestResolveSiteNotePathCache:
 
     def test_cache_clear_forces_recheck(self, tmp_path):
         """After cache_clear(), the next call re-checks the filesystem."""
-        import scripts.browser_work_verifier as bwv
+        import helm.scripts.browser_work_verifier as bwv
 
         bwv._resolve_site_note_path.cache_clear()
 
@@ -559,7 +559,7 @@ class TestResolveSiteNotePathCache:
 
     def test_different_args_each_hit_filesystem(self, tmp_path):
         """Different URL patterns are separate cache keys → each hits the filesystem."""
-        import scripts.browser_work_verifier as bwv
+        import helm.scripts.browser_work_verifier as bwv
 
         bwv._resolve_site_note_path.cache_clear()
 

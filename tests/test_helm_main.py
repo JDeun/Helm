@@ -26,7 +26,7 @@ if str(ROOT) not in sys.path:
 
 import helm as helm_module  # noqa: E402  (ROOT injected above)
 from helm import cli as helm_cli  # noqa: E402  (ROOT injected above)
-from scripts import run_with_profile  # noqa: E402  (ROOT injected above)
+from helm.scripts import run_with_profile  # noqa: E402  (ROOT injected above)
 
 # ``helm_module.main`` is a lazy forward onto ``helm.cli.main`` (see
 # helm/__init__.py). Its body resolves ``cmd_*`` names from helm.cli's own

@@ -350,7 +350,7 @@ def test_memory_ops_append_jsonl_is_concurrent_safe(tmp_path: Path) -> None:
 
     # Lazy import: don't drag fcntl in on Windows test runs.
     sys.path.insert(0, str(REPO_ROOT))
-    from scripts.memory_ops import _append_jsonl
+    from helm.scripts.memory_ops import _append_jsonl
 
     target = tmp_path / "shared.jsonl"
     n_threads = 8

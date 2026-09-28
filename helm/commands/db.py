@@ -4,7 +4,7 @@ import argparse
 import json
 
 from helm.commands import state_root_for, target_root
-from scripts.ops_db import db_path_for_state_root, init_db, rebuild_index, verify_index
+from helm.scripts.ops_db import db_path_for_state_root, init_db, rebuild_index, verify_index
 
 
 def cmd_db_init(args: argparse.Namespace) -> int:
@@ -69,7 +69,7 @@ def cmd_db_status(args: argparse.Namespace) -> int:
 
 
 def cmd_db_query(args: argparse.Namespace) -> int:
-    from scripts.ops_db import query_tasks, query_guard_decisions
+    from helm.scripts.ops_db import query_tasks, query_guard_decisions
     root = target_root(args.path)
     state_root = state_root_for(root)
 

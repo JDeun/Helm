@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.state_io import append_jsonl_atomic
+from helm.scripts.state_io import append_jsonl_atomic
 
 
 def test_append_creates_parent_dirs(tmp_path: Path) -> None:
@@ -58,7 +58,7 @@ def test_append_one_json_per_line(tmp_path: Path) -> None:
 
 def test_lock_failure_warns(tmp_path: Path, monkeypatch) -> None:
     """When locking is unavailable, a warning should be emitted (at least once)."""
-    import scripts.state_io as state_io_mod
+    import helm.scripts.state_io as state_io_mod
     state_io_mod._LOCK_WARNING_ISSUED = False
 
     target = tmp_path / "ledger.jsonl"
@@ -103,7 +103,7 @@ def test_windows_lock_size_matches_write(tmp_path: Path) -> None:
 
 def test_concurrent_append_no_data_loss(tmp_path: Path) -> None:
     """Multiple threads appending simultaneously should not lose data."""
-    import scripts.state_io as state_io_mod
+    import helm.scripts.state_io as state_io_mod
     from concurrent.futures import ThreadPoolExecutor
 
     state_io_mod._LOCK_WARNING_ISSUED = False
@@ -142,10 +142,10 @@ class TestLedgerExtension:
     """
 
     def _write_and_read(self, path: Path, entries: list[dict]) -> list[dict]:
-        from scripts.state_io import append_jsonl_atomic
+        from helm.scripts.state_io import append_jsonl_atomic
         for entry in entries:
             append_jsonl_atomic(path, entry)
-        from scripts.jsonl_io import read_jsonl
+        from helm.scripts.jsonl_io import read_jsonl
         return read_jsonl(path)
 
     def test_failure_signature_persisted(self, tmp_path: Path):
@@ -277,43 +277,43 @@ class TestBuildLedgerEntry:
     """Unit tests for scripts.state_io.build_ledger_entry."""
 
     def test_returns_copy_not_mutation(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         base = {"task_id": "abc", "status": "failed"}
         result = build_ledger_entry(base, sessions=["s1"])
         assert "sessions" not in base  # original unchanged
 
     def test_base_fields_preserved(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         base = {"task_id": "abc", "status": "failed", "exit_code": 1, "retry_count": 2}
         result = build_ledger_entry(base)
         assert result["retry_count"] == 2
         assert result["exit_code"] == 1
 
     def test_failure_signature_included(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         sig = {"component": "guard", "tool": "run_with_profile", "profile": "inspect_local",
                "error_class": "guard_deny", "target": "profile:inspect_local", "fingerprint": "abc12345"}
         result = build_ledger_entry({"task_id": "t1"}, failure_signature=sig)
         assert result["failure_signature"]["error_class"] == "guard_deny"
 
     def test_sessions_included(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         result = build_ledger_entry({"task_id": "t1"}, sessions=["sess-001"])
         assert result["sessions"] == ["sess-001"]
 
     def test_cleanup_status_valid_values(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         for val in ("ok", "partial", "failed", "not_required"):
             result = build_ledger_entry({"task_id": "t1"}, cleanup_status=val)
             assert result["cleanup_status"] == val
 
     def test_cleanup_status_invalid_raises(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         with pytest.raises(ValueError, match="cleanup_status"):
             build_ledger_entry({"task_id": "t1"}, cleanup_status="bad_value")
 
     def test_none_fields_not_included(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         result = build_ledger_entry({"task_id": "t1"})
         for field in ("failure_signature", "sessions", "snapshot_evidence", "cleanup_status",
                       "browser_profile", "browser_mode", "source_urls", "screenshot_evidence",
@@ -321,7 +321,7 @@ class TestBuildLedgerEntry:
             assert field not in result
 
     def test_browser_fields_included(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         result = build_ledger_entry(
             {"task_id": "t1"},
             browser_profile="default",
@@ -339,12 +339,12 @@ class TestBuildLedgerEntry:
         assert result["site_note_update"] == "note text"
 
     def test_snapshot_evidence_included(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         result = build_ledger_entry({"task_id": "t1"}, snapshot_evidence="~/snaps/s.json")
         assert result["snapshot_evidence"] == "~/snaps/s.json"
 
     def test_policy_transition_included(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         pt = {
             "action": "stop_retry_and_diagnose",
             "reason": "fingerprint repeated 2x",
@@ -354,14 +354,14 @@ class TestBuildLedgerEntry:
         assert result["policy_transition"] == pt
 
     def test_policy_transition_absent_when_not_passed(self):
-        from scripts.state_io import build_ledger_entry
+        from helm.scripts.state_io import build_ledger_entry
         result = build_ledger_entry({"task_id": "t1"})
         assert "policy_transition" not in result
 
     def test_round_trip_via_append(self, tmp_path: Path):
         """build_ledger_entry result persists cleanly via append_jsonl_atomic."""
-        from scripts.state_io import build_ledger_entry, append_jsonl_atomic
-        from scripts.jsonl_io import read_jsonl
+        from helm.scripts.state_io import build_ledger_entry, append_jsonl_atomic
+        from helm.scripts.jsonl_io import read_jsonl
         path = tmp_path / "ledger.jsonl"
         sig = {"component": "skill", "tool": "gemini_video_understand", "profile": "service_ops",
                "error_class": "gemini_video_api", "target": None, "fingerprint": "feedcafe"}

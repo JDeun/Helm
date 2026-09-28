@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 from helm_context import ContextSource
-from scripts import ops_memory_query
+from helm.scripts import ops_memory_query
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -57,7 +57,7 @@ def test_cli_explain_ranking_includes_score_breakdown() -> None:
         result = subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / "scripts" / "ops_memory_query.py"),
+                str(REPO_ROOT / "helm" / "scripts" / "ops_memory_query.py"),
                 "decision",
                 "--explain-ranking",
                 "--json",
@@ -124,7 +124,7 @@ def test_collect_results_ranking_query_match_outranks_unmatched(tmp_path: Path) 
     result = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "ops_memory_query.py"),
+            str(REPO_ROOT / "helm" / "scripts" / "ops_memory_query.py"),
             "decision",
             "--include",
             "memory",
@@ -171,7 +171,7 @@ def test_collect_results_ranking_source_priority_breaks_ties(tmp_path: Path) -> 
     result = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "ops_memory_query.py"),
+            str(REPO_ROOT / "helm" / "scripts" / "ops_memory_query.py"),
             "alpha",
             "--include",
             "notes",
@@ -207,7 +207,7 @@ def test_collect_results_limit_truncates(tmp_path: Path) -> None:
     result = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "ops_memory_query.py"),
+            str(REPO_ROOT / "helm" / "scripts" / "ops_memory_query.py"),
             "needle",
             "--include",
             "memory",
@@ -244,7 +244,7 @@ def test_collect_results_explain_ranking_omitted_by_default(tmp_path: Path) -> N
     result = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "ops_memory_query.py"),
+            str(REPO_ROOT / "helm" / "scripts" / "ops_memory_query.py"),
             "token",
             "--include",
             "memory",
@@ -298,7 +298,7 @@ def test_entity_mode_expands_one_hop_ontology_neighbors() -> None:
         result = subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / "scripts" / "ops_memory_query.py"),
+                str(REPO_ROOT / "helm" / "scripts" / "ops_memory_query.py"),
                 "--mode",
                 "entity",
                 "--entity",

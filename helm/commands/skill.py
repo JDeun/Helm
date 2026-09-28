@@ -12,7 +12,7 @@ from helm.commands import (
     run_script,
     target_root,
 )
-from scripts.skill_lifecycle_lib import record_runner_event
+from helm.scripts.skill_lifecycle_lib import record_runner_event
 
 
 def write_json_file(path: Path, payload: dict) -> None:

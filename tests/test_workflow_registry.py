@@ -1,4 +1,4 @@
-from scripts.workflow_registry import validate_registry
+from helm.scripts.workflow_registry import validate_registry
 
 
 def test_workflow_registry_requires_verification_handoff_and_stop_contracts() -> None:

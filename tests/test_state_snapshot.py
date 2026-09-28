@@ -6,8 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import helm
-from scripts import run_with_profile
-from scripts.state_snapshot import latest_snapshot_path, write_state_snapshot
+from helm.scripts import run_with_profile
+from helm.scripts.state_snapshot import latest_snapshot_path, write_state_snapshot
 
 
 def test_write_state_snapshot_creates_markdown_artifact() -> None:

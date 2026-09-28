@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.skill_lifecycle_lib import (
+from helm.scripts.skill_lifecycle_lib import (
     DEFAULT_CONFIG,
     LifecycleError,
     LifecyclePaths,

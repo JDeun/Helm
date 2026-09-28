@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from scripts.route_contract_lib import infer_chosen_tool
-from scripts.retrieval_policy_lib import build_retrieval_plan, classify_retrieval
+from helm.scripts.route_contract_lib import infer_chosen_tool
+from helm.scripts.retrieval_policy_lib import build_retrieval_plan, classify_retrieval
 
 
 def test_classify_fetch_blocked_from_status_code() -> None:

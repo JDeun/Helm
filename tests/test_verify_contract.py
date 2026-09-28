@@ -94,7 +94,7 @@ def test_ledger_append_atomic_reports_ok(tmp_path: Path) -> None:
 
 
 def test_guard_denies_destructive_fails_if_guard_allows(tmp_path: Path) -> None:
-    from scripts.command_guard import GuardDecision, CommandClassification
+    from helm.scripts.command_guard import GuardDecision, CommandClassification
 
     fake_classification = CommandClassification(
         normalized_command="rm -rf /",

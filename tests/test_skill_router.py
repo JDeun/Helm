@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.skill_router import load_installed_manifests, route_skill
+from helm.scripts.skill_router import load_installed_manifests, route_skill
 
 
 def test_single_clear_match_routes_direct() -> None:

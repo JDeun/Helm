@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.action_scope import (
+from helm.scripts.action_scope import (
     MUTABLE_RESOURCES,
     ActionScopeDecision,
     ActionScopeKind,
@@ -373,7 +373,7 @@ def test_cli_outputs_valid_json() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "action_scope.py"),
+            str(REPO_ROOT / "helm" / "scripts" / "action_scope.py"),
             "--message",
             "캘린더 일정 확인해봐",
         ],
@@ -394,7 +394,7 @@ def test_cli_attempt_check_reports_blocked() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "action_scope.py"),
+            str(REPO_ROOT / "helm" / "scripts" / "action_scope.py"),
             "--message",
             "캘린더 확인해",
             "--attempt",

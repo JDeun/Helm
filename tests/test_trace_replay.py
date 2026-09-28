@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-REPLAY_SCRIPT = ROOT / "scripts" / "trace_replay.py"
+REPLAY_SCRIPT = ROOT / "helm" / "scripts" / "trace_replay.py"
 
 # Make `scripts.*` importable for helpers below.  Done at module-load
 # time (guarded) instead of inside helpers so it doesn't run on every
@@ -24,7 +24,7 @@ REPLAY_SCRIPT = ROOT / "scripts" / "trace_replay.py"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.trace_recorder import (  # noqa: E402
+from helm.scripts.trace_recorder import (  # noqa: E402
     record_changed_file,
     record_tool_call,
     record_validation_gate,
@@ -32,7 +32,7 @@ from scripts.trace_recorder import (  # noqa: E402
     set_outcome,
     start_trace,
 )
-from scripts.trace_replay import build_parser  # noqa: E402
+from helm.scripts.trace_replay import build_parser  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

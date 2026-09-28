@@ -28,7 +28,7 @@ def _write_runner_stub(workdir: Path, scenario_test_relpath: str) -> Path:
     This isolates the test from any future addition or rename of real
     scenarios.
     """
-    src = (ROOT / "scripts" / "eval_runner.py").read_text(encoding="utf-8")
+    src = (ROOT / "helm" / "scripts" / "eval_runner.py").read_text(encoding="utf-8")
 
     # Replace the _SCENARIOS dict literal with a one-entry registry that
     # points at our forced-fail scenario.

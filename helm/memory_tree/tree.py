@@ -881,7 +881,7 @@ class MemoryTree:
         # most-recent refresh row. See module docstring for the
         # dependency-contract rationale.
         entry = result.to_ledger_entry()
-        from scripts.state_io import append_jsonl_atomic
+        from helm.scripts.state_io import append_jsonl_atomic
         append_jsonl_atomic(self.ledger_path, entry)
 
 

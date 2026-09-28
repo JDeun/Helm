@@ -12,8 +12,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from helm_workspace import clear_workspace_layout_cache
-from scripts.command_guard import CommandClassification, GuardDecision
-from scripts.long_running_runtime import (
+from helm.scripts.command_guard import CommandClassification, GuardDecision
+from helm.scripts.long_running_runtime import (
     append_checkpoint,
     can_execute_external_action,
     create_task_run,
@@ -28,7 +28,7 @@ from scripts.long_running_runtime import (
     save_runtime_state,
     upsert_task_run,
 )
-from scripts.run_with_profile import record_runtime_approval_pause
+from helm.scripts.run_with_profile import record_runtime_approval_pause
 
 
 def test_checkpoint_resume_reuses_processed_items_and_idempotency_key() -> None:

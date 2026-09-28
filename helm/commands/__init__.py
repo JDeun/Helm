@@ -8,14 +8,14 @@ from pathlib import Path
 
 from helm_context import adopt_context_source, configured_context_sources, load_context_sources, onboarding_root
 from helm_workspace import DEFAULT_WORKSPACE, detect_layout, discover_workspace, resolve_nested_workspace, suggest_external_sources
-from scripts.jsonl_io import read_jsonl as _read_jsonl
-from scripts.memory_ops import review_queue_items
-from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies, manifest_audit
-from scripts.state_snapshot import latest_snapshot_path
+from helm.scripts.jsonl_io import read_jsonl as _read_jsonl
+from helm.scripts.memory_ops import review_queue_items
+from helm.scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill_policies, manifest_audit
+from helm.scripts.state_snapshot import latest_snapshot_path
 
 ROOT = Path(__file__).resolve().parent.parent
 REFERENCES_ROOT = ROOT / "references"
-SCRIPT_ROOT = ROOT.parent / "scripts"   # reverts to ROOT / "scripts" in Task 6
+SCRIPT_ROOT = ROOT / "scripts"
 REQUIRED_REFERENCE_FILES = (
     "execution_profiles.json",
     "model_recovery_policy.json",

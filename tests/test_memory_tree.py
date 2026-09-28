@@ -436,7 +436,7 @@ def test_append_ledger_delegates_to_state_io(monkeypatch) -> None:
     This test pins the centralization contract so a future refactor
     cannot quietly reintroduce the divergence.
     """
-    import scripts.state_io as state_io_mod
+    import helm.scripts.state_io as state_io_mod
 
     captured: list[tuple[Path, dict]] = []
     original = state_io_mod.append_jsonl_atomic

@@ -22,9 +22,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from helm.commands import read_json, target_root
-from scripts.command_guard import evaluate_command_guard
-from scripts.io_utils import atomic_write_json
-from scripts.long_running_runtime import (
+from helm.scripts.command_guard import evaluate_command_guard
+from helm.scripts.io_utils import atomic_write_json
+from helm.scripts.long_running_runtime import (
     create_task_run,
     empty_runtime_state,
     pause_for_approval,

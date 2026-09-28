@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
 import pytest
 from unittest.mock import patch
 
-from scripts.reply_gate import evaluate, evaluate_claims, latest_entries, load_entries, select_entry
+from helm.scripts.reply_gate import evaluate, evaluate_claims, latest_entries, load_entries, select_entry
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ def test_load_entries_default_path_uses_task_ledger(tmp_path: Path) -> None:
     ledger = tmp_path / "task-ledger.jsonl"
     ledger.write_text('{"task_id":"default-1","status":"completed"}\n', encoding="utf-8")
 
-    with patch("scripts.reply_gate._get_task_ledger", return_value=ledger):
+    with patch("helm.scripts.reply_gate._get_task_ledger", return_value=ledger):
         result = load_entries()
 
     assert len(result) == 1
@@ -121,7 +121,7 @@ def test_select_entry_with_specific_task_id(tmp_path: Path) -> None:
     ]
     ledger.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    with patch("scripts.reply_gate._get_task_ledger", return_value=ledger):
+    with patch("helm.scripts.reply_gate._get_task_ledger", return_value=ledger):
         result = select_entry("t1")
 
     assert result is not None
@@ -132,7 +132,7 @@ def test_select_entry_unknown_task_id_returns_none(tmp_path: Path) -> None:
     ledger = tmp_path / "task-ledger.jsonl"
     ledger.write_text('{"task_id":"t1","status":"completed"}\n', encoding="utf-8")
 
-    with patch("scripts.reply_gate._get_task_ledger", return_value=ledger):
+    with patch("helm.scripts.reply_gate._get_task_ledger", return_value=ledger):
         result = select_entry("does-not-exist")
 
     assert result is None
@@ -146,7 +146,7 @@ def test_select_entry_without_task_id_returns_latest_by_timestamp(tmp_path: Path
     ]
     ledger.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
 
-    with patch("scripts.reply_gate._get_task_ledger", return_value=ledger):
+    with patch("helm.scripts.reply_gate._get_task_ledger", return_value=ledger):
         result = select_entry(None)
 
     assert result is not None
@@ -157,7 +157,7 @@ def test_select_entry_empty_ledger_returns_none(tmp_path: Path) -> None:
     ledger = tmp_path / "task-ledger.jsonl"
     ledger.write_text("", encoding="utf-8")
 
-    with patch("scripts.reply_gate._get_task_ledger", return_value=ledger):
+    with patch("helm.scripts.reply_gate._get_task_ledger", return_value=ledger):
         result = select_entry(None)
 
     assert result is None
@@ -537,7 +537,7 @@ def test_evaluate_advisory_failure_does_not_block_decision(monkeypatch) -> None:
     def explode(*_args, **_kwargs):
         raise RuntimeError("synthetic action_scope failure")
 
-    import scripts.action_scope as scope
+    import helm.scripts.action_scope as scope
     monkeypatch.setattr(scope, "evaluate", explode)
 
     result = evaluate(entry)
@@ -556,7 +556,7 @@ def test_evaluate_advisory_failure_increments_counter(monkeypatch) -> None:
     test pins the counter contract so a future refactor cannot drop
     the breadcrumb.
     """
-    from scripts.advisory_log import (
+    from helm.scripts.advisory_log import (
         reset_advisory_failures,
         snapshot_advisory_failures,
     )
@@ -570,7 +570,7 @@ def test_evaluate_advisory_failure_increments_counter(monkeypatch) -> None:
         "memory_capture": {"finalization_status": "capture_written"},
     }
 
-    import scripts.action_scope as scope
+    import helm.scripts.action_scope as scope
 
     def explode(*_args, **_kwargs):
         raise RuntimeError("synthetic action_scope failure")

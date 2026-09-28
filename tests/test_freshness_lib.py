@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.freshness_lib import (  # noqa: E402
+from helm.scripts.freshness_lib import (  # noqa: E402
     CONNECTOR_DEFAULTS,
     NAMESPACE,
     STATE_VERSION,

@@ -29,7 +29,7 @@ jobs:
         run: python -m pytest -q
 
       - name: Check release versions
-        run: python scripts/release_version_check.py
+        run: python helm/scripts/release_version_check.py
 
       - name: Build package
         run: python -m build

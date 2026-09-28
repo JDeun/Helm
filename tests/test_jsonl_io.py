@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.jsonl_io import iter_jsonl, read_jsonl, tail_jsonl
+from helm.scripts.jsonl_io import iter_jsonl, read_jsonl, tail_jsonl
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:

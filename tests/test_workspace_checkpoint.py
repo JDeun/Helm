@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from scripts import workspace_checkpoint
+from helm.scripts import workspace_checkpoint
 
 
 def test_restore_rejects_symlink_members() -> None:

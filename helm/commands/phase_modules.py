@@ -35,7 +35,7 @@ def cmd_action_scope_evaluate(args: argparse.Namespace) -> int:
     ``python3 -m scripts.action_scope`` CLI but is reachable via
     ``helm action-scope evaluate``.
     """
-    from scripts.action_scope import (
+    from helm.scripts.action_scope import (
         ActionScopeKind,
         MUTABLE_RESOURCES,
         attempted_action_allowed,
@@ -77,7 +77,7 @@ def cmd_freshness_status(args: argparse.Namespace) -> int:
     last_seen, last_success, age, SLA budget, risk class, and freshness
     branch ("fresh" / "stale_low" / "stale_high").
     """
-    from scripts.freshness_lib import (
+    from helm.scripts.freshness_lib import (
         assess_record,
         list_records,
         load_state,
@@ -260,7 +260,7 @@ def cmd_compression_profiles(args: argparse.Namespace) -> int:
     stage-1 / stage-2 output. Useful for verifying the registry is wired
     correctly without invoking a connector.
     """
-    from scripts.compression import get_default_registry
+    from helm.scripts.compression import get_default_registry
 
     registry = get_default_registry()
     rows: list[dict[str, object]] = []

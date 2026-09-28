@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from scripts.memory_quality import build_memory_label, decay_memory_label, transition_memory_label
+from helm.scripts.memory_quality import build_memory_label, decay_memory_label, transition_memory_label
 
 
 def test_failed_high_impact_run_is_error_prevention_memory() -> None:

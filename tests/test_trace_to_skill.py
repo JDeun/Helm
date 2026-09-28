@@ -27,13 +27,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.trace_to_skill import (
+from helm.scripts.trace_to_skill import (
     compound_runner_candidates,
     load_recent_traces,
     skill_repair_candidates,
     skill_scaffold_candidates,
 )
-from scripts.skill_capture_ext import (
+from helm.scripts.skill_capture_ext import (
     assess_draft_path,
     draft_from_trace,
 )
@@ -342,7 +342,7 @@ class TestCLIIntegration:
     def _run_cli(self, traces_dir: Path, extra_args: list[str] | None = None) -> str:
         cmd = [
             sys.executable,
-            str(ROOT / "scripts" / "trace_to_skill.py"),
+            str(ROOT / "helm" / "scripts" / "trace_to_skill.py"),
             "--traces-dir", str(traces_dir),
         ] + (extra_args or [])
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -385,7 +385,7 @@ class TestCLIIntegration:
     def test_exits_zero_on_empty_dir(self, tmp_path):
         cmd = [
             sys.executable,
-            str(ROOT / "scripts" / "trace_to_skill.py"),
+            str(ROOT / "helm" / "scripts" / "trace_to_skill.py"),
             "--traces-dir", str(tmp_path / "empty"),
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -475,7 +475,7 @@ class TestDraftFromTask:
         drafts_dir = tmp_path / "drafts"
         cmd = [
             sys.executable,
-            str(ROOT / "scripts" / "skill_capture_ext.py"),
+            str(ROOT / "helm" / "scripts" / "skill_capture_ext.py"),
             "draft-from-task",
             "--task-id", "cli-task",
             "--traces-dir", str(traces_dir),
@@ -584,7 +584,7 @@ class TestAssessDraftPath:
         draft.write_text("# Incomplete\n", encoding="utf-8")
         cmd = [
             sys.executable,
-            str(ROOT / "scripts" / "skill_capture_ext.py"),
+            str(ROOT / "helm" / "scripts" / "skill_capture_ext.py"),
             "assess-draft",
             "--draft-path", str(draft),
             "--template", str(_TEMPLATE_PATH),
@@ -598,7 +598,7 @@ class TestAssessDraftPath:
         draft = self._full_draft(tmp_path)
         cmd = [
             sys.executable,
-            str(ROOT / "scripts" / "skill_capture_ext.py"),
+            str(ROOT / "helm" / "scripts" / "skill_capture_ext.py"),
             "assess-draft",
             "--draft-path", str(draft),
             "--template", str(_TEMPLATE_PATH),
@@ -617,7 +617,7 @@ class TestExpandUserTraceToSkill:
         """OPENCLAW_TRACES_DIR env var with ~ is expanded to home directory."""
         import os
         from pathlib import Path
-        from scripts.trace_to_skill import _default_traces_dir
+        from helm.scripts.trace_to_skill import _default_traces_dir
 
         monkeypatch.setenv("OPENCLAW_TRACES_DIR", "~/my/traces")
         result = _default_traces_dir()
@@ -630,7 +630,7 @@ class TestExpandUserSkillCaptureExt:
         """OPENCLAW_TRACES_DIR env var with ~ is expanded to home directory."""
         import os
         from pathlib import Path
-        from scripts.skill_capture_ext import _default_traces_dir
+        from helm.scripts.skill_capture_ext import _default_traces_dir
 
         monkeypatch.setenv("OPENCLAW_TRACES_DIR", "~/capture/traces")
         result = _default_traces_dir()
@@ -641,7 +641,7 @@ class TestExpandUserSkillCaptureExt:
         """OPENCLAW_DRAFTS_DIR env var with ~ is expanded to home directory."""
         import os
         from pathlib import Path
-        from scripts.skill_capture_ext import _default_drafts_dir
+        from helm.scripts.skill_capture_ext import _default_drafts_dir
 
         monkeypatch.setenv("OPENCLAW_DRAFTS_DIR", "~/my/drafts")
         result = _default_drafts_dir()

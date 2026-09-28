@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts import long_running_runtime, model_health_lib, model_provider_probe, omfm_status
+from helm.scripts import long_running_runtime, model_health_lib, model_provider_probe, omfm_status
 
 
 def test_omfm_provider_is_local_and_secret_free() -> None:

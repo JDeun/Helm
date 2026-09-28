@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.grounding import (  # noqa: E402
+from helm.scripts.grounding import (  # noqa: E402
     build_grounding,
     render_deterministic_template,
     should_use_deterministic_fallback,

@@ -7,8 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.conversational_memory_capture import build_ledger_entries
-from scripts.experience_attribution import attach_experience_attribution
+from helm.scripts.conversational_memory_capture import build_ledger_entries
+from helm.scripts.experience_attribution import attach_experience_attribution
 
 
 def test_service_ops_without_evidence_records_review_flag() -> None:

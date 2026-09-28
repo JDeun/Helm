@@ -7,8 +7,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from scripts import adaptive_harness_lib
-from scripts.adaptive_harness_lib import (
+from helm.scripts import adaptive_harness_lib
+from helm.scripts.adaptive_harness_lib import (
     _deep_merge,
     build_hydration_commands,
     completion_evidence_signals,

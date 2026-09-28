@@ -35,8 +35,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.skill_promotion_approval import handle_reply, parse_reply
-from scripts.skill_promotion_state import (
+from helm.scripts.skill_promotion_approval import handle_reply, parse_reply
+from helm.scripts.skill_promotion_state import (
     is_processed,
     load_state,
     mark_approved,

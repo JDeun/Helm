@@ -21,9 +21,9 @@ import json
 import sys
 from pathlib import Path
 
-from scripts.skill_promotion_approval import handle_reply
-from scripts.skill_promotion_digest import build_digest
-from scripts.skill_promotion_state import (
+from helm.scripts.skill_promotion_approval import handle_reply
+from helm.scripts.skill_promotion_digest import build_digest
+from helm.scripts.skill_promotion_state import (
     default_state_path,
     load_state,
     mark_approved,

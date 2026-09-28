@@ -10,7 +10,7 @@ from helm.commands import (
     read_json,
     target_root,
 )
-from scripts.skill_manifest_lib import load_skill_contract_manifests
+from helm.scripts.skill_manifest_lib import load_skill_contract_manifests
 
 
 def validate_workspace_config(root: Path) -> dict:

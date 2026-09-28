@@ -50,7 +50,7 @@ class HelmOpenClawMirrorTests(unittest.TestCase):
         # Import OpenClaw under a fresh module name to avoid name collisions
         # with Helm's ``action_scope`` module.
         self._oc = importlib.import_module("action_scope_gate")
-        from scripts import action_scope as helm_module  # noqa: WPS433
+        from helm.scripts import action_scope as helm_module  # noqa: WPS433
 
         self._helm = helm_module
 

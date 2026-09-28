@@ -15,7 +15,7 @@ if str(ROOT) not in sys.path:
 
 # --- skill_router: one malformed on-disk manifest must not crash the router ---
 def test_route_skill_tolerates_malformed_manifest():
-    from scripts.skill_router import route_skill
+    from helm.scripts.skill_router import route_skill
 
     manifests = {
         "ok-skill": {"route_decision": {"task_type": "generic"}},
@@ -27,7 +27,7 @@ def test_route_skill_tolerates_malformed_manifest():
 
 # --- request_intake: a non-dict (untrusted) payload must ACK, not crash ---
 def test_accept_request_tolerates_non_dict_payload():
-    from scripts.request_intake import accept_request
+    from helm.scripts.request_intake import accept_request
 
     state: dict = {}
     result = accept_request(state, "d1", ["not", "a", "dict"])  # must not raise
@@ -41,7 +41,7 @@ def test_accept_request_tolerates_non_dict_payload():
 
 # --- grounding: template substitution is single-pass (no bleed, order-independent) ---
 def test_template_substitution_no_bleed_and_order_independent(tmp_path):
-    from scripts.grounding import render_deterministic_template
+    from helm.scripts.grounding import render_deterministic_template
 
     skill = tmp_path / "s"
     (skill / "templates").mkdir(parents=True)
@@ -55,7 +55,7 @@ def test_template_substitution_no_bleed_and_order_independent(tmp_path):
 
 # --- grounding: None repair budget means "unlimited", not a TypeError ---
 def test_should_use_deterministic_fallback_handles_none_budget():
-    from scripts.grounding import should_use_deterministic_fallback
+    from helm.scripts.grounding import should_use_deterministic_fallback
 
     assert should_use_deterministic_fallback("frontier", None) is False
     assert should_use_deterministic_fallback("deterministic_only", None) is True
@@ -65,7 +65,7 @@ def test_should_use_deterministic_fallback_handles_none_budget():
 
 # --- tool_adapter: a raising guard must be contained, not propagated ---
 def test_invoke_tool_contains_raising_guard():
-    from scripts.tool_adapter import invoke_tool
+    from helm.scripts.tool_adapter import invoke_tool
 
     class _Adapter:
         def describe(self):
@@ -84,7 +84,7 @@ def test_invoke_tool_contains_raising_guard():
 
 # --- tool_adapter: a non-dict adapter return is normalized, not leaked ---
 def test_invoke_tool_normalizes_non_dict_return():
-    from scripts.tool_adapter import invoke_tool
+    from helm.scripts.tool_adapter import invoke_tool
 
     class _Adapter:
         def describe(self):

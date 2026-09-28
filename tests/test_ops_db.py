@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.ops_db import db_path_for_state_root, init_db, rebuild_index, index_task_entry, verify_index, query_tasks, query_guard_decisions, _connect
+from helm.scripts.ops_db import db_path_for_state_root, init_db, rebuild_index, index_task_entry, verify_index, query_tasks, query_guard_decisions, _connect
 
 
 def test_init_db_creates_schema(tmp_path: Path) -> None:
@@ -96,7 +96,7 @@ def test_verify_index_reports_no_drift(tmp_path: Path) -> None:
 
 
 def test_sqlite_failure_does_not_delete_jsonl(tmp_path: Path) -> None:
-    import scripts.ops_db as ops_db_mod
+    import helm.scripts.ops_db as ops_db_mod
     ops_db_mod._INDEX_FAILURE_WARNED = False
     state_root = tmp_path / ".helm"
     state_root.mkdir()
@@ -205,7 +205,7 @@ def test_connect_helper_sets_pragmas(tmp_path: Path) -> None:
 
 def test_indexing_failure_warns_once(tmp_path: Path, capsys) -> None:
     """index_task_entry should warn once on failure, then be silent."""
-    import scripts.ops_db as ops_db_mod
+    import helm.scripts.ops_db as ops_db_mod
     ops_db_mod._INDEX_FAILURE_WARNED = False
     state_root = tmp_path / ".helm"
     state_root.mkdir()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.social_privacy_gate import (
+from helm.scripts.social_privacy_gate import (
     DERIVED_DATA_LABELS,
     DOSSIER,
     RAW_PUBLIC_POST,

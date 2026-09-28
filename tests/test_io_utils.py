@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.io_utils import atomic_write_json
+from helm.scripts.io_utils import atomic_write_json
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ def test_atomic_write_json_replace_failure_leaves_original(tmp_path: Path) -> No
     dest.write_text(json.dumps(original), encoding="utf-8")
     original_content = dest.read_text(encoding="utf-8")
 
-    with patch("scripts.io_utils.os.replace", side_effect=OSError("disk full")):
+    with patch("helm.scripts.io_utils.os.replace", side_effect=OSError("disk full")):
         with pytest.raises(OSError, match="disk full"):
             atomic_write_json(dest, {"new": True})
 
@@ -83,7 +83,7 @@ def test_atomic_write_json_replace_failure_no_original(tmp_path: Path) -> None:
     dest = tmp_path / "new.json"
     assert not dest.exists(), "precondition: destination must not exist"
 
-    with patch("scripts.io_utils.os.replace", side_effect=OSError("no space")):
+    with patch("helm.scripts.io_utils.os.replace", side_effect=OSError("no space")):
         with pytest.raises(OSError, match="no space"):
             atomic_write_json(dest, {"data": 123})
 

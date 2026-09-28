@@ -26,8 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.skill_promotion_digest import build_digest, _build_summary, _SUMMARY_BYTE_BUDGET
-from scripts.skill_promotion_state import (
+from helm.scripts.skill_promotion_digest import build_digest, _build_summary, _SUMMARY_BYTE_BUDGET
+from helm.scripts.skill_promotion_state import (
     load_state,
     mark_approved,
     record_notified,

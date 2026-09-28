@@ -157,19 +157,19 @@ def _common_patches(*, ledger_calls: list[dict] | None = None, subprocess_rc: in
             ledger_calls.append(dict(entry))
 
     return [
-        patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES),
-        patch("scripts.run_with_profile.validate_skill_profile"),
+        patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES),
+        patch("helm.scripts.run_with_profile.validate_skill_profile"),
         patch(
-            "scripts.run_with_profile.append_ledger",
+            "helm.scripts.run_with_profile.append_ledger",
             side_effect=(capture_ledger if ledger_calls is not None else None),
         ),
-        patch("scripts.run_with_profile._best_effort_index"),
-        patch("scripts.run_with_profile.run_checkpoint", return_value=None),
-        patch("scripts.run_with_profile.evaluate_command_guard", return_value=None),
-        patch("scripts.run_with_profile.finalize_task"),
-        patch("scripts.run_with_profile.latest_snapshot_path", return_value=None),
+        patch("helm.scripts.run_with_profile._best_effort_index"),
+        patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None),
+        patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None),
+        patch("helm.scripts.run_with_profile.finalize_task"),
+        patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None),
         patch(
-            "scripts.run_with_profile.subprocess.run",
+            "helm.scripts.run_with_profile.subprocess.run",
             return_value=_sp.CompletedProcess(args=[], returncode=subprocess_rc),
         ),
     ]
@@ -185,19 +185,19 @@ def test_no_browser_action_verify_not_called(
     """When --browser-action is absent, verify() must never be invoked."""
     monkeypatch.delenv("OPENCLAW_BROWSER_GATE", raising=False)
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task"), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task"), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify") as mock_verify:
+         patch("helm.scripts.browser_work_verifier.verify") as mock_verify:
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(_make_args(browser_action=None))
 
     assert mock_verify.call_count == 0, (
@@ -219,22 +219,22 @@ def test_shadow_mode_gate_off(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task",
                side_effect=lambda t: ledger_calls.append(dict(t))), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_READ_ALLOWED) as mock_verify:
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(_make_args(browser_action="read", profile="inspect_local"))
 
     # Verifier was called
@@ -264,22 +264,22 @@ def test_enforce_mode_read_allowed(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task",
                side_effect=lambda t: ledger_calls.append(dict(t))), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_READ_ALLOWED):
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(_make_args(browser_action="read", profile="inspect_local"))
 
     assert rc == 0, f"Expected exit 0 when read is allowed; got {rc}"
@@ -306,17 +306,17 @@ def test_enforce_mode_submit_blocked(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_SUBMIT_BLOCKED):
 
-        from scripts.run_with_profile import cmd_run, EXIT_BROWSER_BLOCKED
+        from helm.scripts.run_with_profile import cmd_run, EXIT_BROWSER_BLOCKED
         rc = cmd_run(_make_args(browser_action="submit", profile="inspect_local"))
 
     assert rc == EXIT_BROWSER_BLOCKED == 27, (
@@ -354,17 +354,17 @@ def test_enforce_mode_submit_gated_no_approval(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_SUBMIT_GATED):
 
-        from scripts.run_with_profile import cmd_run, EXIT_GUARD_REQUIRE_APPROVAL
+        from helm.scripts.run_with_profile import cmd_run, EXIT_GUARD_REQUIRE_APPROVAL
         rc = cmd_run(
             _make_args(
                 browser_action="submit",
@@ -405,22 +405,22 @@ def test_enforce_mode_submit_gated_with_approval(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task",
                side_effect=lambda t: ledger_calls.append(dict(t))), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_SUBMIT_GATED):
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(
             _make_args(
                 browser_action="submit",
@@ -453,20 +453,20 @@ def test_browser_action_without_url_pattern_shadow(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task",
                side_effect=lambda t: ledger_calls.append(dict(t))), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)):
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         # url_pattern=None → falls back to "" inside _evaluate_browser_gate
         rc = cmd_run(_make_args(browser_action="read", browser_url_pattern=None))
 
@@ -502,7 +502,7 @@ def test_browser_gate_enabled_detection(
 ) -> None:
     """_browser_gate_enabled must match env_flag semantics exactly."""
     monkeypatch.setenv("OPENCLAW_BROWSER_GATE", env_value)
-    from scripts.run_with_profile import _browser_gate_enabled
+    from helm.scripts.run_with_profile import _browser_gate_enabled
     result = _browser_gate_enabled()
     assert result == expected_enabled, (
         f"For OPENCLAW_BROWSER_GATE={env_value!r}: expected {expected_enabled}, got {result}"
@@ -512,14 +512,14 @@ def test_browser_gate_enabled_detection(
 def test_browser_gate_disabled_when_env_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     """_browser_gate_enabled must return False when OPENCLAW_BROWSER_GATE is unset."""
     monkeypatch.delenv("OPENCLAW_BROWSER_GATE", raising=False)
-    from scripts.run_with_profile import _browser_gate_enabled
+    from helm.scripts.run_with_profile import _browser_gate_enabled
     assert _browser_gate_enabled() is False
 
 
 def test_browser_gate_uses_env_flag_not_duplicate_helper() -> None:
     """_browser_gate_enabled delegates to env_flag — the module-level import is shared."""
-    import scripts.run_with_profile as rwp
-    import scripts.env_flags as ef
+    import helm.scripts.run_with_profile as rwp
+    import helm.scripts.env_flags as ef
     # Both should map the same values the same way (spot-check)
     import os
     old = os.environ.get("OPENCLAW_BROWSER_GATE")
@@ -554,16 +554,16 @@ def test_pause_gate_wins_before_browser_gate(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
-         patch("scripts.browser_work_verifier.verify") as mock_verify:
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("helm.scripts.browser_work_verifier.verify") as mock_verify:
 
-        from scripts.run_with_profile import cmd_run, EXIT_PAUSED
+        from helm.scripts.run_with_profile import cmd_run, EXIT_PAUSED
         rc = cmd_run(_make_args(browser_action="read", profile="inspect_local"))
 
     assert rc == EXIT_PAUSED == 26, f"Expected EXIT_PAUSED (26); got {rc}"
@@ -644,22 +644,22 @@ def test_oq1_site_note_satisfies_gated_gate(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task",
                side_effect=lambda t: ledger_calls.append(dict(t))), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_SUBMIT_GATED_WITH_SITE_NOTE):
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(
             _make_args(
                 browser_action="submit",
@@ -689,17 +689,17 @@ def test_oq1_neither_approval_nor_site_note_blocks(
     ledger_calls: list[dict] = []
 
     # Use the gated decision WITHOUT site note
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_SUBMIT_GATED):
 
-        from scripts.run_with_profile import cmd_run, EXIT_GUARD_REQUIRE_APPROVAL
+        from helm.scripts.run_with_profile import cmd_run, EXIT_GUARD_REQUIRE_APPROVAL
         rc = cmd_run(
             _make_args(
                 browser_action="submit",
@@ -762,18 +762,18 @@ def test_oq3_max_sessions_blocks_when_at_cap(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
-         patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run") as mock_subprocess, \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run") as mock_subprocess, \
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_READ_ALLOWED):
 
-        from scripts.run_with_profile import cmd_run, EXIT_BROWSER_BLOCKED
+        from helm.scripts.run_with_profile import cmd_run, EXIT_BROWSER_BLOCKED
         rc = cmd_run(_make_args(browser_action="read", profile="inspect_local"))
 
     assert rc == EXIT_BROWSER_BLOCKED == 27, (
@@ -824,23 +824,23 @@ def test_oq3_max_sessions_allows_when_under_cap(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
-         patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task",
                side_effect=lambda t: ledger_calls.append(dict(t))), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_READ_ALLOWED):
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(_make_args(browser_action="read", profile="inspect_local"))
 
     assert rc == 0, f"Expected exit 0 when under max_sessions cap; got {rc}"
@@ -886,23 +886,23 @@ def test_oq3_max_sessions_ignores_sessions_with_cleanup(
 
     ledger_calls: list[dict] = []
 
-    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
-         patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task",
                side_effect=lambda t: ledger_calls.append(dict(t))), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_READ_ALLOWED):
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(_make_args(browser_action="read", profile="inspect_local"))
 
     assert rc == 0, (
@@ -963,21 +963,21 @@ def test_oq7_finalization_gate_blocks_when_cleanup_missing(
         },
     }
 
-    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
-         patch("scripts.run_with_profile.load_profiles", return_value=fake_profiles_with_risky), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("helm.scripts.run_with_profile.load_profiles", return_value=fake_profiles_with_risky), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_RISKY_EDIT_READ):
 
-        from scripts.run_with_profile import cmd_run, EXIT_CLEANUP_REQUIRED
+        from helm.scripts.run_with_profile import cmd_run, EXIT_CLEANUP_REQUIRED
 
         # Override the task_id so that _check_cleanup_required_satisfied
         # finds the pre-populated ledger entry.
@@ -1057,23 +1057,23 @@ def test_oq7_finalization_gate_passes_when_cleanup_recorded(
         },
     }
 
-    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
-         patch("scripts.run_with_profile.load_profiles", return_value=fake_profiles_with_risky), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("helm.scripts.run_with_profile.load_profiles", return_value=fake_profiles_with_risky), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task",
                side_effect=lambda t: ledger_calls.append(dict(t))), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_RISKY_EDIT_READ):
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
 
         args = _make_args(browser_action="read", profile="risky_edit")
         args.task_id = task_id
@@ -1127,23 +1127,23 @@ def test_oq7_finalization_gate_off_does_not_enforce(
         },
     }
 
-    with patch("scripts.run_with_profile.TASK_LEDGER", ledger_file), \
-         patch("scripts.run_with_profile.load_profiles", return_value=fake_profiles_with_risky), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger",
+    with patch("helm.scripts.run_with_profile.TASK_LEDGER", ledger_file), \
+         patch("helm.scripts.run_with_profile.load_profiles", return_value=fake_profiles_with_risky), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger",
                side_effect=lambda e: ledger_calls.append(dict(e))), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=None), \
-         patch("scripts.run_with_profile.finalize_task",
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=None), \
+         patch("helm.scripts.run_with_profile.finalize_task",
                side_effect=lambda t: ledger_calls.append(dict(t))), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=[], returncode=0)), \
-         patch("scripts.browser_work_verifier.verify",
+         patch("helm.scripts.browser_work_verifier.verify",
                return_value=_DECISION_RISKY_EDIT_READ):
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
 
         args = _make_args(browser_action="read", profile="risky_edit")
         args.task_id = task_id

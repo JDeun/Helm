@@ -12,12 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.model_provider_probe import (
+from helm.scripts.model_provider_probe import (
     probe_api_providers_from_env,
     probe_local_providers,
     probe_all_model_providers,
 )
-from scripts.discovery import _detect_gpu, HardwareProfile
+from helm.scripts.discovery import _detect_gpu, HardwareProfile
 
 import pytest as _pytest
 
@@ -282,7 +282,7 @@ def test_local_probe_valid_openai_compat(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_policy_json_loading_custom_provider(tmp_path: Path) -> None:
-    from scripts.model_provider_probe import _load_provider_registry
+    from helm.scripts.model_provider_probe import _load_provider_registry
     policy = tmp_path / "custom.json"
     policy.write_text(json.dumps({
         "version": 1,
@@ -294,7 +294,7 @@ def test_policy_json_loading_custom_provider(tmp_path: Path) -> None:
 
 
 def test_policy_json_fallback_on_missing() -> None:
-    from scripts.model_provider_probe import _load_provider_registry
+    from helm.scripts.model_provider_probe import _load_provider_registry
     api_reg, local_reg = _load_provider_registry(Path("/nonexistent/path.json"))
     assert "openai" in api_reg
 

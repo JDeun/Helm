@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.tool_groups import classify_tool, compute_grant, load_tool_groups, _DATA_FILE
+from helm.scripts.tool_groups import classify_tool, compute_grant, load_tool_groups, _DATA_FILE
 
 _ALL_TOOL_GROUPS = frozenset([
     "read_file",
@@ -330,7 +330,7 @@ def test_runner_ledger_entry_has_tool_grant_for_inspect_local():
         }
     }
 
-    from scripts.command_guard import GuardDecision, CommandClassification
+    from helm.scripts.command_guard import GuardDecision, CommandClassification
 
     fake_decision = GuardDecision(
         action="allow",
@@ -380,18 +380,18 @@ def test_runner_ledger_entry_has_tool_grant_for_inspect_local():
     args.delivery_mode = "inline"
     args.timeout = 1800
 
-    with patch("scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
-         patch("scripts.run_with_profile.validate_skill_profile"), \
-         patch("scripts.run_with_profile.append_ledger"), \
-         patch("scripts.run_with_profile._best_effort_index"), \
-         patch("scripts.run_with_profile.run_checkpoint", return_value=None), \
-         patch("scripts.run_with_profile.evaluate_command_guard", return_value=fake_decision), \
-         patch("scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
-         patch("scripts.run_with_profile.latest_snapshot_path", return_value=None), \
-         patch("scripts.run_with_profile.subprocess.run",
+    with patch("helm.scripts.run_with_profile.load_profiles", return_value=_FAKE_PROFILES), \
+         patch("helm.scripts.run_with_profile.validate_skill_profile"), \
+         patch("helm.scripts.run_with_profile.append_ledger"), \
+         patch("helm.scripts.run_with_profile._best_effort_index"), \
+         patch("helm.scripts.run_with_profile.run_checkpoint", return_value=None), \
+         patch("helm.scripts.run_with_profile.evaluate_command_guard", return_value=fake_decision), \
+         patch("helm.scripts.run_with_profile.finalize_task", side_effect=capture_finalize), \
+         patch("helm.scripts.run_with_profile.latest_snapshot_path", return_value=None), \
+         patch("helm.scripts.run_with_profile.subprocess.run",
                return_value=_sp.CompletedProcess(args=["echo", "hello"], returncode=0)):
 
-        from scripts.run_with_profile import cmd_run
+        from helm.scripts.run_with_profile import cmd_run
         rc = cmd_run(args)
 
     assert captured_tasks, "finalize_task must have been called to produce a ledger entry"
@@ -416,7 +416,7 @@ def test_runner_ledger_entry_has_tool_grant_for_inspect_local():
 
 def test_load_tool_groups_returns_independent_copy():
     """Mutating the returned dict does not corrupt the cache for the next call."""
-    from scripts.tool_groups import load_tool_groups
+    from helm.scripts.tool_groups import load_tool_groups
     g1 = load_tool_groups("inspect_local")
     # Mutate the returned dict and its nested list
     g1["__injected__"] = ["poison"]

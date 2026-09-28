@@ -46,7 +46,7 @@ _SAMPLE_TOOL: dict = {"type": "function", "function": {"name": "search", "descri
     ],
 )
 def test_synthetic_respond_enabled(env_val, expected, monkeypatch):
-    from scripts import respond_tool_wiring
+    from helm.scripts import respond_tool_wiring
     if env_val is None:
         monkeypatch.delenv("HELM_SYNTHETIC_RESPOND", raising=False)
     else:
@@ -61,7 +61,7 @@ def test_synthetic_respond_enabled(env_val, expected, monkeypatch):
 
 def test_prepare_tools_flag_off_returns_unchanged(monkeypatch):
     monkeypatch.delenv("HELM_SYNTHETIC_RESPOND", raising=False)
-    from scripts import respond_tool_wiring
+    from helm.scripts import respond_tool_wiring
 
     tools = [_SAMPLE_TOOL]
     result = respond_tool_wiring.prepare_tools(tools, model_tier="L3_local_model")
@@ -75,7 +75,7 @@ def test_prepare_tools_flag_off_returns_unchanged(monkeypatch):
 
 def test_prepare_tools_flag_on_l3_appends_respond_tool(monkeypatch):
     monkeypatch.setenv("HELM_SYNTHETIC_RESPOND", "1")
-    from scripts import respond_tool_wiring
+    from helm.scripts import respond_tool_wiring
 
     tools = [_SAMPLE_TOOL]
     result = respond_tool_wiring.prepare_tools(tools, model_tier="L3_local_model")
@@ -97,7 +97,7 @@ def test_prepare_tools_flag_on_l3_appends_respond_tool(monkeypatch):
 
 def test_prepare_tools_flag_on_l4_returns_unchanged(monkeypatch):
     monkeypatch.setenv("HELM_SYNTHETIC_RESPOND", "1")
-    from scripts import respond_tool_wiring
+    from helm.scripts import respond_tool_wiring
 
     tools = [_SAMPLE_TOOL]
     result = respond_tool_wiring.prepare_tools(tools, model_tier="L4_cloud_provider")
@@ -111,7 +111,7 @@ def test_prepare_tools_flag_on_l4_returns_unchanged(monkeypatch):
 
 def test_prepare_tools_never_mutates_input(monkeypatch):
     monkeypatch.setenv("HELM_SYNTHETIC_RESPOND", "1")
-    from scripts import respond_tool_wiring
+    from helm.scripts import respond_tool_wiring
 
     tools = [_SAMPLE_TOOL]
     original_len = len(tools)
@@ -125,7 +125,7 @@ def test_prepare_tools_never_mutates_input(monkeypatch):
 
 
 def test_finalize_response_strips_respond_call(monkeypatch):
-    from scripts import respond_tool_wiring
+    from helm.scripts import respond_tool_wiring
 
     response = {
         "content": "",
@@ -149,7 +149,7 @@ def test_finalize_response_strips_respond_call(monkeypatch):
 
 
 def test_finalize_response_no_respond_no_tools_tool_required_warning(monkeypatch):
-    from scripts import respond_tool_wiring
+    from helm.scripts import respond_tool_wiring
 
     response = {
         "content": "some text",
@@ -167,7 +167,7 @@ def test_finalize_response_no_respond_no_tools_tool_required_warning(monkeypatch
 
 
 def test_finalize_response_no_respond_tool_required_false_no_warning(monkeypatch):
-    from scripts import respond_tool_wiring
+    from helm.scripts import respond_tool_wiring
 
     response = {
         "content": "some text",

@@ -87,7 +87,7 @@ _ABORT_PAYLOAD: dict = {
     ],
 )
 def test_repair_enabled_truthy_falsy(env_val, expected, monkeypatch):
-    from scripts import model_repair
+    from helm.scripts import model_repair
     if env_val is None:
         monkeypatch.delenv("HELM_MODEL_REPAIR", raising=False)
     else:
@@ -102,7 +102,7 @@ def test_repair_enabled_truthy_falsy(env_val, expected, monkeypatch):
 
 def test_evaluate_response_valid_payload_verdict_ok(monkeypatch):
     monkeypatch.delenv("HELM_MODEL_REPAIR", raising=False)
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     result = model_repair.evaluate_response(
         _VALID_PAYLOAD,
@@ -123,7 +123,7 @@ def test_evaluate_response_valid_payload_verdict_ok(monkeypatch):
 
 def test_evaluate_response_malformed_tool_call_nudge_and_retry(monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     result = model_repair.evaluate_response(
         _MALFORMED_PAYLOAD,
@@ -144,7 +144,7 @@ def test_evaluate_response_malformed_tool_call_nudge_and_retry(monkeypatch):
 
 def test_evaluate_response_shadow_mode_when_flag_off(monkeypatch):
     monkeypatch.delenv("HELM_MODEL_REPAIR", raising=False)
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     result = model_repair.evaluate_response(
         _MALFORMED_PAYLOAD,
@@ -163,7 +163,7 @@ def test_evaluate_response_shadow_mode_when_flag_off(monkeypatch):
 
 def test_evaluate_response_shadow_mode_false_when_flag_on(monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     result = model_repair.evaluate_response(
         _MALFORMED_PAYLOAD,
@@ -182,7 +182,7 @@ def test_evaluate_response_shadow_mode_false_when_flag_on(monkeypatch):
 
 def test_evaluate_response_logs_to_traces_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     traces_dir = tmp_path / "traces"
     model_repair.evaluate_response(
@@ -209,7 +209,7 @@ def test_evaluate_response_logs_to_traces_dir(tmp_path, monkeypatch):
 
 def test_evaluate_response_abort_issue_verdict_abort(monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     result = model_repair.evaluate_response(
         _ABORT_PAYLOAD,
@@ -229,7 +229,7 @@ def test_evaluate_response_abort_issue_verdict_abort(monkeypatch):
 
 def test_evaluate_response_at_max_retries_give_up(monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     result = model_repair.evaluate_response(
         _MALFORMED_PAYLOAD,
@@ -249,7 +249,7 @@ def test_evaluate_response_at_max_retries_give_up(monkeypatch):
 
 def test_repair_loop_terminates_on_ok(monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     call_count = 0
 
@@ -278,7 +278,7 @@ def test_repair_loop_terminates_on_ok(monkeypatch):
 
 def test_repair_loop_terminates_at_max_attempts(monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     call_count = 0
 
@@ -306,7 +306,7 @@ def test_repair_loop_terminates_at_max_attempts(monkeypatch):
 
 def test_repair_loop_disabled_invokes_once(monkeypatch):
     monkeypatch.delenv("HELM_MODEL_REPAIR", raising=False)
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     call_count = 0
 
@@ -335,7 +335,7 @@ def test_repair_loop_disabled_invokes_once(monkeypatch):
 
 def test_repair_loop_abort_issue_terminates_immediately(monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     call_count = 0
 
@@ -363,7 +363,7 @@ def test_repair_loop_abort_issue_terminates_immediately(monkeypatch):
 
 def test_shadow_mode_key_always_present(monkeypatch):
     monkeypatch.delenv("HELM_MODEL_REPAIR", raising=False)
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     result = model_repair.evaluate_response(
         _VALID_PAYLOAD,
@@ -384,7 +384,7 @@ def test_shadow_mode_key_always_present(monkeypatch):
 def test_evaluate_response_loads_policy_from_file_when_none(monkeypatch):
     """When policy=None, the function loads references/local_model_proxy_policy.json."""
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     # Valid payload → should return ok regardless of which policy loads
     result = model_repair.evaluate_response(
@@ -405,7 +405,7 @@ def test_evaluate_response_loads_policy_from_file_when_none(monkeypatch):
 
 def test_evaluate_response_next_attempt_increments_on_retry(monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     result = model_repair.evaluate_response(
         _MALFORMED_PAYLOAD,
@@ -419,7 +419,7 @@ def test_evaluate_response_next_attempt_increments_on_retry(monkeypatch):
 
 def test_evaluate_response_next_attempt_unchanged_on_ok(monkeypatch):
     monkeypatch.setenv("HELM_MODEL_REPAIR", "1")
-    from scripts import model_repair
+    from helm.scripts import model_repair
 
     result = model_repair.evaluate_response(
         _VALID_PAYLOAD,

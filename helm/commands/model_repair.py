@@ -21,8 +21,8 @@ _SCHEMA_PATH = ROOT / "references" / "respond_tool_schema.json"
 
 def cmd_model_repair_check(args: argparse.Namespace) -> int:
     """Print env detection, policy, and schema name. Exit 0 always."""
-    from scripts.model_repair import repair_enabled
-    from scripts.respond_tool_wiring import synthetic_respond_enabled
+    from helm.scripts.model_repair import repair_enabled
+    from helm.scripts.respond_tool_wiring import synthetic_respond_enabled
 
     repair_on = repair_enabled()
     respond_on = synthetic_respond_enabled()

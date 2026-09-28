@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.policy_transition import evaluate, transition_record
+from helm.scripts.policy_transition import evaluate, transition_record
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +223,7 @@ def test_transition_record_returns_fresh_dict_each_call() -> None:
 def test_integration_ledger_entry_has_policy_transition() -> None:
     """Feed the harness a synthetic failure history via record_failure_with_policy_check
     and verify the written ledger entry contains the expected policy_transition."""
-    from scripts import adaptive_harness_lib
+    from helm.scripts import adaptive_harness_lib
 
     task_id = "task-integ-policy-test"
     # Build a synthetic ledger with two identical failure events (same fingerprint)

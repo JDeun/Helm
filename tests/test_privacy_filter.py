@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from scripts.privacy_filter import detect, load_vault, restore_text, tokenize_text
+from helm.scripts.privacy_filter import detect, load_vault, restore_text, tokenize_text
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

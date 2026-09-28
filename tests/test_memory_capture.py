@@ -10,9 +10,9 @@ if str(ROOT) not in sys.path:
 
 import pytest
 from unittest.mock import patch
-from scripts import task_capture_core
+from helm.scripts import task_capture_core
 
-from scripts.memory_capture import (
+from helm.scripts.memory_capture import (
     _crystallization,
     _retention_profile,
     _review_flags,
@@ -60,7 +60,7 @@ def test_build_memory_capture_plan_basic_completed_task() -> None:
     task = _make_task(status="completed", profile="service_ops")
 
     # Patch _recent_final_tasks to return empty so _supersession does nothing
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[]):
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[]):
         plan = build_memory_capture_plan(task)
 
     assert plan["relevant"] is True
@@ -74,7 +74,7 @@ def test_build_memory_capture_plan_basic_completed_task() -> None:
 
 def test_operational_capture_invokes_memory_decay_policy() -> None:
     task = _make_task(status="completed", profile="service_ops", finished_at="2026-07-13T01:02:03Z")
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[]), patch.object(
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[]), patch.object(
         task_capture_core,
         "decay_memory_label",
         wraps=task_capture_core.decay_memory_label,
@@ -94,7 +94,7 @@ def test_build_memory_capture_plan_irrelevant_task() -> None:
         runtime_target=None,
     )
 
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[]):
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[]):
         plan = build_memory_capture_plan(task)
 
     assert plan["relevant"] is False
@@ -106,7 +106,7 @@ def test_build_memory_capture_plan_irrelevant_task() -> None:
 def test_build_memory_capture_plan_high_impact_failure_is_relevant() -> None:
     task = _make_task(status="failed", profile="service_ops")
 
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[]):
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[]):
         plan = build_memory_capture_plan(task)
 
     assert plan["relevant"] is True
@@ -135,7 +135,7 @@ def test_build_memory_capture_plan_with_browser_evidence() -> None:
         },
     )
 
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[]):
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[]):
         plan = build_memory_capture_plan(task)
 
     assert plan["relevant"] is True
@@ -160,7 +160,7 @@ def test_build_memory_capture_plan_api_reusable_browser_evidence_adds_project_st
         },
     )
 
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[]):
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[]):
         plan = build_memory_capture_plan(task)
 
     assert "project_state" in plan["event_types"]
@@ -170,7 +170,7 @@ def test_build_memory_capture_plan_api_reusable_browser_evidence_adds_project_st
 def test_build_memory_capture_plan_has_crystallization_and_retention() -> None:
     task = _make_task(status="completed", profile="service_ops")
 
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[]):
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[]):
         plan = build_memory_capture_plan(task)
 
     assert "crystallization" in plan
@@ -197,7 +197,7 @@ def test_supersession_matching_task_name_gets_high_score() -> None:
         finished_at="2024-01-01T10:00:00Z",
     )
 
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[prior]):
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[prior]):
         result = _supersession(task)
 
     assert result["state"] != "not_applicable"
@@ -226,7 +226,7 @@ def test_supersession_no_matching_prior_tasks() -> None:
         runtime_target="other-server",
     )
 
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[prior]):
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[prior]):
         result = _supersession(task)
 
     assert result["state"] == "none"
@@ -242,7 +242,7 @@ def test_supersession_failed_prior_marks_as_retries() -> None:
         finished_at="2024-01-01T09:00:00Z",
     )
 
-    with patch("scripts.memory_capture._recent_final_tasks", return_value=[prior_failed]):
+    with patch("helm.scripts.memory_capture._recent_final_tasks", return_value=[prior_failed]):
         result = _supersession(task)
 
     assert result["state"] == "retries_or_replaces_prior_work"
@@ -257,7 +257,7 @@ def test_review_flags_high_risk_score_task() -> None:
     claim_state = {"confidence_hint": "low"}
 
     # Patch _supersession to return empty so we can isolate flag logic
-    with patch("scripts.memory_capture._supersession", return_value={"supersedes_task_ids": []}):
+    with patch("helm.scripts.memory_capture._supersession", return_value={"supersedes_task_ids": []}):
         flags = _review_flags(task, claim_state)
 
     flag_types = {f["type"] for f in flags}
@@ -269,7 +269,7 @@ def test_review_flags_contradiction_keywords_trigger_review() -> None:
     task["touched_paths"] = ["README.md"]
     claim_state = {"confidence_hint": "medium"}
 
-    with patch("scripts.memory_capture._supersession", return_value={"supersedes_task_ids": []}):
+    with patch("helm.scripts.memory_capture._supersession", return_value={"supersedes_task_ids": []}):
         flags = _review_flags(task, claim_state)
 
     flag_types = {f["type"] for f in flags}
@@ -280,7 +280,7 @@ def test_review_flags_supersession_adds_supersession_review() -> None:
     task = _make_task(task_name="deploy service", status="completed")
     claim_state = {"confidence_hint": "high"}
 
-    with patch("scripts.memory_capture._supersession", return_value={"supersedes_task_ids": ["prior-001"]}):
+    with patch("helm.scripts.memory_capture._supersession", return_value={"supersedes_task_ids": ["prior-001"]}):
         flags = _review_flags(task, claim_state)
 
     flag_types = {f["type"] for f in flags}
@@ -291,7 +291,7 @@ def test_review_flags_clean_task_has_no_flags() -> None:
     task = _make_task(task_name="read config file", status="completed")
     claim_state = {"confidence_hint": "high"}
 
-    with patch("scripts.memory_capture._supersession", return_value={"supersedes_task_ids": []}):
+    with patch("helm.scripts.memory_capture._supersession", return_value={"supersedes_task_ids": []}):
         flags = _review_flags(task, claim_state)
 
     assert flags == []

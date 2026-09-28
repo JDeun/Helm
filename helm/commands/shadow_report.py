@@ -33,8 +33,8 @@ import json
 import sys
 from pathlib import Path
 
-from scripts.shadow_mode_report import generate_report, to_markdown
-from scripts.shadow_mode_recommendation import recommend
+from helm.scripts.shadow_mode_report import generate_report, to_markdown
+from helm.scripts.shadow_mode_recommendation import recommend
 
 
 def cmd_shadow_report(args: argparse.Namespace) -> int:

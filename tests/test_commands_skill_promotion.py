@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.skill_promotion_state import (
+from helm.scripts.skill_promotion_state import (
     load_state,
     record_notified,
     save_state,

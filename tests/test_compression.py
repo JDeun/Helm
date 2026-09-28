@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.compression import (
+from helm.scripts.compression import (
     CompressionRegistry,
     extract_fenced_blocks,
     extract_urls,
@@ -25,7 +25,7 @@ from scripts.compression import (
     resolve,
     restore_fenced_blocks,
 )
-from scripts.compression.profiles import (
+from helm.scripts.compression.profiles import (
     AtomFeedProfile,
     BrowserSnapshotProfile,
     GitHubReadmeProfile,

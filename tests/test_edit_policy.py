@@ -24,7 +24,7 @@ import pytest
 def _get_module():
     """Return a freshly loaded scripts.edit_policy module."""
     # Force a fresh import so the module-level cache is cleared.
-    mod_name = "scripts.edit_policy"
+    mod_name = "helm.scripts.edit_policy"
     if mod_name in sys.modules:
         del sys.modules[mod_name]
     return importlib.import_module(mod_name)

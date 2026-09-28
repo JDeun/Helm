@@ -22,7 +22,7 @@ def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_loop_examples_validate_through_library() -> None:
-    from scripts.loop_lib import load_loop_file, validate_loop
+    from helm.scripts.loop_lib import load_loop_file, validate_loop
 
     for rel in ("examples/loops/completion-evidence.yaml", "examples/loops/docs-sweep.yaml"):
         payload = load_loop_file(REPO_ROOT / rel)
@@ -52,7 +52,7 @@ def test_loop_cli_validates_and_inspects_examples() -> None:
 
 
 def test_loop_validator_rejects_missing_evidence() -> None:
-    from scripts.loop_lib import validate_loop
+    from helm.scripts.loop_lib import validate_loop
 
     result = validate_loop({"id": "bad", "title": "Bad", "steps": []})
     assert not result["ok"]
@@ -60,7 +60,7 @@ def test_loop_validator_rejects_missing_evidence() -> None:
 
 
 def test_skill_intake_classifier_is_conservative() -> None:
-    from scripts.skill_intake_lib import classify_candidate, validate_candidate
+    from helm.scripts.skill_intake_lib import classify_candidate, validate_candidate
 
     safe = classify_candidate("tool poisoning audit", "read-only MCP server review")
     unsafe = classify_candidate("phishing credential collection", "stealth and credential theft workflow")

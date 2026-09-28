@@ -689,7 +689,7 @@ def test_hitl_decision_patterns_record_report_and_policy() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
         create_minimal_workspace(root)
-        script = REPO_ROOT / "scripts" / "hitl_decision_patterns.py"
+        script = REPO_ROOT / "helm" / "scripts" / "hitl_decision_patterns.py"
         for index in range(3):
             recorded = subprocess.run(
                 [
@@ -1078,7 +1078,7 @@ Inspect first and mutate only through the strict runner.
         env["HELM_WORKSPACE"] = str(root)
 
         validate_result = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "run_with_profile.py"), "validate-manifests", "--json"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "run_with_profile.py"), "validate-manifests", "--json"],
             capture_output=True,
             text=True,
             check=False,
@@ -1088,7 +1088,7 @@ Inspect first and mutate only through the strict runner.
         assert json.loads(validate_result.stdout)["ok"]
 
         audit_result = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "run_with_profile.py"), "audit-manifest-quality", "--json"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "run_with_profile.py"), "audit-manifest-quality", "--json"],
             capture_output=True,
             text=True,
             check=False,
@@ -1366,7 +1366,7 @@ def test_harness_postflight_requires_browser_and_retrieval_evidence_when_contrac
         env["HELM_WORKSPACE"] = str(root)
 
         missing = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-browser-1"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-browser-1"],
             capture_output=True,
             text=True,
             check=False,
@@ -1382,7 +1382,7 @@ def test_harness_postflight_requires_browser_and_retrieval_evidence_when_contrac
         recorded = subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / "scripts" / "adaptive_harness.py"),
+                str(REPO_ROOT / "helm" / "scripts" / "adaptive_harness.py"),
                 "record-evidence",
                 "--task-id",
                 "task-browser-1",
@@ -1448,7 +1448,7 @@ def test_harness_record_evidence_accepts_completion_evidence() -> None:
         recorded = subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / "scripts" / "adaptive_harness.py"),
+                str(REPO_ROOT / "helm" / "scripts" / "adaptive_harness.py"),
                 "record-evidence",
                 "--task-id",
                 "task-completion-evidence",
@@ -1513,7 +1513,7 @@ def test_harness_postflight_requires_artifact_validation_when_contract_demands_i
         env["HELM_WORKSPACE"] = str(root)
 
         missing = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-artifact-1"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-artifact-1"],
             capture_output=True,
             text=True,
             check=False,
@@ -1527,7 +1527,7 @@ def test_harness_postflight_requires_artifact_validation_when_contract_demands_i
         recorded = subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / "scripts" / "adaptive_harness.py"),
+                str(REPO_ROOT / "helm" / "scripts" / "adaptive_harness.py"),
                 "record-evidence",
                 "--task-id",
                 "task-artifact-1",
@@ -1589,7 +1589,7 @@ def test_harness_postflight_can_infer_missing_evidence_from_task_metadata() -> N
         env["HELM_WORKSPACE"] = str(root)
 
         inferred = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-browser-2"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-browser-2"],
             capture_output=True,
             text=True,
             check=False,
@@ -1655,7 +1655,7 @@ def test_harness_postflight_conditionally_requires_browser_and_retrieval_evidenc
         env["HELM_WORKSPACE"] = str(root)
 
         local_only = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-mixed-1"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-mixed-1"],
             capture_output=True,
             text=True,
             check=False,
@@ -1668,7 +1668,7 @@ def test_harness_postflight_conditionally_requires_browser_and_retrieval_evidenc
         assert local_checks["retrieval_evidence"]["ok"]
 
         blocked = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-mixed-2"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "adaptive_harness.py"), "postflight", "--task-id", "task-mixed-2"],
             capture_output=True,
             text=True,
             check=False,
@@ -1711,7 +1711,7 @@ def test_task_ledger_report_shows_evidence_summary() -> None:
         env["HELM_WORKSPACE"] = str(root)
 
         result = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "task_ledger_report.py"), "--summary", "--limit", "1"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "task_ledger_report.py"), "--summary", "--limit", "1"],
             capture_output=True,
             text=True,
             check=False,
@@ -1763,7 +1763,7 @@ def test_harness_backfill_evidence_updates_prior_tasks() -> None:
         env["HELM_WORKSPACE"] = str(root)
 
         result = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "adaptive_harness.py"), "backfill-evidence", "--skill", "mixed-skill"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "adaptive_harness.py"), "backfill-evidence", "--skill", "mixed-skill"],
             capture_output=True,
             text=True,
             check=False,
@@ -1796,7 +1796,7 @@ def test_manifest_quality_flags_broad_when_any_triggers() -> None:
         env = os.environ.copy()
         env["HELM_WORKSPACE"] = str(root)
         result = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "run_with_profile.py"), "audit-manifest-quality", "--json"],
+            [sys.executable, str(REPO_ROOT / "helm" / "scripts" / "run_with_profile.py"), "audit-manifest-quality", "--json"],
             capture_output=True,
             text=True,
             check=False,

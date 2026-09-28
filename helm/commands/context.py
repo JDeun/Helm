@@ -17,7 +17,7 @@ from helm.commands import (
     target_root,
     latest_snapshot_path,
 )
-from scripts.skill_manifest_lib import load_skill_contract_manifests
+from helm.scripts.skill_manifest_lib import load_skill_contract_manifests
 
 
 def latest_tasks(entries: list[dict]) -> list[dict]:

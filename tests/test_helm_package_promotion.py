@@ -45,7 +45,7 @@ def test_python_dash_m_helm_runs_the_cli() -> None:
 
 
 def test_source_bundle_detects_a_helm_checkout_by_the_package(tmp_path, monkeypatch) -> None:
-    from scripts.source_bundle import _default_registry
+    from helm.scripts.source_bundle import _default_registry
 
     (tmp_path / "helm").mkdir()
     (tmp_path / "helm" / "cli.py").write_text("", encoding="utf-8")

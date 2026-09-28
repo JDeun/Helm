@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.failure_signature import (
+from helm.scripts.failure_signature import (
     _WORKSPACE_PATH,
     classify_error,
     normalize_target,

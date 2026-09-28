@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.env_flags import env_flag, is_truthy
+from helm.scripts.env_flags import env_flag, is_truthy
 
 
 @pytest.mark.parametrize("value", ["1", "true", "yes", "TRUE", "Yes", " 1 ", "  TRUE  "])

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from scripts.skill_intake_lib import classify_candidate, validate_candidate
+from helm.scripts.skill_intake_lib import classify_candidate, validate_candidate
 
 
 def cmd_skill_intake(args: argparse.Namespace) -> int:

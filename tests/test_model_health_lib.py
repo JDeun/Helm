@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from scripts.model_health_lib import (
+from helm.scripts.model_health_lib import (
     ModelHealthChoice,
     policy_models,
     select_model,
@@ -41,7 +41,7 @@ def test_select_model_falls_back_to_discovery_choice() -> None:
     }
 
     with patch(
-        "scripts.model_health_lib.choose_model_from_discovery",
+        "helm.scripts.model_health_lib.choose_model_from_discovery",
         return_value=ModelHealthChoice("openai/gpt-4.1-mini", "runtime discovery detected provider", "runtime-discovery"),
     ):
         choice = select_model(policy, {"models": {}})
@@ -51,8 +51,8 @@ def test_select_model_falls_back_to_discovery_choice() -> None:
 
 
 def test_policy_models_can_be_derived_from_available_providers() -> None:
-    with patch("scripts.model_health_lib.probe_local_providers", return_value=[]), patch(
-        "scripts.model_health_lib.probe_api_providers_from_env",
+    with patch("helm.scripts.model_health_lib.probe_local_providers", return_value=[]), patch(
+        "helm.scripts.model_health_lib.probe_api_providers_from_env",
         return_value=[type("Probe", (), {"provider": "openai"})()],
     ):
         models = policy_models({})
