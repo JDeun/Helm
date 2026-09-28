@@ -38,10 +38,10 @@ def _run_cmd(monkeypatch, env_repair=None, env_respond=None):
     import importlib
     for mod_name in list(sys.modules.keys()):
         if mod_name in ("scripts.model_repair", "scripts.respond_tool_wiring",
-                        "commands.model_repair"):
+                        "helm.commands.model_repair"):
             del sys.modules[mod_name]
 
-    from commands import model_repair as cmd_mod
+    from helm.commands import model_repair as cmd_mod
 
     captured = io.StringIO()
     old_stdout = sys.stdout

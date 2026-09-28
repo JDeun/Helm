@@ -4,12 +4,12 @@ import argparse
 import json
 import sys
 
-from commands import (
+from helm.commands import (
     discover_workspace,
     run_script,
     target_root,
 )
-from commands.checkpoint import build_capture_state_payload
+from helm.commands.checkpoint import build_capture_state_payload
 
 
 def cmd_ops(args: argparse.Namespace) -> int:

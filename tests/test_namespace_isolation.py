@@ -37,3 +37,12 @@ def test_memory_tree_lives_under_the_helm_package() -> None:
 
     assert MemoryTree is SameClass
     assert not (ROOT / "memory_tree").exists()
+
+
+def test_commands_live_under_the_helm_package() -> None:
+    from helm.commands import REFERENCES_ROOT, SCRIPT_ROOT
+    from helm.commands.checkpoint import cmd_checkpoint_create  # noqa: F401
+
+    assert REFERENCES_ROOT == ROOT / "helm" / "references"
+    assert (SCRIPT_ROOT / "skill_capture.py").is_file()
+    assert not (ROOT / "commands").exists()

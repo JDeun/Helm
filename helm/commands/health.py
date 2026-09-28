@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from commands import discover_workspace, run_script, target_root
+from helm.commands import discover_workspace, run_script, target_root
 
 
 def cmd_health(args: argparse.Namespace) -> int:

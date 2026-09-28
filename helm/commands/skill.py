@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from commands import (
+from helm.commands import (
     discover_workspace,
     relative_or_absolute,
     run_script,

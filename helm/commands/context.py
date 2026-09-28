@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from commands import (
+from helm.commands import (
     DEFAULT_WORKSPACE,
     adopt_context_source,
     configured_context_sources,
@@ -30,7 +30,7 @@ def latest_tasks(entries: list[dict]) -> list[dict]:
 
 
 def load_draft_assessments(root: Path) -> list[dict]:
-    from commands import _warn_parse_failure
+    from helm.commands import _warn_parse_failure
     assessments: list[dict] = []
     drafts_root = root / "skill_drafts"
     if not drafts_root.exists():
@@ -310,7 +310,7 @@ def build_recent_state_payload(root: Path, limit: int, *, pending_only: bool = F
 
 
 def build_state_snapshot_payload(root: Path, task_id: str | None = None) -> dict:
-    from commands import _warn_parse_failure
+    from helm.commands import _warn_parse_failure
     state_root = state_root_for(root)
     tasks = latest_tasks(read_jsonl(state_root / "task-ledger.jsonl"))
     target = None
@@ -367,7 +367,7 @@ def cmd_sources(args: argparse.Namespace) -> int:
 
 
 def cmd_context(args: argparse.Namespace) -> int:
-    from commands import discover_workspace, run_script
+    from helm.commands import discover_workspace, run_script
     root = target_root(args.path) if args.path else discover_workspace().root
     if args.args:
         subcommand, *remainder = args.args
@@ -410,7 +410,7 @@ def cmd_context(args: argparse.Namespace) -> int:
 def cmd_adopt(args: argparse.Namespace) -> int:
     root = target_root(args.path or str(DEFAULT_WORKSPACE), create=True)
     if not (root / ".helm").exists():
-        from commands.status import cmd_init
+        from helm.commands.status import cmd_init
         cmd_init(argparse.Namespace(path=str(root), force=False, json=False))
     target = target_root(args.from_path)
     source = adopt_context_source(root, target, name=args.name, kind=args.kind)
@@ -429,7 +429,7 @@ def cmd_adopt(args: argparse.Namespace) -> int:
 def cmd_onboard(args: argparse.Namespace) -> int:
     root = target_root(args.path or str(DEFAULT_WORKSPACE), create=True)
     if not (root / ".helm").exists():
-        from commands.status import cmd_init
+        from helm.commands.status import cmd_init
         cmd_init(argparse.Namespace(path=str(root), force=False, json=False))
 
     payload = build_onboarding_payload(root)
@@ -470,9 +470,9 @@ def cmd_onboard(args: argparse.Namespace) -> int:
         print(f"next=Run helm status --path {root} --verbose")
         return 0
 
-    from commands.doctor import cmd_doctor
-    from commands.validate import cmd_validate
-    from commands.status import cmd_status
+    from helm.commands.doctor import cmd_doctor
+    from helm.commands.validate import cmd_validate
+    from helm.commands.status import cmd_status
     print(f"running=helm doctor --path {root}")
     doctor_code = cmd_doctor(argparse.Namespace(path=str(root), json=False))
     print(f"running=helm validate --path {root}")

@@ -20,8 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from commands import REFERENCES_ROOT, REQUIRED_REFERENCE_FILES  # noqa: E402
-from commands.reconcile import (  # noqa: E402
+from helm.commands import REFERENCES_ROOT, REQUIRED_REFERENCE_FILES  # noqa: E402
+from helm.commands.reconcile import (  # noqa: E402
     cmd_reconcile,
     reconcile_workspace_references,
 )

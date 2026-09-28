@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-_POLICY_PATH = ROOT / "helm" / "references" / "local_model_proxy_policy.json"
-_SCHEMA_PATH = ROOT / "helm" / "references" / "respond_tool_schema.json"
+_POLICY_PATH = ROOT / "references" / "local_model_proxy_policy.json"
+_SCHEMA_PATH = ROOT / "references" / "respond_tool_schema.json"
 
 
 def cmd_model_repair_check(args: argparse.Namespace) -> int:

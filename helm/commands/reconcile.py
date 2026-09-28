@@ -31,7 +31,7 @@ import json
 import shutil
 from pathlib import Path
 
-from commands import (
+from helm.commands import (
     DEFAULT_WORKSPACE,
     REFERENCES_ROOT,
     REQUIRED_REFERENCE_FILES,

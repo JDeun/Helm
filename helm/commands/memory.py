@@ -4,12 +4,12 @@ import argparse
 import json
 import sys
 
-from commands import (
+from helm.commands import (
     discover_workspace,
     run_script,
     target_root,
 )
-from commands.context import build_recent_state_payload
+from helm.commands.context import build_recent_state_payload
 
 
 def cmd_memory(args: argparse.Namespace) -> int:

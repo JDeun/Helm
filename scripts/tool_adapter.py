@@ -59,7 +59,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from commands import read_json
+from helm.commands import read_json
 
 __all__ = [
     "ToolAdapter",

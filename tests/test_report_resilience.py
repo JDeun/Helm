@@ -64,7 +64,7 @@ def test_helm_status_payload_tolerates_malformed_state_files() -> None:
         (state_root / "checkpoints" / "index.json").write_text("{not-json\n", encoding="utf-8")
         (drafts_root / "draft-a" / "meta" / "assessment.json").write_text("{not-json\n", encoding="utf-8")
 
-        from commands import status as _status_mod
+        from helm.commands import status as _status_mod
         with patch.object(_status_mod, "configured_context_sources", return_value=[]):
             payload = helm.build_status_payload(workspace)
 

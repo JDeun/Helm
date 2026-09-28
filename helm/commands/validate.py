@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from commands import (
+from helm.commands import (
     load_skill_policies,
     manifest_audit,
     read_json,

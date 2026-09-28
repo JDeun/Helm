@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from commands import read_jsonl
+from helm.commands import read_jsonl
 from helm_workspace import get_workspace_layout
 from scripts.file_intake_lib import probe_file_intake
 from scripts.route_contract_lib import (

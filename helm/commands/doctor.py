@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from commands import (
+from helm.commands import (
     REQUIRED_REFERENCE_FILES,
     load_context_sources,
     relative_or_absolute,
@@ -15,7 +15,7 @@ from commands import (
     DEFAULT_WORKSPACE,
     detect_layout,
 )
-from commands.context import build_onboarding_payload, format_onboarding_text
+from helm.commands.context import build_onboarding_payload, format_onboarding_text
 from scripts.discovery import discover_environment, snapshot_to_json
 from scripts.model_health_lib import load_policy as load_model_health_policy, load_state as load_model_health_state, select_model as select_healthy_model, state_path as model_health_state_path
 

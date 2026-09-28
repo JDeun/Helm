@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from commands import read_jsonl
+from helm.commands import read_jsonl
 from helm_workspace import get_workspace_layout
 from scripts.task_capture_core import (
     infer_crystallization,

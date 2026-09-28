@@ -14,8 +14,8 @@ from scripts.skill_manifest_lib import load_skill_contract_manifests, load_skill
 from scripts.state_snapshot import latest_snapshot_path
 
 ROOT = Path(__file__).resolve().parent.parent
-REFERENCES_ROOT = ROOT / "helm" / "references"
-SCRIPT_ROOT = ROOT / "scripts"
+REFERENCES_ROOT = ROOT / "references"
+SCRIPT_ROOT = ROOT.parent / "scripts"   # reverts to ROOT / "scripts" in Task 6
 REQUIRED_REFERENCE_FILES = (
     "execution_profiles.json",
     "model_recovery_policy.json",

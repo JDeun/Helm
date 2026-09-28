@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from commands import state_root_for, target_root
+from helm.commands import state_root_for, target_root
 from scripts.ops_db import db_path_for_state_root, init_db, rebuild_index, verify_index
 
 

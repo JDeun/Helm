@@ -8,7 +8,7 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
-from commands import (
+from helm.commands import (
     DEFAULT_WORKSPACE,
     REFERENCES_ROOT,
     REQUIRED_REFERENCE_FILES,
@@ -22,7 +22,7 @@ from commands import (
     suggest_external_sources,
     target_root,
 )
-from commands.context import (
+from helm.commands.context import (
     build_capability_diff_payload,
     build_onboarding_payload,
     build_run_contract_payload,

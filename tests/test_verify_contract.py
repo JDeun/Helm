@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from commands.verify_contract import cmd_verify_contract, verify_operating_contract
+from helm.commands.verify_contract import cmd_verify_contract, verify_operating_contract
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ def test_guard_denies_destructive_fails_if_guard_allows(tmp_path: Path) -> None:
         classification=fake_classification,
         approval_required=False,
     )
-    with patch("commands.verify_contract.evaluate_command_guard", return_value=fake_decision):
+    with patch("helm.commands.verify_contract.evaluate_command_guard", return_value=fake_decision):
         payload = verify_operating_contract(tmp_path)
 
     check = next(c for c in payload["checks"] if c["name"] == "guard_denies_destructive")
@@ -171,7 +171,7 @@ def test_cmd_verify_contract_exits_1_when_a_probe_fails(tmp_path: Path) -> None:
         }
 
     args = argparse.Namespace(path=str(tmp_path), json=True)
-    with patch("commands.verify_contract.verify_operating_contract", side_effect=_broken):
+    with patch("helm.commands.verify_contract.verify_operating_contract", side_effect=_broken):
         exit_code, output = _run_cmd(args)
 
     assert exit_code == 1

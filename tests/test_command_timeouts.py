@@ -46,7 +46,7 @@ def write_lifecycle_candidate(root: Path) -> None:
 
 
 def test_run_script_returns_124_when_child_times_out(monkeypatch, capsys, tmp_path: Path) -> None:
-    import commands
+    import helm.commands as commands
 
     create_workspace(tmp_path)
 
@@ -61,14 +61,14 @@ def test_run_script_returns_124_when_child_times_out(monkeypatch, capsys, tmp_pa
 
 
 def test_script_timeout_can_be_disabled(monkeypatch) -> None:
-    import commands
+    import helm.commands as commands
 
     monkeypatch.setenv("HELM_SCRIPT_TIMEOUT_SECONDS", "0")
     assert commands.script_timeout_seconds() is None
 
 
 def test_promote_from_trajectory_apply_timeout_returns_124(monkeypatch, capsys, tmp_path: Path) -> None:
-    from commands import skill_lifecycle
+    from helm.commands import skill_lifecycle
 
     create_workspace(tmp_path)
     write_lifecycle_candidate(tmp_path)

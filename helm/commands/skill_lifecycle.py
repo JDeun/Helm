@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from commands import target_root
+from helm.commands import target_root
 from scripts.skill_lifecycle_lib import (
     LifecycleError,
     LifecyclePaths,
@@ -458,7 +458,7 @@ def cmd_skill_lifecycle_promote_from_trajectory(args: argparse.Namespace) -> int
         "apply": args.apply,
         "command": [
             sys.executable,
-            str(Path(__file__).resolve().parents[1] / "scripts" / "skill_capture.py"),
+            str(Path(__file__).resolve().parents[2] / "scripts" / "skill_capture.py"),
             "draft-from-task",
             "--task-id",
             str(target.get("task_id")),

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from helm_workspace import DEFAULT_WORKSPACE
 
-from commands.checkpoint import (
+from helm.commands.checkpoint import (
     cmd_checkpoint_create,
     cmd_checkpoint_finalize,
     cmd_checkpoint_list,
@@ -20,24 +20,24 @@ from commands.checkpoint import (
     cmd_checkpoint_restore,
     cmd_checkpoint_show,
 )
-from commands.context import (
+from helm.commands.context import (
     build_state_snapshot_payload,
     cmd_adopt,
     cmd_context,
     cmd_onboard,
     cmd_sources,
 )
-from commands.doctor import cmd_doctor, cmd_survey
-from commands.harness import cmd_harness
-from commands.health import cmd_health
-from commands.memory import cmd_memory
-from commands.loops import cmd_loops
-from commands.ops import cmd_ops
-from commands.privacy import cmd_privacy
-from commands.profile import cmd_profile
-from commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_skill_reject, cmd_skill_review
-from commands.skill_intake import cmd_skill_intake
-from commands.skill_lifecycle import (
+from helm.commands.doctor import cmd_doctor, cmd_survey
+from helm.commands.harness import cmd_harness
+from helm.commands.health import cmd_health
+from helm.commands.memory import cmd_memory
+from helm.commands.loops import cmd_loops
+from helm.commands.ops import cmd_ops
+from helm.commands.privacy import cmd_privacy
+from helm.commands.profile import cmd_profile
+from helm.commands.skill import cmd_skill, cmd_skill_approve, cmd_skill_diff, cmd_skill_reject, cmd_skill_review
+from helm.commands.skill_intake import cmd_skill_intake
+from helm.commands.skill_lifecycle import (
     cmd_skill_lifecycle_archive,
     cmd_skill_lifecycle_events,
     cmd_skill_lifecycle_ledger,
@@ -59,7 +59,7 @@ from commands.skill_lifecycle import (
     cmd_skill_lifecycle_unpin,
     cmd_skill_lifecycle_view,
 )
-from commands.status import (
+from helm.commands.status import (
     build_status_payload,
     cmd_capability_diff,
     cmd_dashboard,
@@ -70,7 +70,7 @@ from commands.status import (
     cmd_status,
     format_report_markdown,
 )
-from commands.task import (
+from helm.commands.task import (
     cmd_task_block,
     cmd_task_complete,
     cmd_task_doctor,
@@ -80,13 +80,13 @@ from commands.task import (
     cmd_task_retry,
     cmd_task_show,
 )
-from commands.validate import cmd_validate
-from commands.reconcile import cmd_reconcile
-from commands.verify_contract import cmd_verify_contract
-from commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status, cmd_db_query
-from commands.skill_promotion import cmd_skill_promotion
-from commands.shadow_report import cmd_shadow_report
-from commands.phase_modules import (
+from helm.commands.validate import cmd_validate
+from helm.commands.reconcile import cmd_reconcile
+from helm.commands.verify_contract import cmd_verify_contract
+from helm.commands.db import cmd_db_init, cmd_db_rebuild, cmd_db_verify, cmd_db_status, cmd_db_query
+from helm.commands.skill_promotion import cmd_skill_promotion
+from helm.commands.shadow_report import cmd_shadow_report
+from helm.commands.phase_modules import (
     cmd_action_scope_evaluate,
     cmd_compression_profiles,
     cmd_freshness_status,
