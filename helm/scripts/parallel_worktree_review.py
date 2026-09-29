@@ -16,9 +16,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 try:
-    from redaction import SECRET_REGEXES
-except ModuleNotFoundError:  # Helm package import
+    # helm.scripts first: a top-level `redaction` on sys.path would otherwise
+    # win this branch and silently replace it -- a decoy file was shown to
+    # disable secret redaction entirely.
     from helm.scripts.redaction import SECRET_REGEXES
+except ImportError:  # running from a flat checkout
+    from redaction import SECRET_REGEXES
 
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")

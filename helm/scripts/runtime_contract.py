@@ -5,9 +5,12 @@ from pathlib import Path
 import hashlib, json, shutil
 
 try:
-    from task_state_bundle import write_task_state_bundle
-except ModuleNotFoundError:
+    # helm.scripts first: a top-level `task_state_bundle` on sys.path would otherwise
+    # win this branch and silently replace it -- a decoy file was shown to
+    # disable secret redaction entirely.
     from helm.scripts.task_state_bundle import write_task_state_bundle
+except ImportError:  # running from a flat checkout
+    from task_state_bundle import write_task_state_bundle
 
 
 MUTATING_PROFILES = {"workspace_edit", "risky_edit", "service_ops"}

@@ -16,13 +16,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    import state_io
-except ModuleNotFoundError:  # Helm package import
     from helm.scripts import state_io
+except ImportError:  # running from a flat checkout
+    import state_io
 try:
-    from redaction import SECRET_REGEXES
-except ModuleNotFoundError:  # Helm package import
+    # helm.scripts first: a top-level `redaction` on sys.path would otherwise
+    # win this branch and silently replace it -- a decoy file was shown to
+    # disable secret redaction entirely.
     from helm.scripts.redaction import SECRET_REGEXES
+except ImportError:  # running from a flat checkout
+    from redaction import SECRET_REGEXES
 from typing import Iterable
 
 

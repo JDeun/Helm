@@ -40,6 +40,11 @@ _BEARER_STRICT = (re.compile(r"(?i)\bbearer\s+(?=[A-Za-z0-9._~+/=-]*[0-9._~+/=-]
 # BROAD (execution/state secret redaction): mask ANY token after Bearer, incl. pure-alpha —
 # these contexts aren't prose, so fail-secure > prose-preservation (matches the old per-file rule).
 _BEARER_BROAD = (re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+"), "[secret]")
+# `Basic <base64>` is the same shape and the same secret -- an HTTP auth scheme
+# carrying a credential after the scheme word. Both scrubbers leaked it: the
+# bearer rules only matched the word "bearer", and _BLOB's 40-char floor is above
+# a typical base64 user:pass. Same pattern, different scheme word.
+_BASIC_AUTH = (re.compile(r"(?i)\bbasic\s+[A-Za-z0-9+/=]{8,}"), "[secret]")
 # JWT by STRUCTURE (base64url.base64url.base64url, always starts `eyJ`) — no keyword needed
 _JWT = (re.compile(r"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}"), "[jwt]")
 # whole PEM block (input is capped below, so the bounded lazy body is ReDoS-safe) + orphan header
@@ -51,7 +56,7 @@ SECRET_PATTERNS = [
     # by the KV rule (its `\S+` grabs the word "Bearer" after "authorization:"), leaving the opaque
     # token orphaned — _BEARER_BROAD then finds no "bearer" keyword and the token LEAKS. Bearer-first
     # masks the whole "Bearer <token>" before the KV rule touches the header.
-    _BEARER_BROAD, _KV_ANCHORED, _CONNSTRING, _BOT, _TOKEN_PREFIX, _AKIA, _GOOGLE_KEY, _JWT, _PEM_BLOCK, _PEM_HEADER,
+    _BEARER_BROAD, _BASIC_AUTH, _KV_ANCHORED, _CONNSTRING, _BOT, _TOKEN_PREFIX, _AKIA, _GOOGLE_KEY, _JWT, _PEM_BLOCK, _PEM_HEADER,
 ]
 
 # Compiled patterns only (no baked replacement) — for consumers that apply their own
@@ -100,12 +105,26 @@ _IP = (re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"), "[ip]")
 _EMAIL = (re.compile(r"\b[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\.[A-Za-z]{2,24}\b"), "[email]")
 _BLOB = (re.compile(r"\b[A-Za-z0-9+/]{40,}={0,2}\b"), "[blob]")  # 40+ (was 60) — AWS secrets etc.
 
-# Full scrubber rule list — SAME order as the original content_draft_runner._REDACT.
+# Full scrubber rule list. Order matters, and got this wrong for a long time:
+# _GENERIC_KV's value pattern is \S+, which stops at whitespace -- so on
+# `access_token: Bearer QQQtoken`, it consumed the word "Bearer" and left the token
+# orphaned in the output. SECRET_PATTERNS documents that exact failure and fixes it by
+# running the bearer rules FIRST; this list did not, so the publishing scrubber leaked
+# a token the evidence scrubber caught. Bearer rules now lead here too.
+#
+# _KV_ANCHORED carries `authorization`, which _GENERIC_KV does not, so without it
+# redact() left `Authorization: <token>` completely untouched while redact_secrets()
+# masked it. The module's docstring calls redact() the full scrubber "on top of the
+# secret rules"; it has to actually be a superset for that to be true.
 REDACT_PATTERNS = [
     *_TRAILERS,
-    _GENERIC_KV, _CONNSTRING,
+    # _BEARER_STRICT only, NOT _BEARER_BROAD: broad matches any word after
+    # "bearer", so leading with it clobbers ordinary prose ("flag bearer standing
+    # tall" -> "flag [secret] tall"). Strict requires a token-shaped run of 8+.
+    _BEARER_STRICT, _BASIC_AUTH,
+    _KV_ANCHORED, _GENERIC_KV, _CONNSTRING,
     *_PATHS,
-    _BOT, _TOKEN_PREFIX, _AKIA, _GOOGLE_KEY, _BEARER_STRICT, _JWT, _PEM_BLOCK, _PEM_HEADER,
+    _BOT, _TOKEN_PREFIX, _AKIA, _GOOGLE_KEY, _JWT, _PEM_BLOCK, _PEM_HEADER,
     _IP, _EMAIL, _BLOB,
 ]
 

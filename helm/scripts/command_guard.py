@@ -680,7 +680,12 @@ def _classify_argv(
     # catches it at all when it's the wrapped command behind a privilege
     # prefix (`... && sudo nc ...`). Scan the unwrapped shell body when
     # present, otherwise the joined effective argv.
-    _heads = _command_heads(shell_inner if (shell_wrapped and shell_inner) else normalized)
+    # ONLY split a string the shell will actually interpret. `normalized` is argv
+    # joined by whitespace, which destroys the quoting that made an element an
+    # argument -- splitting it treats `grep -E 'foo|curl'` as a pipeline and denies
+    # an ordinary read. The shell body of `sh -c "..."` is the opposite case: there
+    # the metacharacters are real, and splitting is the whole point.
+    _heads = _command_heads(shell_inner) if (shell_wrapped and shell_inner) else []
     if not privilege_detected:
         privilege_detected = any(part.lower() in PRIVILEGE_COMMANDS for part in original_argv) or any(
             h in PRIVILEGE_COMMANDS for h in _heads
@@ -990,7 +995,15 @@ def evaluate_command_guard(
     elif "cron" in classification.categories and classification.destructive_detected:
         action = "deny"
 
-    elif "credential_exposure" in classification.categories and selected_profile == "inspect_local":
+    elif (
+        "credential_exposure" in classification.categories
+        and selected_profile == "inspect_local"
+        # ...but not when privilege was ALSO detected. Stripping the wrapper before
+        # classification means `sudo env` classifies as `env`, and this branch sits
+        # above the approval branch -- so it swallowed the risk.sudo rule and let a
+        # root environment dump through on a warning under the strictest profile.
+        and not classification.privilege_detected
+    ):
         action = "warn"
 
     elif "cron" in classification.categories:

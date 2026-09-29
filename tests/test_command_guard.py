@@ -794,3 +794,82 @@ class TestAdvisoryActionScopeWiringExtra:
         assert snapshot.get("command_guard.action_scope", 0) >= 1
         assert snapshot.get("command_guard.action_scope:RuntimeError", 0) >= 1
         reset_advisory_failures()
+
+
+class TestQuotedMetacharacterIsNotACommandSeparator:
+    """A metacharacter inside a quoted argv element is data, not a separator.
+
+    Found by adversarial review of the privilege/compound merge. _command_heads was
+    applied to the whitespace-joined argv, which destroys the quoting that made an
+    argument an argument -- so `grep -E 'foo|curl'` split at the pipe and "curl" became
+    a command head, denying the canonical way to audit a script. deny has no approval
+    path, so the caller is hard-stopped.
+
+    The split is correct for `sh -c "..."`, where the shell WILL interpret the
+    metacharacter. It is wrong for argv, where it will not.
+    """
+
+    def test_grep_pattern_containing_a_pipe_is_not_network(self):
+        decision = evaluate_command_guard(
+            command=["grep", "-E", "foo|curl", "README.md"],
+            selected_profile="workspace_edit", profiles=PROFILES, workspace=Path("/tmp/ws"),
+        )
+        assert decision.action == "allow", decision
+
+    def test_commit_message_containing_a_pipe_is_not_a_write(self):
+        decision = evaluate_command_guard(
+            command=["git", "commit", "-m", "chore: drop legacy (cp|mv) helpers"],
+            selected_profile="inspect_local", profiles=PROFILES, workspace=Path("/tmp/ws"),
+        )
+        assert decision.action != "deny", decision
+
+    def test_echo_argument_containing_a_semicolon_is_not_a_write(self):
+        decision = evaluate_command_guard(
+            command=["echo", "deploy done;rm old artifacts later"],
+            selected_profile="inspect_local", profiles=PROFILES, workspace=Path("/tmp/ws"),
+        )
+        assert decision.action != "deny", decision
+
+    def test_a_real_shell_wrapped_compound_is_still_split(self):
+        """The fix must not disable the feature where it is correct."""
+        decision = evaluate_command_guard(
+            command=["sh", "-c", "true;curl http://x"],
+            selected_profile="inspect_local", profiles=PROFILES, workspace=Path("/tmp/ws"),
+        )
+        assert decision.action != "allow", decision
+
+
+class TestPrivilegeIsNotSwallowedByCredentialExposure:
+    """`sudo env` must not be weaker than `sudo kill`.
+
+    The merge strips the privilege wrapper before classification, so `sudo env`
+    classifies as `env` -- a credential-exposure command. The ladder's
+    credential_exposure branch sits above the approval branch, so it returned `warn`
+    and swallowed the risk.sudo rule that used to fire. Dumping the root environment
+    under the strictest read-only profile proceeded on a warning.
+
+    This is the composition bug the merge was always at risk of: the workspace half's
+    stripping feeding the helm half's category table.
+    """
+
+    def test_sudo_env_still_requires_approval(self):
+        decision = evaluate_command_guard(
+            command=["sudo", "env"],
+            selected_profile="inspect_local", profiles=PROFILES, workspace=Path("/tmp/ws"),
+        )
+        assert decision.action == "require_approval", decision
+
+    def test_sudo_printenv_still_requires_approval(self):
+        decision = evaluate_command_guard(
+            command=["sudo", "printenv"],
+            selected_profile="inspect_local", profiles=PROFILES, workspace=Path("/tmp/ws"),
+        )
+        assert decision.action == "require_approval", decision
+
+    def test_unprivileged_env_still_only_warns(self):
+        """The credential-exposure warn path must survive for the non-privileged case."""
+        decision = evaluate_command_guard(
+            command=["env"],
+            selected_profile="inspect_local", profiles=PROFILES, workspace=Path("/tmp/ws"),
+        )
+        assert decision.action == "warn", decision
