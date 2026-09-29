@@ -1,51 +1,20 @@
-# scripts/state_io.py
-"""Atomic JSONL append with cross-platform file locking.
-
-Also provides :func:`build_ledger_entry` — a thin schema helper that
-formalises the optional task-ledger fields added in harness-engineering
-Task 2.  The underlying writer (:func:`append_jsonl_atomic`) remains
-unchanged; backward compatibility is guaranteed because new fields are
-only included when the caller explicitly passes them.
-
-New optional fields (Task 2):
-  failure_signature  (dict)   — structured FS-001..FS-010 signature
-  retry_count        (int)    — already present; left intact
-  sessions           (list)   — session IDs associated with this task
-  snapshot_evidence  (str)    — path to the snapshot used as evidence
-  cleanup_status     (str)    — "ok" | "partial" | "failed" | "not_required"
-
-Browser-specific stubs (accepted and persisted; values not generated here):
-  browser_profile         (str)
-  browser_mode            (str)
-  source_urls             (list)
-  screenshot_evidence     (str)
-  console_network_signals (dict)
-  site_note_update        (str)
-
-Browser verifier recon result (Wave 3a):
-  browser_recon           (dict)  — BrowserReconDecision dict from
-                                    scripts.browser_work_verifier.verify()
-"""
 from __future__ import annotations
 
 import json
 import os
 import sys
+import tempfile
 import threading
 import warnings as _warnings
+from collections import deque
 from pathlib import Path
 from typing import Any
 
 _lock_warning_event = threading.Event()
-
-# Keep the legacy name so tests that reset it directly still work.
-# Tests do `state_io_mod._LOCK_WARNING_ISSUED = False`; we intercept that via
-# a module-level property shim by keeping both in sync in the functions below.
 _LOCK_WARNING_ISSUED = False
 
 
 def _warn_lock_once(msg: str) -> None:
-    """Emit a lock-unavailability warning exactly once, thread-safely."""
     global _LOCK_WARNING_ISSUED
     if not _lock_warning_event.is_set():
         _lock_warning_event.set()
@@ -53,10 +22,88 @@ def _warn_lock_once(msg: str) -> None:
         _warnings.warn(msg)
 
 
+def iter_jsonl(path: Path):
+    if not path.exists():
+        return
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        for lineno, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                print(f"warning: ignoring malformed JSONL line {lineno} in {path}: {exc}", file=sys.stderr)
+                continue
+            if not isinstance(payload, dict):
+                print(f"warning: ignoring non-object JSONL line {lineno} in {path}", file=sys.stderr)
+                continue
+            yield payload
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    return list(iter_jsonl(path))
+
+
+def tail_lines(path: Path, limit: int) -> list[str]:
+    if limit <= 0 or not path.exists():
+        return []
+    window: deque[str] = deque(maxlen=limit)
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        for line in handle:
+            window.append(line.rstrip("\n"))
+    return list(window)
+
+
+def atomic_write_text(path: Path, text: str, *, fsync: bool = True) -> None:
+    """Atomically write *text* to *path*: write a sibling tempfile, fsync, then
+    ``os.replace`` (atomic rename on POSIX) so readers never see a partial file.
+    Creates the parent directory. On failure the tempfile is removed and the
+    error re-raised."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        # Encode to bytes ourselves so a lone surrogate (\ud800-\udfff — a broken
+        # emoji half that slipped in from upstream truncation) can't crash the write.
+        # Valid text encodes byte-identically; only corrupt content gets sanitized.
+        try:
+            data = text.encode("utf-8")
+        except UnicodeEncodeError:
+            data = text.encode("utf-8", "replace")
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            if fsync:
+                os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def atomic_write_json(
+    path: Path,
+    payload: Any,
+    *,
+    indent: int | None = 2,
+    sort_keys: bool = False,
+    ensure_ascii: bool = False,
+    trailing_newline: bool = True,
+    fsync: bool = True,
+) -> None:
+    """Serialize *payload* to JSON and write it atomically (see
+    ``atomic_write_text``). Defaults match the common workspace idiom
+    (``indent=2, ensure_ascii=False`` + trailing newline)."""
+    text = json.dumps(payload, indent=indent, ensure_ascii=ensure_ascii, sort_keys=sort_keys)
+    if trailing_newline:
+        text += "\n"
+    atomic_write_text(path, text, fsync=fsync)
+
+
 def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
-    """Append one JSON object to a JSONL file with best-effort locking."""
-    # Allow tests to reset the event via the legacy boolean flag.
-    # If _LOCK_WARNING_ISSUED has been reset to False externally, clear the event too.
     global _LOCK_WARNING_ISSUED
     if not _LOCK_WARNING_ISSUED and _lock_warning_event.is_set():
         _lock_warning_event.clear()
@@ -65,31 +112,25 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
     line = json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n"
     line_bytes = line.encode("utf-8")
 
-    # "ab" (binary append) mode: writes always go to end-of-file regardless
-    # of seek position, so the sentinel-region seek(0) for locking does not
-    # affect where data is written.
     with path.open("ab") as fh:
         locked = False
 
         if sys.platform != "win32":
             try:
                 import fcntl
+
                 fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
                 locked = True
-            except Exception:
-                locked = False
+            except (ImportError, OSError):  # noqa: BLE001 - fcntl optional on macOS variants
                 _warn_lock_once("File locking unavailable; concurrent writes may corrupt data")
         else:
             try:
                 import msvcrt
-                # Use bytes 0–1 as a fixed sentinel mutex region.
-                # This ensures lock and unlock always operate on the same
-                # byte region regardless of file position changes during write.
+
                 fh.seek(0)
                 msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
                 locked = True
-            except Exception:
-                locked = False
+            except (ImportError, OSError):  # noqa: BLE001 - msvcrt optional in WSL
                 _warn_lock_once("File locking unavailable; concurrent writes may corrupt data")
 
         try:
@@ -97,29 +138,30 @@ def append_jsonl_atomic(path: Path, entry: dict[str, Any]) -> None:
             fh.flush()
             os.fsync(fh.fileno())
         finally:
+            # Release the lock if we hold one. Must NOT `return` here: a bare
+            # `return` inside `finally` would swallow a write/flush/fsync
+            # exception raised in the `try` (e.g. ENOSPC on a platform where
+            # locking was unavailable), silently losing the append. When we
+            # never locked there is simply nothing to unlock.
             if locked:
                 if sys.platform != "win32":
                     try:
                         import fcntl
+
                         fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-                    except Exception:
+                    except (ImportError, OSError):
+                        # Unlock failure is harmless: file handle is about to close.
                         pass
                 else:
                     try:
                         import msvcrt
-                        # Unlock the same sentinel region locked above.
+
                         fh.seek(0)
                         msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
-                    except Exception:
+                    except (ImportError, OSError):
                         pass
 
-
-# ---------------------------------------------------------------------------
-# Task-ledger entry schema helper (harness-engineering Task 2)
-# ---------------------------------------------------------------------------
-
 _CLEANUP_STATUS_VALUES = frozenset({"ok", "partial", "failed", "not_required"})
-
 
 def build_ledger_entry(
     base: dict[str, Any],

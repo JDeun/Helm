@@ -7,9 +7,17 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    import state_io
+except ModuleNotFoundError:  # Helm package import
+    from helm.scripts import state_io
+try:
+    from redaction import SECRET_REGEXES
+except ModuleNotFoundError:  # Helm package import
+    from helm.scripts.redaction import SECRET_REGEXES
+
 
 SECRET_KEY_RE = re.compile(r"(?:secret|token|password|passwd|api[_-]?key|credential)", re.I)
-SECRET_VALUE_RE = re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+\-/]+=*|\b(?:sk|ghp|github_pat|xox[baprs])-[-A-Za-z0-9_]{8,}\b")
 
 
 def utc_now_iso() -> str:
@@ -32,15 +40,14 @@ def _redact(value: object) -> object:
     if isinstance(value, list):
         return [_redact(item) for item in value]
     if isinstance(value, str):
-        return SECRET_VALUE_RE.sub("[REDACTED]", value)
+        for rx in SECRET_REGEXES:  # canonical shape set (incl. JWT/PEM/AKIA the local copy lacked)
+            value = rx.sub("[REDACTED]", value)
+        return value
     return value
 
 
 def _atomic_write(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(text, encoding="utf-8")
-    temporary.replace(path)
+    state_io.atomic_write_text(path, text)
 
 
 def _relative(path: Path, workspace: Path) -> str:

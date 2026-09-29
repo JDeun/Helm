@@ -7,20 +7,27 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import state_io
+except ModuleNotFoundError:  # Helm package import
+    from helm.scripts import state_io
+try:
+    from redaction import SECRET_REGEXES
+except ModuleNotFoundError:  # Helm package import
+    from helm.scripts.redaction import SECRET_REGEXES
 from typing import Iterable
 
 
 SHELL_META_RE = re.compile(r"[;&|`<>\r\n]|\$\(|\$\{")
 SECRET_KEY_RE = re.compile(r"(?:secret|token|password|passwd|api[_-]?key|credential)", re.I)
-SECRET_TEXT_PATTERNS = (
-    re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+\-/]+=*"),
-    re.compile(r"\b(?:sk|ghp|github_pat|xox[baprs])-[-A-Za-z0-9_]{8,}\b", re.I),
-)
 SAFE_ENV_KEYS = {
     "PATH", "HOME", "LANG", "LC_ALL", "TERM", "TMPDIR", "TMP", "TEMP",
     "SYSTEMROOT", "COMSPEC", "CI", "PYTHONPATH", "VIRTUAL_ENV", "CONDA_PREFIX",
@@ -64,6 +71,24 @@ def load_config(path: Path | None = None) -> dict:
     return payload
 
 
+def _executable_is_trusted(arg0: str) -> bool:
+    """The allowlist pins argv[0] by BASENAME but the command runs with the ORIGINAL
+    argv, so '/tmp/evil/python3 -m pytest' would pass as 'python3' yet execute the
+    attacker binary. A BARE name is safe (PATH resolves it). A path-bearing argv[0]
+    is trusted ONLY if it is the running interpreter or resolves to the exact same
+    file PATH would pick for its basename — i.e. no attacker substitution."""
+    if not (os.sep in arg0 or (os.altsep and os.altsep in arg0)):
+        return True
+    try:
+        real = Path(arg0).resolve()
+        if real == Path(sys.executable).resolve():
+            return True
+        which = shutil.which(Path(arg0).name)
+        return bool(which and Path(which).resolve() == real)
+    except OSError:
+        return False
+
+
 def _normalized_argv(argv: Iterable[object]) -> list[str]:
     command = [str(token) for token in argv]
     if command:
@@ -99,6 +124,8 @@ def validate_command(argv: list[str], *, config: dict, cwd: Path) -> tuple[bool,
         return False, "command must be a non-empty string array", None
     if any("\x00" in token or SHELL_META_RE.search(token) for token in argv):
         return False, "shell metacharacters and command chaining are forbidden", None
+    if not _executable_is_trusted(argv[0]):
+        return False, "executable path is not the running interpreter nor the PATH-resolved binary for its name", None
     normalized = _normalized_argv(argv)
     prefixes = [*config.get("allowed_prefixes", []), *_configured_prefixes(config, cwd)]
     for raw_prefix in prefixes:
@@ -113,6 +140,8 @@ def validate_service_readback_command(argv: list[str], *, config: dict) -> tuple
         return False, "service readback command must be a non-empty string array"
     if any("\x00" in token or SHELL_META_RE.search(token) for token in argv):
         return False, "shell metacharacters and command chaining are forbidden"
+    if not _executable_is_trusted(argv[0]):
+        return False, "executable path is not the running interpreter nor the PATH-resolved binary for its name"
     normalized = _normalized_argv(argv)
     for raw_prefix in config.get("service_readback_prefixes") or []:
         prefix = _normalized_argv(raw_prefix)
@@ -123,8 +152,8 @@ def validate_service_readback_command(argv: list[str], *, config: dict) -> tuple
 
 def _redact_text(text: str, *, env: dict[str, str] | None = None) -> str:
     redacted = text
-    for pattern in SECRET_TEXT_PATTERNS:
-        redacted = pattern.sub(lambda match: (match.group(1) if match.lastindex else "") + "[REDACTED]", redacted)
+    for pattern in SECRET_REGEXES:  # canonical shape set (incl. JWT/PEM/AKIA the local copy lacked)
+        redacted = pattern.sub("[REDACTED]", redacted)
     for key, value in (env or os.environ).items():
         if SECRET_KEY_RE.search(key) and value and len(value) >= 6:
             redacted = redacted.replace(value, "[REDACTED]")
@@ -213,6 +242,25 @@ def run_command(argv: list[str], *, cwd: Path, config: dict) -> dict:
             "stdout_chars": stdout_chars,
             "stderr_chars": stderr_chars,
         }
+    except (FileNotFoundError, OSError) as exc:
+        # An allowlisted-but-uninstalled tool (e.g. pytest not on PATH) raises
+        # FileNotFoundError/OSError. Record it as a FAILED command rather than
+        # letting it propagate and abort the whole evidence run.
+        return {
+            **record,
+            "finished_at": utc_now_iso(),
+            "duration_ms": round((time.monotonic() - start) * 1000),
+            "status": "failed",
+            "ok": False,
+            "exit_code": None,
+            "reason": f"command could not be executed: {type(exc).__name__}: {exc}",
+            "stdout": "",
+            "stderr": "",
+            "stdout_truncated": False,
+            "stderr_truncated": False,
+            "stdout_chars": 0,
+            "stderr_chars": 0,
+        }
     stdout, stdout_truncated, stdout_chars = _truncate(result.stdout or "", output_limit)
     stderr, stderr_truncated, stderr_chars = _truncate(result.stderr or "", output_limit)
     return {
@@ -253,10 +301,7 @@ def read_file_evidence(path_value: str, *, cwd: Path) -> dict:
 
 
 def _atomic_write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    state_io.atomic_write_json(path, payload)
 
 
 def gather_evidence(

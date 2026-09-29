@@ -15,6 +15,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+try:
+    from redaction import SECRET_REGEXES
+except ModuleNotFoundError:  # Helm package import
+    from helm.scripts.redaction import SECRET_REGEXES
+
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 SHELLS = frozenset({"sh", "bash", "zsh", "fish", "dash", "ksh", "csh", "tcsh", "pwsh", "powershell", "cmd", "cmd.exe"})
@@ -148,17 +153,8 @@ def _redact(value: str, secrets: tuple[str, ...]) -> tuple[str, int]:
         if occurrences:
             text = text.replace(secret, "[REDACTED]")
             count += occurrences
-    patterns = (
-        re.compile(r"(?i)\b(api[_-]?key|token|secret|password|authorization)(\s*[:=]\s*)([^\s,;]+)"),
-        re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]{8,}"),
-        re.compile(r"\b(?:sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|AIza[0-9A-Za-z_-]{20,})\b"),
-        re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
-    )
-    for pattern in patterns:
-        text, replaced = pattern.subn(
-            (lambda match: f"{match.group(1)}{match.group(2)}[REDACTED]") if pattern is patterns[0] else "[REDACTED]",
-            text,
-        )
+    for pattern in SECRET_REGEXES:  # canonical shape set (superset of the old local 4 patterns)
+        text, replaced = pattern.subn("[REDACTED]", text)
         count += replaced
     return text, count
 
