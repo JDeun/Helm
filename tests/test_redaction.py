@@ -97,3 +97,29 @@ class TestShimCannotBeHijackedByAToplevelModule:
                 "a decoy redaction.py on sys.path replaced the real SECRET_REGEXES; "
                 "the shim's primary branch must not win over the helm package"
             )
+
+
+class TestHomePathsOnEveryOs:
+    """_PATHS claims to cover "any machine"; it covered macOS and `~/` only.
+
+    pyproject declares "Operating System :: OS Independent". On Linux or Windows
+    redact() masked no home path at all, so the generalisation that removed three
+    deployment names left a rule that works on one OS.
+    """
+
+    def test_linux_home_path(self):
+        assert "testuser" not in redaction.redact("/home/testuser/secret/a")
+
+    def test_windows_home_path(self):
+        assert "testuser" not in redaction.redact(r"C:\Users\testuser\Desktop\a.txt")
+
+    def test_macos_home_path_still_masked(self):
+        assert "testuser" not in redaction.redact("/Users/testuser/x")
+
+    def test_tilde_still_masked(self):
+        assert redaction.redact("~/y") == "[path]"
+
+    def test_an_ordinary_word_is_not_a_path(self):
+        """The widened rule must not start eating prose."""
+        assert redaction.redact("homeward bound") == "homeward bound"
+        assert redaction.redact("see users table") == "see users table"

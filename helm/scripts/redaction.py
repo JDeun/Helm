@@ -69,9 +69,15 @@ _TRAILERS = [
     (re.compile(r"🤖.*$", re.M), ""),
     (re.compile(r"https?://claude\.ai/\S+", re.I), "[link]"),
 ]
-# Path shapes that identify a person on any machine, regardless of deployment.
+# Home-directory shapes that identify a person, on every OS this package declares
+# support for. It used to be macOS (/Users/) and ~/ only, while pyproject declares
+# "OS Independent" and the comment claimed "any machine" -- so on Linux or Windows
+# redact() masked no home path at all. Anchored on the separator after the username
+# so ordinary prose ("homeward bound", "see users table") is untouched.
 _PATHS = [
-    (re.compile(r"/Users/[^\s\"'`]+"), "[path]"),
+    (re.compile(r"/Users/[^\s\"'`]+"), "[path]"),                  # macOS
+    (re.compile(r"/home/[^\s\"'`]+"), "[path]"),                   # Linux
+    (re.compile(r"(?i)[A-Z]:\\Users\\[^\s\"'`]+"), "[path]"),      # Windows
     (re.compile(r"~/[^\s\"'`]+"), "[path]"),
 ]
 
