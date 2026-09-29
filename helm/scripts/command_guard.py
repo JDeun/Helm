@@ -117,6 +117,81 @@ CRON_COMMANDS: frozenset[str] = frozenset(
 )
 
 # ---------------------------------------------------------------------------
+# Privilege-wrapper stripping and compound-command head detection
+#
+# Ported from the workspace copy of this guard. Two evasion routes this
+# closes that the classify-by-position-0 approach alone misses:
+#   1. `sudo <risky>` / `doas <risky>` / `runas <risky>` — the wrapper sits
+#      at argv[0], so any detection keyed on "is argv[0] a risky command"
+#      (database/cloud/process/firewall/cron categories) sees only the
+#      wrapper and never classifies the real command underneath.
+#   2. `a && <risky>`, `a; <risky>`, `a | <risky>` — a compound shell
+#      string where the risky command is not the first token at all.
+# ---------------------------------------------------------------------------
+
+# Privilege-wrapper option flags that consume a FOLLOWING argument
+# (e.g. `sudo -u X`). Without this the argument (`X`) would be mistaken
+# for the wrapped command head.
+_PRIVILEGE_ARG_FLAGS: frozenset[str] = frozenset({"-u", "-g", "-C", "-h", "-p", "-r", "-t", "-U", "-D", "-R"})
+_ENV_ASSIGN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+
+
+def _strip_privilege_prefix(argv: list[str]) -> list[str]:
+    """Drop a leading privilege wrapper (sudo/su/doas/runas + its own option
+    flags, arg-taking flags like `-u X`, and env-style `VAR=val` assignments)
+    so `sudo rm -rf /` / `sudo -u X psql` / `sudo VAR=1 curl` are classified
+    on the REAL command. Stops at the first token that is the wrapped
+    command. Returns [] if the wrapper consumes the entire argv (nothing
+    left to classify) so callers can detect "nothing to strip further"."""
+    a = list(argv)
+    while a and a[0].lower() in PRIVILEGE_COMMANDS:
+        i = 1
+        while i < len(a):
+            tok = a[i]
+            if tok == "--":
+                i += 1
+                break
+            if tok in _PRIVILEGE_ARG_FLAGS:
+                i += 2  # flag + its value
+                continue
+            if tok.startswith("-"):
+                i += 1
+                continue
+            if _ENV_ASSIGN_RE.fullmatch(tok):
+                i += 1  # sudo VAR=val cmd
+                continue
+            break
+        if i >= len(a):
+            return []
+        a = a[i:]
+    return a
+
+
+_OP_SPLIT_RE = re.compile(r"\$\(|[;&|()<>`\n]+")
+
+
+def _command_heads(text: str) -> list[str]:
+    """Head command of every operator-delimited segment of a (possibly
+    compound) shell string. `true; curl x && sudo y` -> ['true','curl','sudo'].
+    Args are NOT included (so a filename that happens to be 'curl' isn't a
+    false network hit), but a risky command buried past position 0 IS
+    caught. Also emits the real head behind any privilege wrapper on a
+    segment, so `... && sudo nc ...` is classified on `nc`, not just `sudo`.
+    """
+    heads: list[str] = []
+    for seg in _OP_SPLIT_RE.split(text):
+        seg = seg.strip()
+        if not seg:
+            continue
+        tokens = seg.split()
+        head = tokens[0].lower()
+        heads.append(head)
+        stripped = _strip_privilege_prefix(tokens)
+        if stripped and stripped[0].lower() != head:
+            heads.append(stripped[0].lower())
+    return heads
+
+# ---------------------------------------------------------------------------
 # Flag normalization
 # ---------------------------------------------------------------------------
 
@@ -454,6 +529,16 @@ def _effective_argv(argv: list[str]) -> tuple[list[str], bool, str | None]:
     last_inner_str: str | None = None
 
     for _ in range(_MAX_UNWRAP_DEPTH):
+        # Privilege wrappers BEFORE shell/interpreter extraction: `sudo sh -c
+        # "..."` must have `sudo` stripped first, or `sh -c` is never seen as
+        # the head and its inner command is never unwrapped at all. Runs
+        # every iteration so nested cases (`sudo sh -c "sudo rm -rf /"`) are
+        # each stripped in turn.
+        stripped = _strip_privilege_prefix(current_argv)
+        if stripped and stripped != current_argv:
+            current_argv = stripped
+            continue
+
         # Shell wrappers first
         inner_str = _extract_shell_inner(current_argv)
         if inner_str is not None:
@@ -588,6 +673,25 @@ def _classify_argv(
             or _contains_shell_write_redirection(normalized)
         )
 
+    # Head command of every operator-delimited segment of a (possibly
+    # compound) shell string: `true; curl x && sudo y` -> ['true','curl',
+    # 'sudo']. Whitespace-split alone (above) misses a buried command when
+    # the operator has no surrounding whitespace (`true;curl x`), and never
+    # catches it at all when it's the wrapped command behind a privilege
+    # prefix (`... && sudo nc ...`). Scan the unwrapped shell body when
+    # present, otherwise the joined effective argv.
+    _heads = _command_heads(shell_inner if (shell_wrapped and shell_inner) else normalized)
+    if not privilege_detected:
+        privilege_detected = any(part.lower() in PRIVILEGE_COMMANDS for part in original_argv) or any(
+            h in PRIVILEGE_COMMANDS for h in _heads
+        )
+    if not network_detected:
+        network_detected = any(h in NETWORK_COMMANDS for h in _heads)
+    if not writes_detected:
+        writes_detected = any(h in WRITE_COMMANDS for h in _heads)
+    if not remote_detected:
+        remote_detected = any(rc.split()[0] == h for rc in REMOTE_COMMANDS for h in _heads)
+
     # Extract target paths: everything in argv that looks like a path (heuristic)
     target_paths_list: list[str] = [
         arg for arg in effective_argv[1:]
@@ -646,14 +750,28 @@ def _classify_argv(
         if cmd0 in {"systemctl", "service", "launchctl"}:
             if any(s in PROCESS_DESTRUCTIVE_SUBCMDS for s in subcmds_lower):
                 destructive_detected = True
+    elif any(h in PROCESS_COMMANDS for h in _heads):
+        # Buried behind a privilege wrapper or compound operator, e.g.
+        # `sudo kill -9 1234` or `true && systemctl stop nginx`. No
+        # subcommand args are available for a buried head, so this only
+        # tags the category — it does not attempt the destructive-subcmd
+        # escalation above.
+        if "process" not in categories:
+            categories.append("process")
 
     if cmd0 in FIREWALL_COMMANDS:
         categories.append("firewall")
+    elif any(h in FIREWALL_COMMANDS for h in _heads):
+        if "firewall" not in categories:
+            categories.append("firewall")
 
     if cmd0 in CRON_COMMANDS:
         categories.append("cron")
         if "-r" in effective_argv[1:]:
             destructive_detected = True
+    elif any(h in CRON_COMMANDS for h in _heads):
+        if "cron" not in categories:
+            categories.append("cron")
 
     # Heredoc detection
     if "<<" in effective_argv:

